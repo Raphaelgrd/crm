@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileUp, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import {
   Contact,
@@ -38,6 +38,12 @@ export default function ContactsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Contact | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Recherche pré-remplie via /contacts?q=… (utilisé par la page Closing)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setSearch(q);
+  }, []);
 
   const categories = useMemo(
     () => Array.from(new Set(contacts.map((c) => c.category).filter(Boolean))).sort(),
