@@ -44,6 +44,14 @@ function makeId() {
   return `e_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Ajout direct (sans hook) — utilisé par le moteur d'automatisations. */
+export function addEventRecord(input: AgendaEventInput): AgendaEvent {
+  const now = new Date().toISOString();
+  const event: AgendaEvent = { ...input, id: makeId(), createdAt: now, updatedAt: now };
+  save([...load(), event]);
+  return event;
+}
+
 export function useAgenda() {
   const [events, setEvents] = useState<AgendaEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +59,9 @@ export function useAgenda() {
   useEffect(() => {
     setEvents(load());
     setLoading(false);
+    const onRefresh = () => setEvents(load());
+    window.addEventListener("netforce:data-refresh", onRefresh);
+    return () => window.removeEventListener("netforce:data-refresh", onRefresh);
   }, []);
 
   const persist = useCallback((next: AgendaEvent[]) => {

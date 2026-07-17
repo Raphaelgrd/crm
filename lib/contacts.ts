@@ -71,6 +71,36 @@ export function contactInitial(c: Contact) {
   return (contactFullName(c) || c.email || "?").charAt(0).toUpperCase();
 }
 
+// --- Événements CRM (consommés par le moteur d'automatisations) ---
+
+export type CrmEvent =
+  | { type: "contact_created"; contact: Contact }
+  | { type: "stage_changed"; contact: Contact; from: StageName; to: StageName };
+
+export function emitCrmEvent(event: CrmEvent) {
+  window.dispatchEvent(new CustomEvent("netforce:crm-event", { detail: event }));
+}
+
+/** Demande aux hooks de données de recharger depuis le stockage. */
+export function requestDataRefresh() {
+  window.dispatchEvent(new Event("netforce:data-refresh"));
+}
+
+/**
+ * Modification directe d'un contact SANS émettre d'événement CRM —
+ * réservé aux actions d'automatisation (évite les boucles infinies).
+ */
+export function applyContactPatch(id: string, patch: Partial<ContactInput>): Contact | null {
+  let updated: Contact | null = null;
+  const next = load().map((c) => {
+    if (c.id !== id) return c;
+    updated = { ...c, ...patch, updatedAt: new Date().toISOString() };
+    return updated;
+  });
+  save(next);
+  return updated;
+}
+
 export function useContacts() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +108,9 @@ export function useContacts() {
   useEffect(() => {
     setContacts(load());
     setLoading(false);
+    const onRefresh = () => setContacts(load());
+    window.addEventListener("netforce:data-refresh", onRefresh);
+    return () => window.removeEventListener("netforce:data-refresh", onRefresh);
   }, []);
 
   const persist = useCallback((next: Contact[]) => {
@@ -90,6 +123,8 @@ export function useContacts() {
       const now = new Date().toISOString();
       const contact: Contact = { ...input, id: makeId(), createdAt: now, updatedAt: now };
       persist([contact, ...load()]);
+      emitCrmEvent({ type: "contact_created", contact });
+      setContacts(load());
       return contact;
     },
     [persist],
@@ -97,10 +132,18 @@ export function useContacts() {
 
   const updateContact = useCallback(
     async (id: string, input: Partial<ContactInput>): Promise<void> => {
-      const next = load().map((c) =>
-        c.id === id ? { ...c, ...input, updatedAt: new Date().toISOString() } : c,
-      );
+      const before = load().find((c) => c.id === id);
+      let after: Contact | null = null;
+      const next = load().map((c) => {
+        if (c.id !== id) return c;
+        after = { ...c, ...input, updatedAt: new Date().toISOString() };
+        return after;
+      });
       persist(next);
+      if (before && after && input.stage && input.stage !== before.stage) {
+        emitCrmEvent({ type: "stage_changed", contact: after, from: before.stage, to: input.stage });
+        setContacts(load());
+      }
     },
     [persist],
   );
@@ -132,6 +175,8 @@ export function useContacts() {
         toAdd.push({ ...input, id: makeId(), createdAt: now, updatedAt: now });
       }
       persist([...toAdd, ...existing]);
+      for (const contact of toAdd) emitCrmEvent({ type: "contact_created", contact });
+      setContacts(load());
       return { added: toAdd.length, skipped };
     },
     [persist],
