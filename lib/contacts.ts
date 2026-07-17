@@ -35,6 +35,10 @@ export interface Contact {
   category: string;
   stage: StageName;
   notes: string;
+  /** Tags libres, cumulables (segments façon Brevo : « Institutionnel », « Espagne »…). */
+  tags?: string[];
+  /** Toutes les colonnes CSV non mappées : rien n'est perdu à l'import. */
+  extra?: Record<string, string>;
   /** Date du dernier envoi du mail « nouveaux arrivants » depuis la fiche. */
   lastEmailSentAt?: string;
   createdAt: string;
@@ -131,27 +135,59 @@ export function useContacts() {
     await store.remove(id);
   }, []);
 
-  /** Importe une liste de contacts en ignorant les emails déjà présents. */
+  /**
+   * Importe une liste de contacts. Un email déjà présent est soit ignoré,
+   * soit complété (updateExisting) : champs vides remplis, tags fusionnés,
+   * colonnes extra ajoutées — jamais de doublon.
+   */
   const importContacts = useCallback(
-    async (inputs: ContactInput[]): Promise<{ added: number; skipped: number }> => {
-      const knownEmails = new Set(
-        store.get().map((c) => c.email.trim().toLowerCase()).filter(Boolean),
-      );
+    async (
+      inputs: ContactInput[],
+      options: { updateExisting?: boolean } = {},
+    ): Promise<{ added: number; updated: number; skipped: number }> => {
+      const byEmail = new Map<string, Contact>();
+      for (const c of store.get()) {
+        const email = c.email.trim().toLowerCase();
+        if (email) byEmail.set(email, c);
+      }
       const now = new Date().toISOString();
-      const toAdd: Contact[] = [];
+      const toWrite: Contact[] = [];
+      const created: Contact[] = [];
+      let updated = 0;
       let skipped = 0;
       for (const input of inputs) {
         const email = input.email.trim().toLowerCase();
-        if (email && knownEmails.has(email)) {
-          skipped += 1;
+        const existing = email ? byEmail.get(email) : undefined;
+        if (existing) {
+          if (!options.updateExisting) {
+            skipped += 1;
+            continue;
+          }
+          const merged: Contact = {
+            ...existing,
+            firstName: existing.firstName || input.firstName,
+            lastName: existing.lastName || input.lastName,
+            phone: existing.phone || input.phone,
+            company: existing.company || input.company,
+            category: existing.category || input.category,
+            notes: existing.notes || input.notes,
+            tags: Array.from(new Set([...(existing.tags ?? []), ...(input.tags ?? [])])),
+            extra: { ...(existing.extra ?? {}), ...(input.extra ?? {}) },
+            updatedAt: now,
+          };
+          byEmail.set(email, merged);
+          toWrite.push(merged);
+          updated += 1;
           continue;
         }
-        if (email) knownEmails.add(email);
-        toAdd.push({ ...input, id: makeId(), createdAt: now, updatedAt: now });
+        const contact: Contact = { ...input, id: makeId(), createdAt: now, updatedAt: now };
+        if (email) byEmail.set(email, contact);
+        toWrite.push(contact);
+        created.push(contact);
       }
-      await store.setMany(toAdd);
-      for (const contact of toAdd) emitCrmEvent({ type: "contact_created", contact });
-      return { added: toAdd.length, skipped };
+      await store.setMany(toWrite);
+      for (const contact of created) emitCrmEvent({ type: "contact_created", contact });
+      return { added: created.length, updated, skipped };
     },
     [],
   );

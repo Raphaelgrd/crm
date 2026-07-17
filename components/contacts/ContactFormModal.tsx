@@ -27,6 +27,8 @@ const EMPTY: ContactInput = {
   category: DEFAULT_CATEGORIES[0],
   stage: "Nouveau",
   notes: "",
+  tags: [],
+  extra: {},
 };
 
 const inputClass =
@@ -34,12 +36,14 @@ const inputClass =
 
 export default function ContactFormModal({ open, initial, categories, onClose, onSave }: Props) {
   const [form, setForm] = useState<ContactInput>(EMPTY);
+  const [tagsText, setTagsText] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) {
-      setForm(initial ? { ...initial } : EMPTY);
+      setForm(initial ? { ...EMPTY, ...initial } : EMPTY);
+      setTagsText((initial?.tags ?? []).join(", "));
       setError("");
     }
   }, [open, initial]);
@@ -57,7 +61,14 @@ export default function ContactFormModal({ open, initial, categories, onClose, o
     }
     setSaving(true);
     try {
-      await onSave({ ...form, category: form.category.trim() || "Sans catégorie" });
+      await onSave({
+        ...form,
+        category: form.category.trim() || "Sans catégorie",
+        tags: tagsText
+          .split(/[;,]/)
+          .map((t) => t.trim())
+          .filter(Boolean),
+      });
       onClose();
     } finally {
       setSaving(false);
@@ -175,6 +186,18 @@ export default function ContactFormModal({ open, initial, categories, onClose, o
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="text-foreground mb-1 block text-xs font-medium">
+              Tags <span className="text-muted-foreground">(séparés par des virgules)</span>
+            </label>
+            <input
+              className={inputClass}
+              value={tagsText}
+              onChange={(e) => setTagsText(e.target.value)}
+              placeholder="Institutionnel, Espagne, Salon Milipol…"
+            />
           </div>
 
           <div>

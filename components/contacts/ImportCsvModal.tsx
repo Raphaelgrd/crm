@@ -8,10 +8,21 @@ import { ParsedCsv, parseCsv } from "@/lib/csv";
 interface Props {
   open: boolean;
   onClose: () => void;
-  onImport: (inputs: ContactInput[]) => Promise<{ added: number; skipped: number }>;
+  onImport: (
+    inputs: ContactInput[],
+    options: { updateExisting?: boolean },
+  ) => Promise<{ added: number; updated: number; skipped: number }>;
 }
 
-type Field = "firstName" | "lastName" | "email" | "phone" | "company" | "category" | "notes";
+type Field =
+  | "firstName"
+  | "lastName"
+  | "email"
+  | "phone"
+  | "company"
+  | "category"
+  | "tags"
+  | "notes";
 
 const FIELD_LABELS: Record<Field, string> = {
   firstName: "Prénom",
@@ -20,6 +31,7 @@ const FIELD_LABELS: Record<Field, string> = {
   phone: "Téléphone",
   company: "Société",
   category: "Catégorie",
+  tags: "Tags",
   notes: "Notes",
 };
 
@@ -31,6 +43,7 @@ const AUTO_MATCH: Record<Field, RegExp> = {
   phone: /^(t[ée]l[ée]phone|tel|phone|mobile|portable)$/i,
   company: /^(soci[ée]t[ée]|entreprise|company|organisation)$/i,
   category: /^(cat[ée]gorie|category|type)$/i,
+  tags: /^(tags?|listes?|segments?)$/i,
   notes: /^(notes?|commentaires?)$/i,
 };
 
@@ -43,8 +56,12 @@ export default function ImportCsvModal({ open, onClose, onImport }: Props) {
   const [csv, setCsv] = useState<ParsedCsv | null>(null);
   const [mapping, setMapping] = useState<Partial<Record<Field, number>>>({});
   const [defaultStage, setDefaultStage] = useState<StageName>("Nouveau");
+  const [keepExtra, setKeepExtra] = useState(true);
+  const [updateExisting, setUpdateExisting] = useState(true);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ added: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{ added: number; updated: number; skipped: number } | null>(
+    null,
+  );
   const [error, setError] = useState("");
 
   if (!open) return null;
@@ -97,19 +114,37 @@ export default function ImportCsvModal({ open, onClose, onImport }: Props) {
         const idx = mapping[field];
         return idx === undefined ? "" : (row[idx] ?? "").trim();
       };
+      const mappedIndexes = new Set(Object.values(mapping).filter((v) => v !== undefined));
       const inputs: ContactInput[] = csv.rows
-        .map((row) => ({
-          firstName: get(row, "firstName"),
-          lastName: get(row, "lastName"),
-          email: get(row, "email"),
-          phone: get(row, "phone"),
-          company: get(row, "company"),
-          category: get(row, "category") || DEFAULT_CATEGORIES[0],
-          stage: defaultStage,
-          notes: get(row, "notes"),
-        }))
+        .map((row) => {
+          // Colonnes non associées : conservées telles quelles sur la fiche.
+          const extra: Record<string, string> = {};
+          if (keepExtra) {
+            csv.headers.forEach((header, i) => {
+              const value = (row[i] ?? "").trim();
+              if (!mappedIndexes.has(i) && header.trim() && value) {
+                extra[header.trim()] = value;
+              }
+            });
+          }
+          return {
+            firstName: get(row, "firstName"),
+            lastName: get(row, "lastName"),
+            email: get(row, "email"),
+            phone: get(row, "phone"),
+            company: get(row, "company"),
+            category: get(row, "category") || DEFAULT_CATEGORIES[0],
+            stage: defaultStage,
+            notes: get(row, "notes"),
+            tags: get(row, "tags")
+              .split(/[;,]/)
+              .map((t) => t.trim())
+              .filter(Boolean),
+            extra,
+          };
+        })
         .filter((c) => c.firstName || c.lastName || c.email);
-      setResult(await onImport(inputs));
+      setResult(await onImport(inputs, { updateExisting }));
     } finally {
       setImporting(false);
     }
@@ -134,8 +169,13 @@ export default function ImportCsvModal({ open, onClose, onImport }: Props) {
           {result ? (
             <div className="py-6 text-center">
               <p className="text-foreground text-base font-semibold">
-                ✅ {result.added} contact{result.added > 1 ? "s" : ""} importé{result.added > 1 ? "s" : ""}
+                ✅ {result.added} contact{result.added > 1 ? "s" : ""} créé{result.added > 1 ? "s" : ""}
               </p>
+              {result.updated > 0 && (
+                <p className="text-muted-foreground mt-1 text-sm">
+                  {result.updated} fiche{result.updated > 1 ? "s" : ""} existante{result.updated > 1 ? "s" : ""} complétée{result.updated > 1 ? "s" : ""} (même email)
+                </p>
+              )}
               {result.skipped > 0 && (
                 <p className="text-muted-foreground mt-1 text-sm">
                   {result.skipped} doublon{result.skipped > 1 ? "s" : ""} ignoré{result.skipped > 1 ? "s" : ""} (email déjà présent)
@@ -211,6 +251,37 @@ export default function ImportCsvModal({ open, onClose, onImport }: Props) {
                         </select>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="flex cursor-pointer items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={keepExtra}
+                        onChange={(e) => setKeepExtra(e.target.checked)}
+                        className="mt-0.5 h-4 w-4"
+                      />
+                      <span className="text-foreground">
+                        Conserver toutes les autres colonnes sur la fiche client{" "}
+                        <span className="text-muted-foreground text-xs">
+                          (rien n&apos;est perdu, visible en ouvrant la fiche)
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={updateExisting}
+                        onChange={(e) => setUpdateExisting(e.target.checked)}
+                        className="mt-0.5 h-4 w-4"
+                      />
+                      <span className="text-foreground">
+                        Compléter les fiches existantes (même email){" "}
+                        <span className="text-muted-foreground text-xs">
+                          (sinon les doublons sont ignorés)
+                        </span>
+                      </span>
+                    </label>
                   </div>
 
                   <div>

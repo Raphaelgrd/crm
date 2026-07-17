@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileUp, Pencil, Plus, Search, Send, Trash2, Users } from "lucide-react";
+import { ChevronDown, FileUp, Pencil, Plus, Search, Send, Tag, Trash2, Users } from "lucide-react";
 import {
   Contact,
   STAGES,
@@ -12,6 +12,7 @@ import {
 import ContactFormModal from "@/components/contacts/ContactFormModal";
 import ImportCsvModal from "@/components/contacts/ImportCsvModal";
 import SendEmailModal from "@/components/contacts/SendEmailModal";
+import ContactDetailModal from "@/components/contacts/ContactDetailModal";
 
 const selectClass =
   "border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 rounded-lg border px-2 py-1.5 text-sm focus:ring-2 focus:outline-none";
@@ -40,6 +41,9 @@ export default function ContactsPage() {
   const [editing, setEditing] = useState<Contact | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [sendingTo, setSendingTo] = useState<Contact | null>(null);
+  const [detailContact, setDetailContact] = useState<Contact | null>(null);
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [tagMenuOpen, setTagMenuOpen] = useState(false);
 
   // Recherche pré-remplie via /contacts?q=… (utilisé par la page Closing)
   useEffect(() => {
@@ -52,18 +56,26 @@ export default function ContactsPage() {
     [contacts],
   );
 
+  const allTags = useMemo(
+    () => Array.from(new Set(contacts.flatMap((c) => c.tags ?? []))).sort(),
+    [contacts],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return contacts.filter((c) => {
       if (categoryFilter !== "all" && c.category !== categoryFilter) return false;
       if (stageFilter !== "all" && c.stage !== stageFilter) return false;
+      // Tags cumulables : le contact doit avoir TOUS les tags cochés.
+      if (tagFilters.length > 0 && !tagFilters.every((t) => (c.tags ?? []).includes(t)))
+        return false;
       if (!q) return true;
-      return [contactFullName(c), c.email, c.phone, c.company]
+      return [contactFullName(c), c.email, c.phone, c.company, (c.tags ?? []).join(" ")]
         .join(" ")
         .toLowerCase()
         .includes(q);
     });
-  }, [contacts, search, categoryFilter, stageFilter]);
+  }, [contacts, search, categoryFilter, stageFilter, tagFilters]);
 
   // window.confirm est bloqué dans certains contextes (aperçu embarqué) :
   // confirmation en deux clics à la place.
@@ -153,6 +165,68 @@ export default function ContactsPage() {
               ))}
             </select>
           </div>
+          {/* Filtre tags cumulables (« Institutionnel » + « Espagne »…) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setTagMenuOpen((o) => !o)}
+              className={
+                "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors " +
+                (tagFilters.length > 0
+                  ? "border-blue-300 bg-blue-50 text-blue-700"
+                  : "border-border bg-card text-foreground hover:bg-muted")
+              }
+            >
+              <Tag className="h-3.5 w-3.5" aria-hidden="true" />
+              Tags
+              {tagFilters.length > 0 && (
+                <span className="rounded-full bg-blue-600 px-1.5 text-[10px] font-bold text-white">
+                  {tagFilters.length}
+                </span>
+              )}
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            {tagMenuOpen && (
+              <div className="border-border bg-card absolute top-full left-0 z-30 mt-1 max-h-72 w-64 overflow-y-auto rounded-xl border p-2 shadow-lg">
+                {allTags.length === 0 ? (
+                  <p className="text-muted-foreground px-2 py-3 text-xs">
+                    Aucun tag pour le moment — ajoute des tags via la fiche contact ou une colonne
+                    « Tags » à l&apos;import CSV.
+                  </p>
+                ) : (
+                  <>
+                    {tagFilters.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTagFilters([])}
+                        className="text-muted-foreground hover:bg-muted mb-1 w-full rounded-lg px-2 py-1.5 text-left text-xs font-medium"
+                      >
+                        Effacer la sélection
+                      </button>
+                    )}
+                    {allTags.map((t) => (
+                      <label
+                        key={t}
+                        className="hover:bg-muted flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={tagFilters.includes(t)}
+                          onChange={(e) =>
+                            setTagFilters((list) =>
+                              e.target.checked ? [...list, t] : list.filter((x) => x !== t),
+                            )
+                          }
+                        />
+                        <span className="text-foreground truncate">{t}</span>
+                      </label>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -186,15 +260,38 @@ export default function ContactsPage() {
               </thead>
               <tbody>
                 {filtered.map((c) => (
-                  <tr key={c.id} className="border-border hover:bg-muted/50 border-t transition-colors">
+                  <tr
+                    key={c.id}
+                    onClick={() => setDetailContact(c)}
+                    className="border-border hover:bg-muted/50 cursor-pointer border-t transition-colors"
+                  >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
                           {contactInitial(c)}
                         </div>
-                        <span className="text-foreground font-semibold whitespace-nowrap">
-                          {contactFullName(c) || "—"}
-                        </span>
+                        <div className="min-w-0">
+                          <span className="text-foreground block font-semibold whitespace-nowrap">
+                            {contactFullName(c) || "—"}
+                          </span>
+                          {(c.tags ?? []).length > 0 && (
+                            <span className="mt-0.5 flex flex-wrap gap-1">
+                              {(c.tags ?? []).slice(0, 3).map((t) => (
+                                <span
+                                  key={t}
+                                  className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-px text-[10px] font-medium text-blue-700"
+                                >
+                                  {t}
+                                </span>
+                              ))}
+                              {(c.tags ?? []).length > 3 && (
+                                <span className="text-muted-foreground text-[10px]">
+                                  +{(c.tags ?? []).length - 3}
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="text-foreground px-4 py-3 whitespace-nowrap">{c.email || "—"}</td>
@@ -221,7 +318,7 @@ export default function ContactsPage() {
                     <td className="text-muted-foreground px-4 py-3 text-xs whitespace-nowrap">
                       {formatDate(c.createdAt)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">
                         <button
                           type="button"
@@ -300,6 +397,19 @@ export default function ContactsPage() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         onImport={importContacts}
+      />
+      <ContactDetailModal
+        contact={detailContact}
+        onClose={() => setDetailContact(null)}
+        onEdit={(c) => {
+          setDetailContact(null);
+          setEditing(c);
+          setFormOpen(true);
+        }}
+        onSendEmail={(c) => {
+          setDetailContact(null);
+          setSendingTo(c);
+        }}
       />
       <SendEmailModal
         open={sendingTo !== null}
