@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+/*
+  ⚠️ IMPORTANT — À LIRE
+  Ces valeurs de couleurs sont des ESTIMATIONS.
+  Le HTML exporté référence des variables CSS (--sidebar, --primary, --border, etc.)
+  mais pas les fichiers .css qui contiennent leurs VRAIES valeurs (ils n'ont pas
+  été inclus dans l'export "page complète").
+
+  => Si tu as encore un accès (même lecture seule / DevTools) à l'appli en ligne,
+     ouvre l'inspecteur, va sur `:root` dans l'onglet Styles/Computed, et remplace
+     les valeurs ci-dessous par les vraies. Ça prend 5 minutes et ça rend la copie
+     pixel-perfect au lieu d'être une approximation "même famille de couleurs".
+*/
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+
+  --border: #e2e8f0;
+
+  --sidebar: #0f172a;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-border: #1e293b;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+
+  --duration-normal: 200ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
