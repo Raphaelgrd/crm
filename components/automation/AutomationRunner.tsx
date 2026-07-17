@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { CrmEvent } from "@/lib/contacts";
-import { runAutomationsForEvent } from "@/lib/automations";
+import { automationStores, runAutomationsForEvent } from "@/lib/automations";
 
 /**
  * Monté dans le layout du dashboard : écoute les événements CRM émis par les
@@ -11,11 +11,16 @@ import { runAutomationsForEvent } from "@/lib/automations";
  */
 export default function AutomationRunner() {
   useEffect(() => {
+    // Précharge le cache des scénarios pour que le moteur soit prêt.
+    const unsub = automationStores.automations.subscribe(() => {});
     const handler = (e: Event) => {
-      runAutomationsForEvent((e as CustomEvent<CrmEvent>).detail);
+      void runAutomationsForEvent((e as CustomEvent<CrmEvent>).detail);
     };
     window.addEventListener("netforce:crm-event", handler);
-    return () => window.removeEventListener("netforce:crm-event", handler);
+    return () => {
+      unsub();
+      window.removeEventListener("netforce:crm-event", handler);
+    };
   }, []);
 
   return null;

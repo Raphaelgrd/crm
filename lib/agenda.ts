@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createCollectionStore } from "@/lib/firebase";
 
-// ⚠️ Couche de données locale (localStorage), même pattern que lib/contacts.ts :
-// API async calquée sur Firestore pour brancher Firebase sans toucher aux pages.
+// Store branché sur Firestore (collection "agenda") avec cache temps réel.
 
 export type EventType = "rdv" | "tache";
 
@@ -25,77 +25,51 @@ export interface AgendaEvent {
 
 export type AgendaEventInput = Omit<AgendaEvent, "id" | "createdAt" | "updatedAt">;
 
-const STORAGE_KEY = "netforce.agenda";
+const store = createCollectionStore<AgendaEvent>("agenda");
 
-function load(): AgendaEvent[] {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as AgendaEvent[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function save(list: AgendaEvent[]) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-}
+/** Accès direct au store (migration). */
+export const agendaStore = store;
 
 function makeId() {
   return `e_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /** Ajout direct (sans hook) — utilisé par le moteur d'automatisations. */
-export function addEventRecord(input: AgendaEventInput): AgendaEvent {
+export async function addEventRecord(input: AgendaEventInput): Promise<AgendaEvent> {
   const now = new Date().toISOString();
   const event: AgendaEvent = { ...input, id: makeId(), createdAt: now, updatedAt: now };
-  save([...load(), event]);
+  await store.set(event);
   return event;
 }
 
 export function useAgenda() {
-  const [events, setEvents] = useState<AgendaEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [events, setEvents] = useState<AgendaEvent[]>(store.get());
+  const [loading, setLoading] = useState(!store.ready());
 
-  useEffect(() => {
-    setEvents(load());
-    setLoading(false);
-    const onRefresh = () => setEvents(load());
-    window.addEventListener("netforce:data-refresh", onRefresh);
-    return () => window.removeEventListener("netforce:data-refresh", onRefresh);
-  }, []);
-
-  const persist = useCallback((next: AgendaEvent[]) => {
-    setEvents(next);
-    save(next);
-  }, []);
+  useEffect(
+    () =>
+      store.subscribe(() => {
+        setEvents(store.get());
+        setLoading(false);
+      }),
+    [],
+  );
 
   const addEvent = useCallback(
-    async (input: AgendaEventInput): Promise<AgendaEvent> => {
-      const now = new Date().toISOString();
-      const event: AgendaEvent = { ...input, id: makeId(), createdAt: now, updatedAt: now };
-      persist([...load(), event]);
-      return event;
-    },
-    [persist],
+    async (input: AgendaEventInput): Promise<AgendaEvent> => addEventRecord(input),
+    [],
   );
 
   const updateEvent = useCallback(
     async (id: string, input: Partial<AgendaEventInput>): Promise<void> => {
-      persist(
-        load().map((e) =>
-          e.id === id ? { ...e, ...input, updatedAt: new Date().toISOString() } : e,
-        ),
-      );
+      await store.update(id, { ...input, updatedAt: new Date().toISOString() });
     },
-    [persist],
+    [],
   );
 
-  const deleteEvent = useCallback(
-    async (id: string): Promise<void> => {
-      persist(load().filter((e) => e.id !== id));
-    },
-    [persist],
-  );
+  const deleteEvent = useCallback(async (id: string): Promise<void> => {
+    await store.remove(id);
+  }, []);
 
   return { events, loading, addEvent, updateEvent, deleteEvent };
 }

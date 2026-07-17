@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createCollectionStore } from "@/lib/firebase";
 
 // ⚠️ Couche de données locale (localStorage), même pattern que lib/contacts.ts :
 // API async calquée sur Firestore pour brancher Firebase sans toucher aux pages.
@@ -255,50 +256,20 @@ export function renderEmailText(t: EmailTemplate): string {
   }
   return parts.join("\n\n");
 }
+// --- Store (Firestore, collection "templates") ---
 
-// --- Store ---
+const store = createCollectionStore<EmailTemplate>("templates");
 
-function seedTemplates(): EmailTemplate[] {
-  const now = new Date().toISOString();
-  const mk = (name: string, subject: string, text: string): EmailTemplate => ({
-    id: makeId("t"),
-    name,
-    type: "Email",
-    subject,
-    blocks: [{ id: makeId(), type: "text", props: { text, align: "left", color: "#334155", fontSize: 14 } }],
-    settings: { ...DEFAULT_SETTINGS },
-    createdAt: now,
-    updatedAt: now,
-  });
-  return [
-    mk(
-      "merci",
-      "Merci — votre accord de confidentialité est signé",
-      "Bonjour {{civility}} {{lastName}},\n\nNous vous confirmons la bonne réception de votre accord de confidentialité (NDA), dûment signé.",
-    ),
-    mk(
-      "email_signature",
-      "signature",
-      "Bonjour {{lastName}},\n\nNous vous remercions de l'intérêt porté par {{companyName}} à un partenariat avec nous.",
-    ),
-    mk(
-      "relance MOU EN",
-      "Milipol Singapore – Territory Exclusivity Confirmation",
-      "{{firstName}} {{lastName}},\n\nIn a context of strong acceleration in global demand for our G.I.E solution (Electric Impulse Glove)…",
-    ),
-    mk(
-      "relance MOU FR",
-      "Présence Milipol Singapour et confirmation MOU",
-      "{{firstName}} {{lastName}},\n\nDans un contexte de forte accélération de la demande internationale pour notre solution G.I.E…",
-    ),
-  ];
-}
+/** Accès direct au store (migration). */
+export const templatesStore = store;
 
-/** Mail par défaut relié au bouton d'envoi des fiches client. */
+/** Id fixe du mail relié au bouton des fiches client : pas de doublon possible. */
+export const WELCOME_TEMPLATE_ID = "welcome";
+
 function makeWelcomeTemplate(): EmailTemplate {
   const now = new Date().toISOString();
   return {
-    id: makeId("t"),
+    id: WELCOME_TEMPLATE_ID,
     name: "Mail nouveaux arrivants",
     type: "Email",
     subject: "Bienvenue {{firstName}} — ravi d'échanger avec vous",
@@ -326,92 +297,89 @@ function makeWelcomeTemplate(): EmailTemplate {
   };
 }
 
-function load(): EmailTemplate[] {
-  let list: EmailTemplate[] | null = null;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) list = JSON.parse(raw) as EmailTemplate[];
-  } catch {
-    /* ignore */
+// Garantit la présence du mail spécial (une seule tentative par session).
+let welcomeEnsured = false;
+function ensureWelcomeTemplate() {
+  if (welcomeEnsured || !store.ready()) return;
+  if (!store.get().some((t) => t.special === "welcome")) {
+    welcomeEnsured = true;
+    void store.set(makeWelcomeTemplate());
+  } else {
+    welcomeEnsured = true;
   }
-  if (!list) list = seedTemplates();
-  // Garantir la présence du mail spécial « nouveaux arrivants »
-  if (!list.some((t) => t.special === "welcome")) {
-    list = [makeWelcomeTemplate(), ...list];
-  }
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  return list;
 }
 
-function save(list: EmailTemplate[]) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+function sorted(list: EmailTemplate[]): EmailTemplate[] {
+  return [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export function useTemplates() {
-  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [templates, setTemplates] = useState<EmailTemplate[]>(sorted(store.get()));
+  const [loading, setLoading] = useState(!store.ready());
 
-  useEffect(() => {
-    setTemplates(load());
-    setLoading(false);
-  }, []);
-
-  const persist = useCallback((next: EmailTemplate[]) => {
-    setTemplates(next);
-    save(next);
-  }, []);
-
-  const getTemplate = useCallback(
-    async (id: string): Promise<EmailTemplate | null> =>
-      load().find((t) => t.id === id) ?? null,
+  useEffect(
+    () =>
+      store.subscribe(() => {
+        ensureWelcomeTemplate();
+        setTemplates(sorted(store.get()));
+        setLoading(false);
+      }),
     [],
   );
+
+  const getTemplate = useCallback(async (id: string): Promise<EmailTemplate | null> => {
+    const cached = store.get().find((t) => t.id === id);
+    if (cached) return cached;
+    // Cache pas encore prêt : attendre la première synchro.
+    return new Promise((resolve) => {
+      const unsub = store.subscribe(() => {
+        if (store.ready()) {
+          unsub();
+          resolve(store.get().find((t) => t.id === id) ?? null);
+        }
+      });
+    });
+  }, []);
 
   const addTemplate = useCallback(
     async (input: Omit<EmailTemplate, "id" | "createdAt" | "updatedAt">): Promise<EmailTemplate> => {
       const now = new Date().toISOString();
       const t: EmailTemplate = { ...input, id: makeId("t"), createdAt: now, updatedAt: now };
-      persist([t, ...load()]);
+      await store.set(t);
       return t;
     },
-    [persist],
+    [],
   );
 
   const updateTemplate = useCallback(
     async (id: string, input: Partial<Omit<EmailTemplate, "id" | "createdAt">>): Promise<void> => {
-      persist(
-        load().map((t) =>
-          t.id === id ? { ...t, ...input, updatedAt: new Date().toISOString() } : t,
-        ),
-      );
+      await store.update(id, { ...input, updatedAt: new Date().toISOString() });
     },
-    [persist],
+    [],
   );
 
-  const deleteTemplate = useCallback(
-    async (id: string): Promise<void> => {
-      persist(load().filter((t) => t.id !== id));
-    },
-    [persist],
-  );
+  const deleteTemplate = useCallback(async (id: string): Promise<void> => {
+    await store.remove(id);
+  }, []);
 
   const duplicateTemplate = useCallback(
     async (id: string): Promise<EmailTemplate | null> => {
-      const source = load().find((t) => t.id === id);
+      const source = store.get().find((t) => t.id === id);
       if (!source) return null;
       const now = new Date().toISOString();
       const copy: EmailTemplate = {
         ...source,
         id: makeId("t"),
         name: `${source.name} (copie)`,
+        special: undefined,
         blocks: source.blocks.map((b) => ({ ...b, id: makeId(), props: { ...b.props } })),
         createdAt: now,
         updatedAt: now,
       };
-      persist([copy, ...load()]);
+      await store.set(copy);
       return copy;
     },
-    [persist],
+    [],
   );
 
   return {

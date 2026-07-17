@@ -1,19 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createCollectionStore } from "@/lib/firebase";
 import {
   Contact,
   CrmEvent,
   StageName,
   applyContactPatch,
   contactFullName,
-  requestDataRefresh,
 } from "@/lib/contacts";
 import { addEventRecord, toDateKey } from "@/lib/agenda";
 
-// ⚠️ Couche de données locale (localStorage), même pattern que lib/contacts.ts.
-// Le moteur s'exécute dans le navigateur via AutomationRunner (monté dans le
-// layout) qui écoute les événements CRM émis par les stores.
+// Moteur branché sur Firestore. Il s'exécute dans le navigateur via
+// AutomationRunner (monté dans le layout) qui écoute les événements CRM.
 
 export type TriggerType = "contact_created" | "stage_changed";
 
@@ -59,35 +58,24 @@ export interface QueuedEmail {
 
 export type AutomationInput = Omit<Automation, "id" | "runs" | "createdAt" | "updatedAt">;
 
-const STORAGE_KEY = "netforce.automations";
-const LOG_KEY = "netforce.automations.log";
-const QUEUE_KEY = "netforce.emailqueue";
-const LOG_LIMIT = 100;
+const automationsStore = createCollectionStore<Automation>("automations");
+const logStore = createCollectionStore<ExecutionLog>("automationLog");
+const queueStore = createCollectionStore<QueuedEmail>("emailQueue");
+
+/** Accès direct aux stores (migration, runner). */
+export const automationStores = {
+  automations: automationsStore,
+  log: logStore,
+  queue: queueStore,
+};
 
 function makeId(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function loadJson<T>(key: string, fallback: T): T {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function saveJson(key: string, value: unknown) {
-  window.localStorage.setItem(key, JSON.stringify(value));
-}
-
-const loadAutomations = () => loadJson<Automation[]>(STORAGE_KEY, []);
-const loadLog = () => loadJson<ExecutionLog[]>(LOG_KEY, []);
-const loadQueue = () => loadJson<QueuedEmail[]>(QUEUE_KEY, []);
-
 // --- Moteur ---
 
-function actionSummary(action: Action, contact: Contact): string {
+function actionSummary(action: Action): string {
   switch (action.type) {
     case "send_email":
       return `Mail ajouté à la file d'attente`;
@@ -100,26 +88,23 @@ function actionSummary(action: Action, contact: Contact): string {
   }
 }
 
-function executeActions(automation: Automation, contact: Contact): string[] {
+async function executeActions(automation: Automation, contact: Contact): Promise<string[]> {
   const summary: string[] = [];
   for (const action of automation.actions) {
     switch (action.type) {
-      case "send_email": {
-        const queue = loadQueue();
-        queue.push({
+      case "send_email":
+        await queueStore.set({
           id: makeId("q"),
           contactId: contact.id,
           templateId: action.templateId,
           automationName: automation.name,
           at: new Date().toISOString(),
         });
-        saveJson(QUEUE_KEY, queue);
         break;
-      }
       case "create_task": {
         const due = new Date();
         due.setDate(due.getDate() + action.dueInDays);
-        addEventRecord({
+        await addEventRecord({
           type: "tache",
           title: action.title,
           date: toDateKey(due),
@@ -134,112 +119,106 @@ function executeActions(automation: Automation, contact: Contact): string[] {
         break;
       }
       case "set_stage":
-        applyContactPatch(contact.id, { stage: action.stage });
+        await applyContactPatch(contact.id, { stage: action.stage });
         break;
       case "set_category":
-        applyContactPatch(contact.id, { category: action.category });
+        await applyContactPatch(contact.id, { category: action.category });
         break;
     }
-    summary.push(actionSummary(action, contact));
+    summary.push(actionSummary(action));
   }
   return summary;
 }
 
 /** Exécute les automatisations qui matchent l'événement. */
-export function runAutomationsForEvent(event: CrmEvent) {
-  const automations = loadAutomations();
-  const matching = automations.filter((a) => {
+export async function runAutomationsForEvent(event: CrmEvent): Promise<void> {
+  const matching = automationsStore.get().filter((a) => {
     if (!a.active || a.trigger.type !== event.type) return false;
     if (event.type === "stage_changed" && a.trigger.stage && a.trigger.stage !== event.to) {
       return false;
     }
     return true;
   });
-  if (matching.length === 0) return;
 
-  const log = loadLog();
   for (const automation of matching) {
-    const summary = executeActions(automation, event.contact);
-    log.unshift({
+    const summary = await executeActions(automation, event.contact);
+    await logStore.set({
       id: makeId("l"),
       automationName: automation.name,
       contactName: contactFullName(event.contact) || event.contact.email,
       summary,
       at: new Date().toISOString(),
     });
-    automation.runs += 1;
+    await automationsStore.update(automation.id, { runs: automation.runs + 1 });
   }
-  saveJson(LOG_KEY, log.slice(0, LOG_LIMIT));
-  saveJson(STORAGE_KEY, automations);
-  requestDataRefresh();
 }
 
 // --- Hooks ---
 
 export function useAutomations() {
-  const [automations, setAutomations] = useState<Automation[]>([]);
-  const [log, setLog] = useState<ExecutionLog[]>([]);
-  const [queue, setQueue] = useState<QueuedEmail[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const reload = useCallback(() => {
-    setAutomations(loadAutomations());
-    setLog(loadLog());
-    setQueue(loadQueue());
-    setLoading(false);
-  }, []);
+  const [automations, setAutomations] = useState<Automation[]>(automationsStore.get());
+  const [log, setLog] = useState<ExecutionLog[]>(logStore.get());
+  const [queue, setQueue] = useState<QueuedEmail[]>(queueStore.get());
+  const [loading, setLoading] = useState(!automationsStore.ready());
 
   useEffect(() => {
-    reload();
-    window.addEventListener("netforce:data-refresh", reload);
-    return () => window.removeEventListener("netforce:data-refresh", reload);
-  }, [reload]);
+    const unsubs = [
+      automationsStore.subscribe(() => {
+        setAutomations(
+          [...automationsStore.get()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+        );
+        setLoading(false);
+      }),
+      logStore.subscribe(() =>
+        setLog([...logStore.get()].sort((a, b) => b.at.localeCompare(a.at))),
+      ),
+      queueStore.subscribe(() =>
+        setQueue([...queueStore.get()].sort((a, b) => b.at.localeCompare(a.at))),
+      ),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, []);
 
-  const getAutomation = useCallback(
-    async (id: string): Promise<Automation | null> =>
-      loadAutomations().find((a) => a.id === id) ?? null,
-    [],
-  );
+  const getAutomation = useCallback(async (id: string): Promise<Automation | null> => {
+    const cached = automationsStore.get().find((a) => a.id === id);
+    if (cached) return cached;
+    return new Promise((resolve) => {
+      const unsub = automationsStore.subscribe(() => {
+        if (automationsStore.ready()) {
+          unsub();
+          resolve(automationsStore.get().find((a) => a.id === id) ?? null);
+        }
+      });
+    });
+  }, []);
 
-  const addAutomation = useCallback(
-    async (input: AutomationInput): Promise<Automation> => {
-      const now = new Date().toISOString();
-      const automation: Automation = { ...input, id: makeId("a"), runs: 0, createdAt: now, updatedAt: now };
-      saveJson(STORAGE_KEY, [automation, ...loadAutomations()]);
-      reload();
-      return automation;
-    },
-    [reload],
-  );
+  const addAutomation = useCallback(async (input: AutomationInput): Promise<Automation> => {
+    const now = new Date().toISOString();
+    const automation: Automation = {
+      ...input,
+      id: makeId("a"),
+      runs: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await automationsStore.set(automation);
+    return automation;
+  }, []);
 
   const updateAutomation = useCallback(
     async (id: string, input: Partial<AutomationInput>): Promise<void> => {
-      saveJson(
-        STORAGE_KEY,
-        loadAutomations().map((a) =>
-          a.id === id ? { ...a, ...input, updatedAt: new Date().toISOString() } : a,
-        ),
-      );
-      reload();
+      await automationsStore.update(id, { ...input, updatedAt: new Date().toISOString() });
     },
-    [reload],
+    [],
   );
 
-  const deleteAutomation = useCallback(
-    async (id: string): Promise<void> => {
-      saveJson(STORAGE_KEY, loadAutomations().filter((a) => a.id !== id));
-      reload();
-    },
-    [reload],
-  );
+  const deleteAutomation = useCallback(async (id: string): Promise<void> => {
+    await automationsStore.remove(id);
+  }, []);
 
-  const removeFromQueue = useCallback(
-    async (id: string): Promise<void> => {
-      saveJson(QUEUE_KEY, loadQueue().filter((q) => q.id !== id));
-      reload();
-    },
-    [reload],
-  );
+  const removeFromQueue = useCallback(async (id: string): Promise<void> => {
+    await queueStore.remove(id);
+  }, []);
 
   return {
     automations,

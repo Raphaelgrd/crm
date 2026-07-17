@@ -73,7 +73,7 @@ export default function AutomationsPage() {
       `&su=${encodeURIComponent(fillVariables(template.subject, vars).trim())}` +
       `&body=${encodeURIComponent(fillVariables(renderEmailText(template), vars))}`;
     window.open(url, "_blank");
-    applyContactPatch(contact.id, { lastEmailSentAt: new Date().toISOString() });
+    void applyContactPatch(contact.id, { lastEmailSentAt: new Date().toISOString() });
     void removeFromQueue(queueId);
   };
 

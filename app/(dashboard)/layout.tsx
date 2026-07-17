@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import AutomationRunner from "@/components/automation/AutomationRunner";
+import MigrationBanner from "@/components/MigrationBanner";
 import type { ReactNode } from "react";
 
 export default function DashboardLayout({
@@ -11,6 +12,7 @@ export default function DashboardLayout({
   return (
     <div className="bg-surface-page flex h-screen overflow-hidden">
       <AutomationRunner />
+      <MigrationBanner />
       <Sidebar />
       <main className="flex flex-1 flex-col overflow-hidden lg:ml-0">
         <Header />

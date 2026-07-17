@@ -1,11 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createCollectionStore } from "@/lib/firebase";
 
-// ⚠️ Couche de données locale (localStorage) en attendant les clés Firebase.
-// L'API (async CRUD) est calquée sur Firestore : pour brancher Firebase,
-// seules les fonctions load/save/persist de ce fichier changent — aucune
-// modification côté pages/composants.
+// Store branché sur Firestore (collection "contacts") avec cache temps réel :
+// les hooks gardent exactement la même API qu'à l'époque localStorage.
 
 export const STAGES = [
   { name: "Nouveau", color: "rgb(59, 130, 246)" },
@@ -44,23 +43,17 @@ export interface Contact {
 
 export type ContactInput = Omit<Contact, "id" | "createdAt" | "updatedAt">;
 
-const STORAGE_KEY = "netforce.contacts";
+const store = createCollectionStore<Contact>("contacts");
 
-function load(): Contact[] {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Contact[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function save(list: Contact[]) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-}
+/** Accès direct au store (migration, moteur d'automatisations). */
+export const contactsStore = store;
 
 function makeId() {
   return `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function sorted(list: Contact[]): Contact[] {
+  return [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export function contactFullName(c: Pick<Contact, "firstName" | "lastName">) {
@@ -81,7 +74,7 @@ export function emitCrmEvent(event: CrmEvent) {
   window.dispatchEvent(new CustomEvent("netforce:crm-event", { detail: event }));
 }
 
-/** Demande aux hooks de données de recharger depuis le stockage. */
+/** Conservé pour compatibilité : Firestore pousse déjà les mises à jour. */
 export function requestDataRefresh() {
   window.dispatchEvent(new Event("netforce:data-refresh"));
 }
@@ -90,77 +83,59 @@ export function requestDataRefresh() {
  * Modification directe d'un contact SANS émettre d'événement CRM —
  * réservé aux actions d'automatisation (évite les boucles infinies).
  */
-export function applyContactPatch(id: string, patch: Partial<ContactInput>): Contact | null {
-  let updated: Contact | null = null;
-  const next = load().map((c) => {
-    if (c.id !== id) return c;
-    updated = { ...c, ...patch, updatedAt: new Date().toISOString() };
-    return updated;
-  });
-  save(next);
-  return updated;
+export async function applyContactPatch(
+  id: string,
+  patch: Partial<ContactInput>,
+): Promise<void> {
+  await store.update(id, { ...patch, updatedAt: new Date().toISOString() });
 }
 
 export function useContacts() {
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [contacts, setContacts] = useState<Contact[]>(sorted(store.get()));
+  const [loading, setLoading] = useState(!store.ready());
 
-  useEffect(() => {
-    setContacts(load());
-    setLoading(false);
-    const onRefresh = () => setContacts(load());
-    window.addEventListener("netforce:data-refresh", onRefresh);
-    return () => window.removeEventListener("netforce:data-refresh", onRefresh);
-  }, []);
-
-  const persist = useCallback((next: Contact[]) => {
-    setContacts(next);
-    save(next);
-  }, []);
-
-  const addContact = useCallback(
-    async (input: ContactInput): Promise<Contact> => {
-      const now = new Date().toISOString();
-      const contact: Contact = { ...input, id: makeId(), createdAt: now, updatedAt: now };
-      persist([contact, ...load()]);
-      emitCrmEvent({ type: "contact_created", contact });
-      setContacts(load());
-      return contact;
-    },
-    [persist],
+  useEffect(
+    () =>
+      store.subscribe(() => {
+        setContacts(sorted(store.get()));
+        setLoading(false);
+      }),
+    [],
   );
+
+  const addContact = useCallback(async (input: ContactInput): Promise<Contact> => {
+    const now = new Date().toISOString();
+    const contact: Contact = { ...input, id: makeId(), createdAt: now, updatedAt: now };
+    await store.set(contact);
+    emitCrmEvent({ type: "contact_created", contact });
+    return contact;
+  }, []);
 
   const updateContact = useCallback(
     async (id: string, input: Partial<ContactInput>): Promise<void> => {
-      const before = load().find((c) => c.id === id);
-      let after: Contact | null = null;
-      const next = load().map((c) => {
-        if (c.id !== id) return c;
-        after = { ...c, ...input, updatedAt: new Date().toISOString() };
-        return after;
-      });
-      persist(next);
-      if (before && after && input.stage && input.stage !== before.stage) {
-        emitCrmEvent({ type: "stage_changed", contact: after, from: before.stage, to: input.stage });
-        setContacts(load());
+      const before = store.get().find((c) => c.id === id);
+      await store.update(id, { ...input, updatedAt: new Date().toISOString() });
+      if (before && input.stage && input.stage !== before.stage) {
+        emitCrmEvent({
+          type: "stage_changed",
+          contact: { ...before, ...input, stage: input.stage },
+          from: before.stage,
+          to: input.stage,
+        });
       }
     },
-    [persist],
+    [],
   );
 
-  const deleteContact = useCallback(
-    async (id: string): Promise<void> => {
-      persist(load().filter((c) => c.id !== id));
-    },
-    [persist],
-  );
+  const deleteContact = useCallback(async (id: string): Promise<void> => {
+    await store.remove(id);
+  }, []);
 
   /** Importe une liste de contacts en ignorant les emails déjà présents. */
   const importContacts = useCallback(
     async (inputs: ContactInput[]): Promise<{ added: number; skipped: number }> => {
-      const existing = load();
       const knownEmails = new Set(
-        existing.map((c) => c.email.trim().toLowerCase()).filter(Boolean),
+        store.get().map((c) => c.email.trim().toLowerCase()).filter(Boolean),
       );
       const now = new Date().toISOString();
       const toAdd: Contact[] = [];
@@ -174,12 +149,11 @@ export function useContacts() {
         if (email) knownEmails.add(email);
         toAdd.push({ ...input, id: makeId(), createdAt: now, updatedAt: now });
       }
-      persist([...toAdd, ...existing]);
+      await store.setMany(toAdd);
       for (const contact of toAdd) emitCrmEvent({ type: "contact_created", contact });
-      setContacts(load());
       return { added: toAdd.length, skipped };
     },
-    [persist],
+    [],
   );
 
   return { contacts, loading, addContact, updateContact, deleteContact, importContacts };
