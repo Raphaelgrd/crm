@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, Filter, Mail, Calendar, Eye } from "lucide-react";
+import { Settings, Filter, Mail, Calendar, Eye, Send } from "lucide-react";
+import SendEmailModal from "@/components/contacts/SendEmailModal";
 import {
   Contact,
   STAGES,
@@ -51,6 +52,7 @@ export default function ClosingPage() {
   const [period, setPeriod] = useState<Period>("all");
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<StageName | null>(null);
+  const [sendingTo, setSendingTo] = useState<Contact | null>(null);
 
   const byStage = useMemo(() => {
     const map = new Map<StageName, Contact[]>();
@@ -186,17 +188,38 @@ export default function ClosingPage() {
                       (dragId === card.id ? "opacity-50" : "")
                     }
                   >
-                    <button
-                      onClick={() =>
-                        router.push(
-                          `/contacts?q=${encodeURIComponent(card.email || contactFullName(card))}`,
-                        )
-                      }
-                      className="hover:bg-muted absolute top-2 right-2 z-10 rounded p-1 transition-colors duration-200"
-                      aria-label="Voir le contact"
-                    >
-                      <Eye className="h-4 w-4 stroke-gray-400" aria-hidden="true" />
-                    </button>
+                    <div className="absolute top-2 right-2 z-10 flex gap-0.5">
+                      <button
+                        onClick={() => setSendingTo(card)}
+                        disabled={!card.email}
+                        className="hover:bg-muted rounded p-1 transition-colors duration-200 disabled:opacity-30"
+                        aria-label="Envoyer le mail nouveaux arrivants"
+                        title={
+                          card.lastEmailSentAt
+                            ? `Mail envoyé le ${new Date(card.lastEmailSentAt).toLocaleDateString("fr-FR")}`
+                            : "Envoyer le mail nouveaux arrivants"
+                        }
+                      >
+                        <Send
+                          className={
+                            "h-4 w-4 " +
+                            (card.lastEmailSentAt ? "stroke-green-500" : "stroke-gray-400")
+                          }
+                          aria-hidden="true"
+                        />
+                      </button>
+                      <button
+                        onClick={() =>
+                          router.push(
+                            `/contacts?q=${encodeURIComponent(card.email || contactFullName(card))}`,
+                          )
+                        }
+                        className="hover:bg-muted rounded p-1 transition-colors duration-200"
+                        aria-label="Voir le contact"
+                      >
+                        <Eye className="h-4 w-4 stroke-gray-400" aria-hidden="true" />
+                      </button>
+                    </div>
                     <div className="mb-3 flex items-center gap-3">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
                         {contactInitial(card)}
@@ -228,6 +251,17 @@ export default function ClosingPage() {
           );
         })}
       </div>
+
+      <SendEmailModal
+        open={sendingTo !== null}
+        contact={sendingTo}
+        onClose={() => setSendingTo(null)}
+        onSent={async (c) => {
+          const sentAt = new Date().toISOString();
+          await updateContact(c.id, { lastEmailSentAt: sentAt });
+          setSendingTo((cur) => (cur ? { ...cur, lastEmailSentAt: sentAt } : cur));
+        }}
+      />
     </div>
   );
 }

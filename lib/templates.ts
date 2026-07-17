@@ -70,6 +70,8 @@ export interface EmailTemplate {
   subject: string;
   blocks: EmailBlock[];
   settings: TemplateSettings;
+  /** "welcome" = mail relié au bouton d'envoi des fiches client. */
+  special?: "welcome";
   createdAt: string;
   updatedAt: string;
 }
@@ -219,6 +221,41 @@ export function fillVariables(html: string, data: Record<string, string> = SAMPL
   return html.replace(/\{\{(\w+)\}\}/g, (m, key: string) => data[key] ?? m);
 }
 
+/** Variables d'un contact pour fillVariables. */
+export function contactVariables(c: {
+  firstName: string;
+  lastName: string;
+  company: string;
+  email: string;
+  phone: string;
+}): Record<string, string> {
+  return {
+    civility: "",
+    firstName: c.firstName,
+    lastName: c.lastName,
+    companyName: c.company,
+    email: c.email,
+    phone: c.phone,
+  };
+}
+
+/** Version texte brut du mail (pour Gmail/mailto qui n'acceptent pas le HTML). */
+export function renderEmailText(t: EmailTemplate): string {
+  const parts: string[] = [];
+  for (const b of t.blocks) {
+    if (b.type === "heading" || b.type === "text") {
+      const text = (b.props as TextProps).text.trim();
+      if (text) parts.push(text);
+    } else if (b.type === "button") {
+      const p = b.props as ButtonProps;
+      parts.push(p.href && p.href !== "https://" ? `${p.label} : ${p.href}` : p.label);
+    } else if (b.type === "divider") {
+      parts.push("――――――――――");
+    }
+  }
+  return parts.join("\n\n");
+}
+
 // --- Store ---
 
 function seedTemplates(): EmailTemplate[] {
@@ -257,16 +294,53 @@ function seedTemplates(): EmailTemplate[] {
   ];
 }
 
+/** Mail par défaut relié au bouton d'envoi des fiches client. */
+function makeWelcomeTemplate(): EmailTemplate {
+  const now = new Date().toISOString();
+  return {
+    id: makeId("t"),
+    name: "Mail nouveaux arrivants",
+    type: "Email",
+    subject: "Bienvenue {{firstName}} — ravi d'échanger avec vous",
+    special: "welcome",
+    blocks: [
+      {
+        id: makeId(),
+        type: "heading",
+        props: { text: "Bienvenue {{firstName}} !", align: "left", color: "#0f172a", fontSize: 24 },
+      },
+      {
+        id: makeId(),
+        type: "text",
+        props: {
+          text: "Bonjour {{firstName}} {{lastName}},\n\nMerci pour votre intérêt. Nous avons bien enregistré votre demande pour {{companyName}} et nous revenons vers vous très rapidement.\n\nÀ très bientôt,\nL'équipe Netforce",
+          align: "left",
+          color: "#334155",
+          fontSize: 14,
+        },
+      },
+    ],
+    settings: { ...DEFAULT_SETTINGS },
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 function load(): EmailTemplate[] {
+  let list: EmailTemplate[] | null = null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as EmailTemplate[];
+    if (raw) list = JSON.parse(raw) as EmailTemplate[];
   } catch {
     /* ignore */
   }
-  const seeded = seedTemplates();
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-  return seeded;
+  if (!list) list = seedTemplates();
+  // Garantir la présence du mail spécial « nouveaux arrivants »
+  if (!list.some((t) => t.special === "welcome")) {
+    list = [makeWelcomeTemplate(), ...list];
+  }
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  return list;
 }
 
 function save(list: EmailTemplate[]) {

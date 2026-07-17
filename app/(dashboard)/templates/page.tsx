@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Mail, MessageSquare, FileText, SquarePen, Copy, Trash2 } from "lucide-react";
+import { Plus, Mail, MessageSquare, FileText, SquarePen, Copy, Trash2, Send } from "lucide-react";
 import { TemplateType, templatePreview, useTemplates } from "@/lib/templates";
 
 const TYPE_ICON: Record<TemplateType, typeof Mail> = {
@@ -23,8 +23,10 @@ export default function TemplatesPage() {
   const [filter, setFilter] = useState<"Tous" | TemplateType>("Tous");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  const welcome = templates.find((t) => t.special === "welcome") ?? null;
+  const regular = templates.filter((t) => t.special !== "welcome");
   const visible =
-    filter === "Tous" ? templates : templates.filter((t) => t.type === filter);
+    filter === "Tous" ? regular : regular.filter((t) => t.type === filter);
 
   return (
     <>
@@ -52,14 +54,41 @@ export default function TemplatesPage() {
       </div>
 
       <div className="p-4 sm:p-6 lg:p-8">
+        {/* Mail spécial relié au bouton des fiches client */}
+        {welcome && (
+          <div className="border-primary/30 bg-primary/5 mb-8 flex flex-col gap-4 rounded-2xl border p-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="bg-primary flex h-11 w-11 shrink-0 items-center justify-center rounded-xl">
+                <Send className="h-5 w-5 text-white" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-foreground text-base font-bold">{welcome.name}</h3>
+                <p className="text-muted-foreground mt-0.5 text-sm">
+                  Ce mail est relié au bouton d&apos;envoi{" "}
+                  <Send className="inline h-3.5 w-3.5 align-[-2px]" aria-hidden="true" /> des
+                  fiches client (Contacts et Closing). Sujet :{" "}
+                  <span className="text-foreground font-semibold">{welcome.subject}</span>
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/templates/${welcome.id}`}
+              className="bg-primary text-primary-foreground inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+            >
+              <SquarePen className="h-4 w-4" aria-hidden="true" />
+              Modifier ce mail
+            </Link>
+          </div>
+        )}
+
         {/* Filtres */}
         <div className="mb-8 flex flex-wrap gap-3">
           {FILTERS.map(({ label, value }) => {
             const active = filter === value;
             const count =
               value === "Tous"
-                ? templates.length
-                : templates.filter((t) => t.type === value).length;
+                ? regular.length
+                : regular.filter((t) => t.type === value).length;
             const Icon = value !== "Tous" ? TYPE_ICON[value] : null;
             return (
               <button

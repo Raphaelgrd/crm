@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileUp, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { FileUp, Pencil, Plus, Search, Send, Trash2, Users } from "lucide-react";
 import {
   Contact,
   STAGES,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/contacts";
 import ContactFormModal from "@/components/contacts/ContactFormModal";
 import ImportCsvModal from "@/components/contacts/ImportCsvModal";
+import SendEmailModal from "@/components/contacts/SendEmailModal";
 
 const selectClass =
   "border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 rounded-lg border px-2 py-1.5 text-sm focus:ring-2 focus:outline-none";
@@ -38,6 +39,7 @@ export default function ContactsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Contact | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [sendingTo, setSendingTo] = useState<Contact | null>(null);
 
   // Recherche pré-remplie via /contacts?q=… (utilisé par la page Closing)
   useEffect(() => {
@@ -223,6 +225,26 @@ export default function ContactsPage() {
                       <div className="flex justify-end gap-1">
                         <button
                           type="button"
+                          onClick={() => setSendingTo(c)}
+                          disabled={!c.email}
+                          className="hover:bg-muted rounded p-1.5 transition-colors disabled:opacity-30"
+                          aria-label="Envoyer le mail nouveaux arrivants"
+                          title={
+                            c.lastEmailSentAt
+                              ? `Mail envoyé le ${formatDate(c.lastEmailSentAt)}`
+                              : "Envoyer le mail nouveaux arrivants"
+                          }
+                        >
+                          <Send
+                            className={
+                              "h-4 w-4 " +
+                              (c.lastEmailSentAt ? "text-green-500" : "text-gray-400")
+                            }
+                            aria-hidden="true"
+                          />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => {
                             setEditing(c);
                             setFormOpen(true);
@@ -278,6 +300,16 @@ export default function ContactsPage() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         onImport={importContacts}
+      />
+      <SendEmailModal
+        open={sendingTo !== null}
+        contact={sendingTo}
+        onClose={() => setSendingTo(null)}
+        onSent={async (c) => {
+          const sentAt = new Date().toISOString();
+          await updateContact(c.id, { lastEmailSentAt: sentAt });
+          setSendingTo((cur) => (cur ? { ...cur, lastEmailSentAt: sentAt } : cur));
+        }}
       />
     </div>
   );

@@ -36,6 +36,8 @@ export interface Contact {
   category: string;
   stage: StageName;
   notes: string;
+  /** Date du dernier envoi du mail « nouveaux arrivants » depuis la fiche. */
+  lastEmailSentAt?: string;
   createdAt: string;
   updatedAt: string;
 }
