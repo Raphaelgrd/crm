@@ -1,55 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Mail, MessageSquare, FileText, SquarePen } from "lucide-react";
-
-type TemplateType = "Email" | "SMS" | "Note";
-
-interface Template {
-  id: string;
-  name: string;
-  type: TemplateType;
-  subject: string;
-  preview: string;
-}
-
-// ⚠️ Données de seed reconstruites depuis l'export HTML (page /templates réelle).
-// À remplacer par un fetch vers ta vraie base de données (API route / server action)
-// une fois le backend reconnecté. Exemple : const templates = await getTemplates()
-const SEED_TEMPLATES: Template[] = [
-  {
-    id: "1",
-    name: "merci",
-    type: "Email",
-    subject: "Merci — votre accord de confidentialité est signé",
-    preview:
-      "Bonjour {{civility}} {{lastName}}, Nous vous confirmons la bonne réception de votre accord de confidentialité (NDA), dûme...",
-  },
-  {
-    id: "2",
-    name: "email_signature",
-    type: "Email",
-    subject: "signature",
-    preview:
-      "Bonjour {{lastName}}, Nous vous remercions de l'intérêt porté par {{companyName}} à un partenariat avec nous. Avant de pa...",
-  },
-  {
-    id: "3",
-    name: "relance MOU EN",
-    type: "Email",
-    subject: "Milipol Singapore – Territory Exclusivity Confirmation",
-    preview:
-      "{{firstName}} {{lastName}}, In a context of strong acceleration in global demand for our G.I.E solution (Electric Impulse...",
-  },
-  {
-    id: "4",
-    name: "relance MOU FR",
-    type: "Email",
-    subject: "Présence Milipol Singapour et confirmation MOU",
-    preview:
-      "{{firstName}} {{lastName}}, Dans un contexte de forte accélération de la demande internationale pour notre solution G.I.E...",
-  },
-];
+import Link from "next/link";
+import { Plus, Mail, MessageSquare, FileText, SquarePen, Copy, Trash2 } from "lucide-react";
+import { TemplateType, templatePreview, useTemplates } from "@/lib/templates";
 
 const TYPE_ICON: Record<TemplateType, typeof Mail> = {
   Email: Mail,
@@ -65,12 +19,12 @@ const FILTERS: { label: string; value: "Tous" | TemplateType }[] = [
 ];
 
 export default function TemplatesPage() {
+  const { templates, loading, deleteTemplate, duplicateTemplate } = useTemplates();
   const [filter, setFilter] = useState<"Tous" | TemplateType>("Tous");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const templates =
-    filter === "Tous"
-      ? SEED_TEMPLATES
-      : SEED_TEMPLATES.filter((t) => t.type === filter);
+  const visible =
+    filter === "Tous" ? templates : templates.filter((t) => t.type === filter);
 
   return (
     <>
@@ -86,10 +40,13 @@ export default function TemplatesPage() {
             </p>
           </div>
           <div className="shrink-0">
-            <button className="bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer rounded-xl px-5 py-2.5 text-sm font-semibold shadow-(--shadow-card) transition-all duration-200">
+            <Link
+              href="/templates/new"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-block cursor-pointer rounded-xl px-5 py-2.5 text-sm font-semibold shadow-(--shadow-card) transition-all duration-200"
+            >
               <Plus className="mr-2 inline h-4 w-4" aria-hidden="true" />
               Nouveau template
-            </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -101,8 +58,8 @@ export default function TemplatesPage() {
             const active = filter === value;
             const count =
               value === "Tous"
-                ? SEED_TEMPLATES.length
-                : SEED_TEMPLATES.filter((t) => t.type === value).length;
+                ? templates.length
+                : templates.filter((t) => t.type === value).length;
             const Icon = value !== "Tous" ? TYPE_ICON[value] : null;
             return (
               <button
@@ -130,8 +87,15 @@ export default function TemplatesPage() {
         </div>
 
         {/* Grille de templates */}
+        {!loading && visible.length === 0 && (
+          <div className="border-border rounded-xl border border-dashed py-16 text-center">
+            <p className="text-muted-foreground text-sm">
+              Aucun template — crée le premier avec « Nouveau template ».
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {templates.map((template) => {
+          {visible.map((template) => {
             const Icon = TYPE_ICON[template.type];
             return (
               <div
@@ -161,23 +125,54 @@ export default function TemplatesPage() {
                     Sujet
                   </p>
                   <p className="text-foreground mt-1 text-sm font-semibold">
-                    {template.subject}
+                    {template.subject || "—"}
                   </p>
                 </div>
 
                 <div className="mb-4">
                   <p className="text-muted-foreground line-clamp-3 text-sm leading-relaxed">
-                    {template.preview}
+                    {templatePreview(template)}
                   </p>
                 </div>
 
                 <div className="border-border flex items-center justify-end gap-2 border-t pt-4">
-                  <button
+                  <Link
+                    href={`/templates/${template.id}`}
                     title="Modifier"
                     className="text-muted-foreground hover:bg-primary/15 hover:text-primary cursor-pointer rounded-lg p-2 transition-all duration-200"
                   >
                     <SquarePen className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                  <button
+                    type="button"
+                    title="Dupliquer"
+                    onClick={() => void duplicateTemplate(template.id)}
+                    className="text-muted-foreground hover:bg-primary/15 hover:text-primary cursor-pointer rounded-lg p-2 transition-all duration-200"
+                  >
+                    <Copy className="h-4 w-4" aria-hidden="true" />
                   </button>
+                  {confirmDeleteId === template.id ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmDeleteId(null);
+                        void deleteTemplate(template.id);
+                      }}
+                      onBlur={() => setConfirmDeleteId(null)}
+                      className="rounded-lg bg-red-500 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-600"
+                    >
+                      Confirmer ?
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      title="Supprimer"
+                      onClick={() => setConfirmDeleteId(template.id)}
+                      className="text-muted-foreground cursor-pointer rounded-lg p-2 transition-all duration-200 hover:bg-red-50 hover:text-red-500"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
