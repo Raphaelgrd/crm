@@ -12,6 +12,7 @@ import {
   Zap,
   FileText,
   FolderLock,
+  Package,
   Settings,
   Plus,
   LogOut,
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { href: "/automatisation", label: "Automatisations", icon: Zap },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/data-room", label: "Data Room", icon: FolderLock },
+  { href: "/stock", label: "Stock", icon: Package },
   { href: "/settings", label: "Paramètres", icon: Settings },
 ];
 
