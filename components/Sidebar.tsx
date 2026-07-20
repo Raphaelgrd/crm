@@ -10,6 +10,7 @@ import {
   FolderKanban,
   SquareCheckBig,
   Zap,
+  Clock,
   FileText,
   FolderLock,
   Package,
@@ -32,6 +33,7 @@ const NAV_ITEMS = [
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/data-room", label: "Data Room", icon: FolderLock },
   { href: "/stock", label: "Stock", icon: Package },
+  { href: "/rapport", label: "Rapport d'activité", icon: Clock },
   { href: "/settings", label: "Paramètres", icon: Settings },
 ];
 
