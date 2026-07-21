@@ -605,6 +605,7 @@ export default function ContactsPage() {
       />
       <ImportCsvModal
         open={importOpen}
+        existingAttributes={allExtraKeys}
         onClose={() => setImportOpen(false)}
         onImport={importContacts}
       />
