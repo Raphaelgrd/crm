@@ -1,14 +1,13 @@
 "use client";
 
 import { Menu, Search, Bell, ChevronDown } from "lucide-react";
+import { initials, useCrmUser } from "@/lib/rapport";
 
-export function Header({
-  userName = "Raphael Gerard",
-  userInitial = "R",
-}: {
-  userName?: string;
-  userInitial?: string;
-}) {
+export function Header() {
+  const { name, user } = useCrmUser();
+  const userName = name || user?.email?.split("@")[0] || "";
+  const userInitial = initials(userName) || "?";
+
   return (
     <header className="border-border bg-background/95 sticky top-0 z-40 border-b px-4 py-3 backdrop-blur-sm sm:px-6 lg:px-8">
       <div className="flex items-center justify-between gap-2 sm:gap-4">
@@ -24,9 +23,11 @@ export function Header({
               Netforce
             </span>
           </div>
-          <span className="text-muted-foreground hidden text-sm sm:inline">
-            Salut {userName} !
-          </span>
+          {userName && (
+            <span className="text-muted-foreground hidden text-sm sm:inline">
+              Salut {userName} !
+            </span>
+          )}
         </div>
 
         <div className="hidden flex-1 justify-center px-4 md:flex">

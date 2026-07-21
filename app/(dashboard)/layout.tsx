@@ -2,6 +2,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import AutomationRunner from "@/components/automation/AutomationRunner";
 import MigrationBanner from "@/components/MigrationBanner";
+import AuthGate from "@/components/AuthGate";
 import type { ReactNode } from "react";
 
 export default function DashboardLayout({
@@ -10,6 +11,7 @@ export default function DashboardLayout({
   children: ReactNode;
 }) {
   return (
+    <AuthGate>
     <div className="bg-surface-page flex h-screen overflow-hidden">
       <AutomationRunner />
       <MigrationBanner />
@@ -21,5 +23,6 @@ export default function DashboardLayout({
         </div>
       </main>
     </div>
+    </AuthGate>
   );
 }

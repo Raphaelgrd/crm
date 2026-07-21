@@ -155,6 +155,55 @@ export function frAuthError(code: string) {
   return frAuthErrors[code] ?? "Erreur de connexion. Réessayez.";
 }
 
+// --- Auth partagée : le compte du Rapport d'activité EST le compte du CRM ---
+
+export function getRapportAuth() {
+  return auth();
+}
+
+export async function signInRapport(email: string, password: string) {
+  await signInWithEmailAndPassword(auth(), email, password);
+}
+
+export async function signUpRapport(name: string, email: string, password: string) {
+  const cred = await createUserWithEmailAndPassword(auth(), email, password);
+  await setDoc(doc(db(), "users", cred.user.uid), {
+    name,
+    email: cred.user.email,
+    validators: ["Laurent", "Sébastien"],
+    isAdmin: false,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+export async function signOutRapport() {
+  await fbSignOut(auth());
+}
+
+/** Session + prénom de l'utilisateur connecté (pour l'en-tête du CRM). */
+export function useCrmUser() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [name, setName] = useState("");
+
+  useEffect(() => {
+    return onAuthStateChanged(auth(), (u) => {
+      setUser(u);
+      setLoading(false);
+      if (u) {
+        void getDoc(doc(db(), "users", u.uid)).then((snap) => {
+          const n = (snap.data() as RapportUser | undefined)?.name;
+          setName(n || u.email?.split("@")[0] || "");
+        });
+      } else {
+        setName("");
+      }
+    });
+  }, []);
+
+  return { user, loading, name };
+}
+
 const EMPTY_DATA: RapportData = {
   settings: { name: "", validators: ["Laurent", "Sébastien"] },
   tasks: [],
@@ -204,24 +253,9 @@ export function useRapport() {
     });
   }, [loadData]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth(), email, password);
-  }, []);
-
-  const signUp = useCallback(async (name: string, email: string, password: string) => {
-    const cred = await createUserWithEmailAndPassword(auth(), email, password);
-    await setDoc(doc(db(), "users", cred.user.uid), {
-      name,
-      email: cred.user.email,
-      validators: ["Laurent", "Sébastien"],
-      isAdmin: false,
-      createdAt: new Date().toISOString(),
-    });
-  }, []);
-
-  const signOutUser = useCallback(async () => {
-    await fbSignOut(auth());
-  }, []);
+  const signIn = useCallback(signInRapport, []);
+  const signUp = useCallback(signUpRapport, []);
+  const signOutUser = useCallback(signOutRapport, []);
 
   const isAdmin = user?.email === ADMIN_EMAIL || data.settings.isAdmin === true;
 

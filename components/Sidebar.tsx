@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { initials, signOutRapport, useCrmUser } from "@/lib/rapport";
 import {
   LayoutDashboard,
   Users,
@@ -33,8 +34,10 @@ const NAV_ITEMS = [
   { href: "/settings", label: "Paramètres", icon: Settings },
 ];
 
-export function Sidebar({ userInitial = "R" }: { userInitial?: string }) {
+export function Sidebar() {
   const pathname = usePathname();
+  const { name } = useCrmUser();
+  const userInitial = initials(name) || "?";
 
   return (
     <div className="group border-sidebar-border bg-sidebar text-sidebar-foreground fixed top-0 left-0 z-40 flex h-screen flex-col border-r shadow-(--shadow-card) transition-all duration-300 ease-(--ease-standard) lg:relative -translate-x-full lg:translate-x-0 w-64 lg:w-16">
@@ -114,6 +117,7 @@ export function Sidebar({ userInitial = "R" }: { userInitial?: string }) {
           <button
             title="Déconnexion"
             aria-label="Déconnexion"
+            onClick={() => void signOutRapport()}
             className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer rounded-lg p-2 transition-colors duration-200"
           >
             <LogOut className="h-5 w-5" aria-hidden="true" />
