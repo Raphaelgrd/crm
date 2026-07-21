@@ -37,6 +37,8 @@ export default function SegmentBuilderModal({
   const [groups, setGroups] = useState<SegmentGroup[]>([{ conditions: [emptyCondition()] }]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Champ valeur dont la liste d'autocomplétion est ouverte ("gi-ci"), ou null.
+  const [openValue, setOpenValue] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -107,13 +109,15 @@ export default function SegmentBuilderModal({
     );
 
   const removeCondition = (gi: number, ci: number) =>
-    setGroups((gs) =>
-      gs
+    setGroups((gs) => {
+      const next = gs
         .map((g, i) =>
           i === gi ? { conditions: g.conditions.filter((_, j) => j !== ci) } : g,
         )
-        .filter((g) => g.conditions.length > 0),
-    );
+        .filter((g) => g.conditions.length > 0);
+      // Toujours garder au moins une ligne de condition affichée.
+      return next.length > 0 ? next : [{ conditions: [emptyCondition()] }];
+    });
 
   const addGroup = () => setGroups((gs) => [...gs, { conditions: [emptyCondition()] }]);
 
@@ -183,7 +187,6 @@ export default function SegmentBuilderModal({
               <div className="border-border bg-muted/30 space-y-2 rounded-xl border p-3">
                 {group.conditions.map((cond, ci) => {
                   const op = SEGMENT_OPERATORS.find((o) => o.id === cond.operator);
-                  const listId = `seg-${gi}-${ci}-vals`;
                   return (
                     <div key={ci}>
                       {ci > 0 && (
@@ -217,22 +220,51 @@ export default function SegmentBuilderModal({
                           ))}
                         </select>
                         {op?.needsValue && (
-                          <>
+                          <div className="relative min-w-40 flex-1">
                             <input
-                              className={`${controlClass} min-w-40 flex-1`}
+                              className={`${controlClass} w-full`}
                               value={cond.value}
-                              list={listId}
-                              onChange={(e) => updateCondition(gi, ci, { value: e.target.value })}
+                              onChange={(e) => {
+                                updateCondition(gi, ci, { value: e.target.value });
+                                setOpenValue(`${gi}-${ci}`);
+                              }}
+                              onFocus={() => setOpenValue(`${gi}-${ci}`)}
+                              onBlur={() =>
+                                setTimeout(
+                                  () => setOpenValue((v) => (v === `${gi}-${ci}` ? null : v)),
+                                  150,
+                                )
+                              }
                               placeholder="valeur…"
+                              autoComplete="off"
                             />
-                            <datalist id={listId}>
-                              {distinctValues(cond.field)
-                                .slice(0, 100)
-                                .map((v) => (
-                                  <option key={v} value={v} />
-                                ))}
-                            </datalist>
-                          </>
+                            {openValue === `${gi}-${ci}` &&
+                              (() => {
+                                const needle = cond.value.trim().toLowerCase();
+                                const sugg = distinctValues(cond.field)
+                                  .filter((v) => !needle || v.toLowerCase().includes(needle))
+                                  .slice(0, 50);
+                                if (sugg.length === 0) return null;
+                                return (
+                                  <div className="border-border bg-card absolute top-full left-0 z-20 mt-1 max-h-44 w-full overflow-y-auto rounded-lg border shadow-lg">
+                                    {sugg.map((v) => (
+                                      <button
+                                        key={v}
+                                        type="button"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => {
+                                          updateCondition(gi, ci, { value: v });
+                                          setOpenValue(null);
+                                        }}
+                                        className="hover:bg-muted text-foreground block w-full truncate px-3 py-1.5 text-left text-sm"
+                                      >
+                                        {v}
+                                      </button>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                          </div>
                         )}
                         <button
                           type="button"
