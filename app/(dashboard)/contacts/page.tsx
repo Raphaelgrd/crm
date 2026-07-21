@@ -31,6 +31,7 @@ import ImportCsvModal from "@/components/contacts/ImportCsvModal";
 import SendEmailModal from "@/components/contacts/SendEmailModal";
 import ContactDetailModal from "@/components/contacts/ContactDetailModal";
 import SegmentBuilderModal from "@/components/contacts/SegmentBuilderModal";
+import ColumnsPanel from "@/components/contacts/ColumnsPanel";
 
 const selectClass =
   "border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 rounded-lg border px-2 py-1.5 text-sm focus:ring-2 focus:outline-none";
@@ -81,7 +82,7 @@ export default function ContactsPage() {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [editingSegment, setEditingSegment] = useState<Segment | null>(null);
   const [confirmDeleteSeg, setConfirmDeleteSeg] = useState<string | null>(null);
-  const [colMenuOpen, setColMenuOpen] = useState(false);
+  const [colPanelOpen, setColPanelOpen] = useState(false);
   const [visibleCols, setVisibleCols] = useState<string[]>(DEFAULT_COLUMNS);
 
   const activeSegment = useMemo(
@@ -101,12 +102,9 @@ export default function ContactsPage() {
     }
   }, []);
 
-  const toggleColumn = (id: string) => {
-    setVisibleCols((cols) => {
-      const next = cols.includes(id) ? cols.filter((c) => c !== id) : [...cols, id];
-      window.localStorage.setItem(COLUMNS_KEY, JSON.stringify(next));
-      return next;
-    });
+  const saveColumns = (cols: string[]) => {
+    setVisibleCols(cols);
+    window.localStorage.setItem(COLUMNS_KEY, JSON.stringify(cols));
   };
 
   const allExtraKeys = useMemo(
@@ -127,12 +125,14 @@ export default function ContactsPage() {
     [contacts],
   );
 
-  const orderedCols = useMemo(
-    () => [
-      ...BASE_COLUMNS.map((c) => c.id).filter((id) => visibleCols.includes(id)),
-      ...visibleCols.filter((id) => id.startsWith("extra:")),
-    ],
-    [visibleCols],
+  // L'ordre affiché EST celui choisi dans le panneau (base et champs importés
+  // mélangés librement, réordonnables par glisser-déposer).
+  const orderedCols = visibleCols;
+
+  // Toutes les colonnes disponibles pour le panneau : base + champs importés.
+  const allColumns = useMemo(
+    () => [...BASE_COLUMNS, ...allExtraKeys.map((k) => ({ id: `extra:${k}`, label: k }))],
+    [allExtraKeys],
   );
 
   const filtered = useMemo(() => {
@@ -419,59 +419,15 @@ export default function ContactsPage() {
             )}
           </div>
 
-          {/* Choix des colonnes */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setColMenuOpen((o) => !o)}
-              className="border-border bg-card text-foreground hover:bg-muted inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors"
-            >
-              <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
-              Colonnes
-            </button>
-            {colMenuOpen && (
-              <div className="border-border bg-card absolute top-full right-0 z-30 mt-1 max-h-80 w-64 overflow-y-auto rounded-xl border p-2 shadow-lg">
-                <p className="text-muted-foreground px-2 pb-1 text-[10px] font-semibold uppercase">
-                  Colonnes standard
-                </p>
-                {BASE_COLUMNS.map((c) => (
-                  <label
-                    key={c.id}
-                    className="hover:bg-muted flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked={visibleCols.includes(c.id)}
-                      onChange={() => toggleColumn(c.id)}
-                    />
-                    <span className="text-foreground">{c.label}</span>
-                  </label>
-                ))}
-                {allExtraKeys.length > 0 && (
-                  <>
-                    <p className="text-muted-foreground px-2 pt-2 pb-1 text-[10px] font-semibold uppercase">
-                      Champs importés
-                    </p>
-                    {allExtraKeys.map((k) => (
-                      <label
-                        key={k}
-                        className="hover:bg-muted flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm"
-                      >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={visibleCols.includes(`extra:${k}`)}
-                          onChange={() => toggleColumn(`extra:${k}`)}
-                        />
-                        <span className="text-foreground truncate">{k}</span>
-                      </label>
-                    ))}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+          {/* Colonnes personnalisables (panneau latéral façon Brevo) */}
+          <button
+            type="button"
+            onClick={() => setColPanelOpen(true)}
+            className="border-border bg-card text-foreground hover:bg-muted inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors"
+          >
+            <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
+            Colonnes
+          </button>
         </div>
       </div>
 
@@ -684,6 +640,13 @@ export default function ContactsPage() {
           const saved = await saveSegment(input);
           setActiveSegmentId(saved.id);
         }}
+      />
+      <ColumnsPanel
+        open={colPanelOpen}
+        allColumns={allColumns}
+        initial={visibleCols}
+        onClose={() => setColPanelOpen(false)}
+        onSave={saveColumns}
       />
     </div>
   );
