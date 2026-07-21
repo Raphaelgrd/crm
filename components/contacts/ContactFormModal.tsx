@@ -37,6 +37,7 @@ const inputClass =
 export default function ContactFormModal({ open, initial, categories, onClose, onSave }: Props) {
   const [form, setForm] = useState<ContactInput>(EMPTY);
   const [tagsText, setTagsText] = useState("");
+  const [extraRows, setExtraRows] = useState<{ key: string; value: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -44,6 +45,9 @@ export default function ContactFormModal({ open, initial, categories, onClose, o
     if (open) {
       setForm(initial ? { ...EMPTY, ...initial } : EMPTY);
       setTagsText((initial?.tags ?? []).join(", "));
+      setExtraRows(
+        Object.entries(initial?.extra ?? {}).map(([key, value]) => ({ key, value })),
+      );
       setError("");
     }
   }, [open, initial]);
@@ -68,6 +72,11 @@ export default function ContactFormModal({ open, initial, categories, onClose, o
           .split(/[;,]/)
           .map((t) => t.trim())
           .filter(Boolean),
+        extra: Object.fromEntries(
+          extraRows
+            .filter((r) => r.key.trim())
+            .map((r) => [r.key.trim(), r.value]),
+        ),
       });
       onClose();
     } finally {
@@ -198,6 +207,53 @@ export default function ContactFormModal({ open, initial, categories, onClose, o
               onChange={(e) => setTagsText(e.target.value)}
               placeholder="Institutionnel, Espagne, Salon Milipol…"
             />
+          </div>
+
+          <div>
+            <label className="text-foreground mb-1 block text-xs font-medium">
+              Champs personnalisés
+            </label>
+            <div className="space-y-2">
+              {extraRows.map((row, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    className={`${inputClass} w-2/5`}
+                    value={row.key}
+                    onChange={(e) =>
+                      setExtraRows((rows) =>
+                        rows.map((r, j) => (j === i ? { ...r, key: e.target.value } : r)),
+                      )
+                    }
+                    placeholder="Nom du champ"
+                  />
+                  <input
+                    className={inputClass}
+                    value={row.value}
+                    onChange={(e) =>
+                      setExtraRows((rows) =>
+                        rows.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)),
+                      )
+                    }
+                    placeholder="Valeur"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setExtraRows((rows) => rows.filter((_, j) => j !== i))}
+                    className="shrink-0 rounded p-2 hover:bg-red-50"
+                    aria-label="Supprimer ce champ"
+                  >
+                    <X className="h-4 w-4 text-gray-400" aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setExtraRows((rows) => [...rows, { key: "", value: "" }])}
+                className="text-muted-foreground hover:text-foreground text-xs font-medium transition-colors"
+              >
+                + Ajouter un champ
+              </button>
+            </div>
           </div>
 
           <div>

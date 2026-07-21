@@ -4,12 +4,14 @@ import { useMemo, useRef, useState } from "react";
 import {
   ChevronRight,
   Download,
+  ExternalLink,
   File as FileIcon,
   FileText,
   FileUp,
   Folder,
   FolderPlus,
   Home,
+  Pencil,
   Search,
   Trash2,
   X,
@@ -37,6 +39,9 @@ export default function DataRoomPage() {
     uploadFiles,
     deleteFile,
     downloadFile,
+    renameFile,
+    moveFile,
+    openFile,
     createFolder,
     deleteFolder,
   } = useDataRoom();
@@ -49,6 +54,9 @@ export default function DataRoomPage() {
   const [newFolderName, setNewFolderName] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null); // id fichier ou "folder:nom"
   const [lightbox, setLightbox] = useState<StoredFile | null>(null);
+  const [editingFile, setEditingFile] = useState<StoredFile | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editFolder, setEditFolder] = useState("");
 
   const visibleFiles = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -88,7 +96,8 @@ export default function DataRoomPage() {
           <div className="min-w-0">
             <h1 className="text-foreground text-xl font-bold sm:text-2xl">Data Room</h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Stockez et organisez vos fichiers et images
+              {files.length} fichier{files.length > 1 ? "s" : ""} —{" "}
+              {formatSize(files.reduce((s, f) => s + f.size, 0))} au total
             </p>
           </div>
           <div className="flex shrink-0 gap-3">
@@ -275,6 +284,26 @@ export default function DataRoomPage() {
                   <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
                       type="button"
+                      onClick={() => void openFile(f.id)}
+                      className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50"
+                      aria-label="Ouvrir"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingFile(f);
+                        setEditName(f.name);
+                        setEditFolder(f.folder);
+                      }}
+                      className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50"
+                      aria-label="Renommer ou déplacer"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => void downloadFile(f.id)}
                       className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50"
                       aria-label="Télécharger"
@@ -347,6 +376,73 @@ export default function DataRoomPage() {
                   className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
                 >
                   Créer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modale renommer / déplacer */}
+      {editingFile && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setEditingFile(null)}
+        >
+          <div
+            className="bg-card w-full max-w-sm rounded-xl p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-foreground mb-4 text-lg font-bold">Modifier le fichier</h2>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const f = editingFile;
+                setEditingFile(null);
+                void (async () => {
+                  if (editName.trim() && editName !== f.name) await renameFile(f.id, editName);
+                  if (editFolder !== f.folder) await moveFile(f.id, editFolder);
+                })();
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="text-foreground mb-1 block text-xs font-medium">Nom</label>
+                <input
+                  autoFocus
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="border-border bg-card text-foreground focus:border-primary/50 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-foreground mb-1 block text-xs font-medium">Dossier</label>
+                <select
+                  value={editFolder}
+                  onChange={(e) => setEditFolder(e.target.value)}
+                  className="border-border bg-card text-foreground focus:border-primary/50 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none"
+                >
+                  <option value="">Racine</option>
+                  {folders.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingFile(null)}
+                  className="border-border bg-card text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-semibold transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+                >
+                  Enregistrer
                 </button>
               </div>
             </form>

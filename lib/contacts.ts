@@ -47,6 +47,16 @@ export interface Contact {
 
 export type ContactInput = Omit<Contact, "id" | "createdAt" | "updatedAt">;
 
+/** Liste/segment façon Brevo : une combinaison de filtres enregistrée. */
+export interface Segment {
+  id: string;
+  name: string;
+  tags: string[];
+  category: string; // "" = toutes
+  stage: string; // "" = toutes
+  createdAt: string;
+}
+
 const store = createCollectionStore<Contact>("contacts");
 
 /** Accès direct au store (migration, moteur d'automatisations). */
@@ -92,6 +102,39 @@ export async function applyContactPatch(
   patch: Partial<ContactInput>,
 ): Promise<void> {
   await store.update(id, { ...patch, updatedAt: new Date().toISOString() });
+}
+
+const segmentsStore = createCollectionStore<Segment>("segments");
+
+export function useSegments() {
+  const [segments, setSegments] = useState<Segment[]>(segmentsStore.get());
+
+  useEffect(
+    () =>
+      segmentsStore.subscribe(() =>
+        setSegments([...segmentsStore.get()].sort((a, b) => a.name.localeCompare(b.name))),
+      ),
+    [],
+  );
+
+  const addSegment = useCallback(
+    async (input: Omit<Segment, "id" | "createdAt">): Promise<Segment> => {
+      const segment: Segment = {
+        ...input,
+        id: `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: new Date().toISOString(),
+      };
+      await segmentsStore.set(segment);
+      return segment;
+    },
+    [],
+  );
+
+  const deleteSegment = useCallback(async (id: string): Promise<void> => {
+    await segmentsStore.remove(id);
+  }, []);
+
+  return { segments, addSegment, deleteSegment };
 }
 
 export function useContacts() {

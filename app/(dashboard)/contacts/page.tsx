@@ -1,13 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, FileUp, Pencil, Plus, Search, Send, Tag, Trash2, Users } from "lucide-react";
+import {
+  ChevronDown,
+  FileUp,
+  List,
+  Pencil,
+  Plus,
+  Search,
+  Send,
+  Settings2,
+  Tag,
+  Trash2,
+  Users,
+} from "lucide-react";
 import {
   Contact,
   STAGES,
   contactFullName,
   contactInitial,
   useContacts,
+  useSegments,
 } from "@/lib/contacts";
 import ContactFormModal from "@/components/contacts/ContactFormModal";
 import ImportCsvModal from "@/components/contacts/ImportCsvModal";
@@ -29,6 +42,19 @@ function formatDate(iso: string) {
   });
 }
 
+// Colonnes de base du tableau ; les colonnes "extra:<clé>" viennent des
+// champs personnalisés importés du CSV.
+const BASE_COLUMNS = [
+  { id: "email", label: "Email" },
+  { id: "phone", label: "Téléphone" },
+  { id: "company", label: "Société" },
+  { id: "category", label: "Catégorie" },
+  { id: "stage", label: "Étape" },
+  { id: "createdAt", label: "Créé le" },
+];
+const DEFAULT_COLUMNS = BASE_COLUMNS.map((c) => c.id);
+const COLUMNS_KEY = "netforce.contacts.columns";
+
 export default function ContactsPage() {
   const { contacts, loading, addContact, updateContact, deleteContact, importContacts } =
     useContacts();
@@ -44,12 +70,49 @@ export default function ContactsPage() {
   const [detailContact, setDetailContact] = useState<Contact | null>(null);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [tagMenuOpen, setTagMenuOpen] = useState(false);
+  const { segments, addSegment, deleteSegment } = useSegments();
+  const [segMenuOpen, setSegMenuOpen] = useState(false);
+  const [newSegName, setNewSegName] = useState("");
+  const [colMenuOpen, setColMenuOpen] = useState(false);
+  const [visibleCols, setVisibleCols] = useState<string[]>(DEFAULT_COLUMNS);
 
   // Recherche pré-remplie via /contacts?q=… (utilisé par la page Closing)
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("q");
     if (q) setSearch(q);
+    try {
+      const cols = window.localStorage.getItem(COLUMNS_KEY);
+      if (cols) setVisibleCols(JSON.parse(cols) as string[]);
+    } catch {
+      /* ignore */
+    }
   }, []);
+
+  const toggleColumn = (id: string) => {
+    setVisibleCols((cols) => {
+      const next = cols.includes(id) ? cols.filter((c) => c !== id) : [...cols, id];
+      window.localStorage.setItem(COLUMNS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const applySegment = (tags: string[], category: string, stage: string) => {
+    setTagFilters(tags);
+    setCategoryFilter(category || "all");
+    setStageFilter(stage || "all");
+    setSegMenuOpen(false);
+  };
+
+  const hasActiveFilters =
+    tagFilters.length > 0 || categoryFilter !== "all" || stageFilter !== "all";
+
+  const allExtraKeys = useMemo(
+    () =>
+      Array.from(new Set(contacts.flatMap((c) => Object.keys(c.extra ?? {}))))
+        .sort()
+        .slice(0, 40),
+    [contacts],
+  );
 
   const categories = useMemo(
     () => Array.from(new Set(contacts.map((c) => c.category).filter(Boolean))).sort(),
@@ -59,6 +122,14 @@ export default function ContactsPage() {
   const allTags = useMemo(
     () => Array.from(new Set(contacts.flatMap((c) => c.tags ?? []))).sort(),
     [contacts],
+  );
+
+  const orderedCols = useMemo(
+    () => [
+      ...BASE_COLUMNS.map((c) => c.id).filter((id) => visibleCols.includes(id)),
+      ...visibleCols.filter((id) => id.startsWith("extra:")),
+    ],
+    [visibleCols],
   );
 
   const filtered = useMemo(() => {
@@ -227,6 +298,143 @@ export default function ContactsPage() {
               </div>
             )}
           </div>
+
+          {/* Listes / segments enregistrés */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setSegMenuOpen((o) => !o)}
+              className="border-border bg-card text-foreground hover:bg-muted inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors"
+            >
+              <List className="h-3.5 w-3.5" aria-hidden="true" />
+              Listes
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            {segMenuOpen && (
+              <div className="border-border bg-card absolute top-full left-0 z-30 mt-1 w-72 rounded-xl border p-2 shadow-lg">
+                {segments.length === 0 ? (
+                  <p className="text-muted-foreground px-2 py-2 text-xs">
+                    Aucune liste — applique des filtres (tags, catégorie, étape) puis
+                    enregistre-les ici sous un nom.
+                  </p>
+                ) : (
+                  segments.map((s) => (
+                    <div key={s.id} className="hover:bg-muted flex items-center gap-1 rounded-lg">
+                      <button
+                        type="button"
+                        onClick={() => applySegment(s.tags, s.category, s.stage)}
+                        className="text-foreground min-w-0 flex-1 px-2 py-1.5 text-left text-sm font-medium"
+                      >
+                        <span className="block truncate">{s.name}</span>
+                        <span className="text-muted-foreground block truncate text-[10px]">
+                          {[
+                            ...s.tags,
+                            s.category && `Cat. ${s.category}`,
+                            s.stage && `Étape ${s.stage}`,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "Tous les contacts"}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteSegment(s.id)}
+                        className="rounded p-1.5 hover:bg-red-50"
+                        aria-label={`Supprimer la liste ${s.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))
+                )}
+                <div className="border-border mt-2 border-t pt-2">
+                  <div className="flex gap-1.5">
+                    <input
+                      value={newSegName}
+                      onChange={(e) => setNewSegName(e.target.value)}
+                      placeholder="Nom de la liste…"
+                      className="border-border bg-card min-w-0 flex-1 rounded-lg border px-2 py-1.5 text-xs focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      disabled={!hasActiveFilters || !newSegName.trim()}
+                      onClick={() => {
+                        void addSegment({
+                          name: newSegName.trim(),
+                          tags: tagFilters,
+                          category: categoryFilter === "all" ? "" : categoryFilter,
+                          stage: stageFilter === "all" ? "" : stageFilter,
+                        });
+                        setNewSegName("");
+                      }}
+                      className="bg-primary text-primary-foreground rounded-lg px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40"
+                    >
+                      Enregistrer
+                    </button>
+                  </div>
+                  {!hasActiveFilters && (
+                    <p className="text-muted-foreground mt-1 px-1 text-[10px]">
+                      Active d&apos;abord des filtres pour pouvoir les enregistrer.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Choix des colonnes */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setColMenuOpen((o) => !o)}
+              className="border-border bg-card text-foreground hover:bg-muted inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors"
+            >
+              <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
+              Colonnes
+            </button>
+            {colMenuOpen && (
+              <div className="border-border bg-card absolute top-full right-0 z-30 mt-1 max-h-80 w-64 overflow-y-auto rounded-xl border p-2 shadow-lg">
+                <p className="text-muted-foreground px-2 pb-1 text-[10px] font-semibold uppercase">
+                  Colonnes standard
+                </p>
+                {BASE_COLUMNS.map((c) => (
+                  <label
+                    key={c.id}
+                    className="hover:bg-muted flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={visibleCols.includes(c.id)}
+                      onChange={() => toggleColumn(c.id)}
+                    />
+                    <span className="text-foreground">{c.label}</span>
+                  </label>
+                ))}
+                {allExtraKeys.length > 0 && (
+                  <>
+                    <p className="text-muted-foreground px-2 pt-2 pb-1 text-[10px] font-semibold uppercase">
+                      Champs importés
+                    </p>
+                    {allExtraKeys.map((k) => (
+                      <label
+                        key={k}
+                        className="hover:bg-muted flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={visibleCols.includes(`extra:${k}`)}
+                          onChange={() => toggleColumn(`extra:${k}`)}
+                        />
+                        <span className="text-foreground truncate">{k}</span>
+                      </label>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -249,12 +457,13 @@ export default function ContactsPage() {
               <thead className="bg-muted">
                 <tr>
                   <th className="text-muted-foreground px-4 py-3 text-xs font-medium">Nom</th>
-                  <th className="text-muted-foreground px-4 py-3 text-xs font-medium">Email</th>
-                  <th className="text-muted-foreground px-4 py-3 text-xs font-medium">Téléphone</th>
-                  <th className="text-muted-foreground px-4 py-3 text-xs font-medium">Société</th>
-                  <th className="text-muted-foreground px-4 py-3 text-xs font-medium">Catégorie</th>
-                  <th className="text-muted-foreground px-4 py-3 text-xs font-medium">Étape</th>
-                  <th className="text-muted-foreground px-4 py-3 text-xs font-medium">Créé le</th>
+                  {orderedCols.map((id) => (
+                    <th key={id} className="text-muted-foreground px-4 py-3 text-xs font-medium whitespace-nowrap">
+                      {id.startsWith("extra:")
+                        ? id.slice(6)
+                        : BASE_COLUMNS.find((c) => c.id === id)?.label ?? id}
+                    </th>
+                  ))}
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -294,30 +503,38 @@ export default function ContactsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="text-foreground px-4 py-3 whitespace-nowrap">{c.email || "—"}</td>
-                    <td className="text-foreground px-4 py-3 whitespace-nowrap">{c.phone || "—"}</td>
-                    <td className="text-foreground px-4 py-3 whitespace-nowrap">{c.company || "—"}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {c.category ? (
-                        <span className="bg-muted text-foreground rounded-full px-2.5 py-0.5 text-xs font-medium">
-                          {c.category}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium">
-                        <span
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: stageColor(c.stage) }}
-                        />
-                        {c.stage}
-                      </span>
-                    </td>
-                    <td className="text-muted-foreground px-4 py-3 text-xs whitespace-nowrap">
-                      {formatDate(c.createdAt)}
-                    </td>
+                    {orderedCols.map((id) => (
+                      <td key={id} className="text-foreground px-4 py-3 whitespace-nowrap">
+                        {id === "email" && (c.email || "—")}
+                        {id === "phone" && (c.phone || "—")}
+                        {id === "company" && (c.company || "—")}
+                        {id === "category" &&
+                          (c.category ? (
+                            <span className="bg-muted text-foreground rounded-full px-2.5 py-0.5 text-xs font-medium">
+                              {c.category}
+                            </span>
+                          ) : (
+                            "—"
+                          ))}
+                        {id === "stage" && (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium">
+                            <span
+                              className="h-2 w-2 rounded-full"
+                              style={{ backgroundColor: stageColor(c.stage) }}
+                            />
+                            {c.stage}
+                          </span>
+                        )}
+                        {id === "createdAt" && (
+                          <span className="text-muted-foreground text-xs">{formatDate(c.createdAt)}</span>
+                        )}
+                        {id.startsWith("extra:") && (
+                          <span className="block max-w-48 truncate" title={c.extra?.[id.slice(6)] ?? ""}>
+                            {c.extra?.[id.slice(6)] || "—"}
+                          </span>
+                        )}
+                      </td>
+                    ))}
                     <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">
                         <button

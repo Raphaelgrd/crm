@@ -166,6 +166,35 @@ export function useDataRoom() {
     [refresh],
   );
 
+  const renameFile = useCallback(
+    async (id: string, name: string): Promise<void> => {
+      const record = await dbGet(id);
+      if (!record || !name.trim()) return;
+      await dbPut({ ...record, name: name.trim() });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const moveFile = useCallback(
+    async (id: string, folder: string): Promise<void> => {
+      const record = await dbGet(id);
+      if (!record) return;
+      await dbPut({ ...record, folder });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  /** Ouvre le fichier dans un nouvel onglet (PDF, images…). */
+  const openFile = useCallback(async (id: string): Promise<void> => {
+    const record = await dbGet(id);
+    if (!record) return;
+    const url = URL.createObjectURL(record.blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }, []);
+
   const downloadFile = useCallback(async (id: string): Promise<void> => {
     const record = await dbGet(id);
     if (!record) return;
@@ -208,6 +237,9 @@ export function useDataRoom() {
     uploadFiles,
     deleteFile,
     downloadFile,
+    renameFile,
+    moveFile,
+    openFile,
     createFolder,
     deleteFolder,
   };
