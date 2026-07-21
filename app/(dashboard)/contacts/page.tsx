@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
+  Filter,
   FileUp,
-  List,
   Pencil,
   Plus,
   Search,
@@ -13,12 +13,16 @@ import {
   Tag,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 import {
   Contact,
+  Segment,
   STAGES,
   contactFullName,
   contactInitial,
+  contactMatchesSegment,
+  segmentCount,
   useContacts,
   useSegments,
 } from "@/lib/contacts";
@@ -26,6 +30,7 @@ import ContactFormModal from "@/components/contacts/ContactFormModal";
 import ImportCsvModal from "@/components/contacts/ImportCsvModal";
 import SendEmailModal from "@/components/contacts/SendEmailModal";
 import ContactDetailModal from "@/components/contacts/ContactDetailModal";
+import SegmentBuilderModal from "@/components/contacts/SegmentBuilderModal";
 
 const selectClass =
   "border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 rounded-lg border px-2 py-1.5 text-sm focus:ring-2 focus:outline-none";
@@ -70,11 +75,19 @@ export default function ContactsPage() {
   const [detailContact, setDetailContact] = useState<Contact | null>(null);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [tagMenuOpen, setTagMenuOpen] = useState(false);
-  const { segments, addSegment, deleteSegment } = useSegments();
+  const { segments, saveSegment, deleteSegment } = useSegments();
   const [segMenuOpen, setSegMenuOpen] = useState(false);
-  const [newSegName, setNewSegName] = useState("");
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [editingSegment, setEditingSegment] = useState<Segment | null>(null);
+  const [confirmDeleteSeg, setConfirmDeleteSeg] = useState<string | null>(null);
   const [colMenuOpen, setColMenuOpen] = useState(false);
   const [visibleCols, setVisibleCols] = useState<string[]>(DEFAULT_COLUMNS);
+
+  const activeSegment = useMemo(
+    () => segments.find((s) => s.id === activeSegmentId) ?? null,
+    [segments, activeSegmentId],
+  );
 
   // Recherche pré-remplie via /contacts?q=… (utilisé par la page Closing)
   useEffect(() => {
@@ -95,16 +108,6 @@ export default function ContactsPage() {
       return next;
     });
   };
-
-  const applySegment = (tags: string[], category: string, stage: string) => {
-    setTagFilters(tags);
-    setCategoryFilter(category || "all");
-    setStageFilter(stage || "all");
-    setSegMenuOpen(false);
-  };
-
-  const hasActiveFilters =
-    tagFilters.length > 0 || categoryFilter !== "all" || stageFilter !== "all";
 
   const allExtraKeys = useMemo(
     () =>
@@ -135,6 +138,8 @@ export default function ContactsPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return contacts.filter((c) => {
+      // Segment actif (constructeur de conditions façon Brevo).
+      if (activeSegment && !contactMatchesSegment(c, activeSegment)) return false;
       if (categoryFilter !== "all" && c.category !== categoryFilter) return false;
       if (stageFilter !== "all" && c.stage !== stageFilter) return false;
       // Tags cumulables : le contact doit avoir TOUS les tags cochés.
@@ -146,7 +151,7 @@ export default function ContactsPage() {
         .toLowerCase()
         .includes(q);
     });
-  }, [contacts, search, categoryFilter, stageFilter, tagFilters]);
+  }, [contacts, search, categoryFilter, stageFilter, tagFilters, activeSegment]);
 
   // window.confirm est bloqué dans certains contextes (aperçu embarqué) :
   // confirmation en deux clics à la place.
@@ -299,85 +304,117 @@ export default function ContactsPage() {
             )}
           </div>
 
-          {/* Listes / segments enregistrés */}
+          {/* Segments dynamiques façon Brevo */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setSegMenuOpen((o) => !o)}
-              className="border-border bg-card text-foreground hover:bg-muted inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors"
+              className={
+                "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors " +
+                (activeSegment
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border bg-card text-foreground hover:bg-muted")
+              }
             >
-              <List className="h-3.5 w-3.5" aria-hidden="true" />
-              Listes
+              <Filter className="h-3.5 w-3.5" aria-hidden="true" />
+              {activeSegment ? activeSegment.name : "Segments"}
               <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
             {segMenuOpen && (
-              <div className="border-border bg-card absolute top-full left-0 z-30 mt-1 w-72 rounded-xl border p-2 shadow-lg">
+              <div className="border-border bg-card absolute top-full left-0 z-30 mt-1 w-80 rounded-xl border p-2 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingSegment(null);
+                    setBuilderOpen(true);
+                    setSegMenuOpen(false);
+                  }}
+                  className="bg-primary text-primary-foreground mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Créer un segment
+                </button>
+                {activeSegment && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveSegmentId(null);
+                      setSegMenuOpen(false);
+                    }}
+                    className="text-muted-foreground hover:bg-muted mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium"
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    Effacer le segment actif
+                  </button>
+                )}
                 {segments.length === 0 ? (
                   <p className="text-muted-foreground px-2 py-2 text-xs">
-                    Aucune liste — applique des filtres (tags, catégorie, étape) puis
-                    enregistre-les ici sous un nom.
+                    Aucun segment. Crée un filtre dynamique (ex. « Pays est différent de France ET
+                    Catégorie contient Institutionnel ») et enregistre-le sous un nom.
                   </p>
                 ) : (
-                  segments.map((s) => (
-                    <div key={s.id} className="hover:bg-muted flex items-center gap-1 rounded-lg">
-                      <button
-                        type="button"
-                        onClick={() => applySegment(s.tags, s.category, s.stage)}
-                        className="text-foreground min-w-0 flex-1 px-2 py-1.5 text-left text-sm font-medium"
+                  <div className="max-h-72 overflow-y-auto">
+                    {segments.map((s) => (
+                      <div
+                        key={s.id}
+                        className={
+                          "flex items-center gap-1 rounded-lg " +
+                          (s.id === activeSegmentId ? "bg-primary/10" : "hover:bg-muted")
+                        }
                       >
-                        <span className="block truncate">{s.name}</span>
-                        <span className="text-muted-foreground block truncate text-[10px]">
-                          {[
-                            ...s.tags,
-                            s.category && `Cat. ${s.category}`,
-                            s.stage && `Étape ${s.stage}`,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ") || "Tous les contacts"}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void deleteSegment(s.id)}
-                        className="rounded p-1.5 hover:bg-red-50"
-                        aria-label={`Supprimer la liste ${s.name}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" aria-hidden="true" />
-                      </button>
-                    </div>
-                  ))
-                )}
-                <div className="border-border mt-2 border-t pt-2">
-                  <div className="flex gap-1.5">
-                    <input
-                      value={newSegName}
-                      onChange={(e) => setNewSegName(e.target.value)}
-                      placeholder="Nom de la liste…"
-                      className="border-border bg-card min-w-0 flex-1 rounded-lg border px-2 py-1.5 text-xs focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      disabled={!hasActiveFilters || !newSegName.trim()}
-                      onClick={() => {
-                        void addSegment({
-                          name: newSegName.trim(),
-                          tags: tagFilters,
-                          category: categoryFilter === "all" ? "" : categoryFilter,
-                          stage: stageFilter === "all" ? "" : stageFilter,
-                        });
-                        setNewSegName("");
-                      }}
-                      className="bg-primary text-primary-foreground rounded-lg px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40"
-                    >
-                      Enregistrer
-                    </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveSegmentId(s.id);
+                            setSegMenuOpen(false);
+                          }}
+                          className="text-foreground min-w-0 flex-1 px-2 py-1.5 text-left text-sm font-medium"
+                        >
+                          <span className="block truncate">{s.name}</span>
+                          <span className="text-muted-foreground block text-[10px]">
+                            {segmentCount(contacts, s)} contact
+                            {segmentCount(contacts, s) > 1 ? "s" : ""}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingSegment(s);
+                            setBuilderOpen(true);
+                            setSegMenuOpen(false);
+                          }}
+                          className="hover:bg-card rounded p-1.5"
+                          aria-label={`Modifier ${s.name}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
+                        </button>
+                        {confirmDeleteSeg === s.id ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void deleteSegment(s.id);
+                              if (activeSegmentId === s.id) setActiveSegmentId(null);
+                              setConfirmDeleteSeg(null);
+                            }}
+                            onBlur={() => setConfirmDeleteSeg(null)}
+                            className="rounded bg-red-500 px-2 py-1 text-[10px] font-semibold text-white"
+                          >
+                            Sûr ?
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteSeg(s.id)}
+                            className="rounded p-1.5 hover:bg-red-50"
+                            aria-label={`Supprimer ${s.name}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  {!hasActiveFilters && (
-                    <p className="text-muted-foreground mt-1 px-1 text-[10px]">
-                      Active d&apos;abord des filtres pour pouvoir les enregistrer.
-                    </p>
-                  )}
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -636,6 +673,16 @@ export default function ContactsPage() {
           const sentAt = new Date().toISOString();
           await updateContact(c.id, { lastEmailSentAt: sentAt });
           setSendingTo((cur) => (cur ? { ...cur, lastEmailSentAt: sentAt } : cur));
+        }}
+      />
+      <SegmentBuilderModal
+        open={builderOpen}
+        initial={editingSegment}
+        contacts={contacts}
+        onClose={() => setBuilderOpen(false)}
+        onSave={async (input) => {
+          const saved = await saveSegment(input);
+          setActiveSegmentId(saved.id);
         }}
       />
     </div>

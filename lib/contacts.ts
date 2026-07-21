@@ -47,14 +47,135 @@ export interface Contact {
 
 export type ContactInput = Omit<Contact, "id" | "createdAt" | "updatedAt">;
 
-/** Liste/segment façon Brevo : une combinaison de filtres enregistrée. */
+// --- Segments dynamiques façon Brevo ---
+// Un segment = des groupes de conditions. Dans un groupe, les conditions sont
+// reliées par ET ; les groupes entre eux sont reliés par OU. La composition se
+// recalcule en direct : tout contact qui remplit les conditions y apparaît.
+
+export type SegmentOperator =
+  | "eq" // est égal à
+  | "neq" // est différent de
+  | "contains" // contient
+  | "not_contains" // ne contient pas
+  | "starts_with" // commence par
+  | "is_set" // contient une valeur (non vide)
+  | "is_empty"; // est vide
+
+export const SEGMENT_OPERATORS: {
+  id: SegmentOperator;
+  label: string;
+  needsValue: boolean;
+}[] = [
+  { id: "eq", label: "est égal à", needsValue: true },
+  { id: "neq", label: "est différent de", needsValue: true },
+  { id: "contains", label: "contient", needsValue: true },
+  { id: "not_contains", label: "ne contient pas", needsValue: true },
+  { id: "starts_with", label: "commence par", needsValue: true },
+  { id: "is_set", label: "contient une valeur", needsValue: false },
+  { id: "is_empty", label: "est vide", needsValue: false },
+];
+
+/** Champs de base filtrables ; le reste vient des colonnes importées (extra:*). */
+export const SEGMENT_BASE_FIELDS: { id: string; label: string }[] = [
+  { id: "name", label: "Nom complet" },
+  { id: "firstName", label: "Prénom" },
+  { id: "lastName", label: "Nom" },
+  { id: "email", label: "Email" },
+  { id: "phone", label: "Téléphone" },
+  { id: "company", label: "Société" },
+  { id: "category", label: "Catégorie" },
+  { id: "stage", label: "Étape" },
+  { id: "tags", label: "Tags" },
+];
+
+export interface SegmentCondition {
+  field: string; // id d'un SEGMENT_BASE_FIELDS ou "extra:<clé>"
+  operator: SegmentOperator;
+  value: string;
+}
+
+export interface SegmentGroup {
+  conditions: SegmentCondition[]; // reliées par ET
+}
+
 export interface Segment {
   id: string;
   name: string;
-  tags: string[];
-  category: string; // "" = toutes
-  stage: string; // "" = toutes
+  groups: SegmentGroup[]; // reliés par OU
   createdAt: string;
+  updatedAt: string;
+}
+
+export function segmentFieldLabel(field: string): string {
+  if (field.startsWith("extra:")) return field.slice(6);
+  return SEGMENT_BASE_FIELDS.find((f) => f.id === field)?.label ?? field;
+}
+
+/** Valeur texte d'un champ pour un contact (pour filtrage et affichage). */
+export function contactFieldValue(c: Contact, field: string): string {
+  switch (field) {
+    case "name":
+      return contactFullName(c);
+    case "firstName":
+      return c.firstName ?? "";
+    case "lastName":
+      return c.lastName ?? "";
+    case "email":
+      return c.email ?? "";
+    case "phone":
+      return c.phone ?? "";
+    case "company":
+      return c.company ?? "";
+    case "category":
+      return c.category ?? "";
+    case "stage":
+      return c.stage ?? "";
+    case "tags":
+      return (c.tags ?? []).join(" ");
+    default:
+      return field.startsWith("extra:") ? (c.extra?.[field.slice(6)] ?? "") : "";
+  }
+}
+
+function matchCondition(c: Contact, cond: SegmentCondition): boolean {
+  const raw = contactFieldValue(c, cond.field);
+  const hay = raw.trim().toLowerCase();
+  const needle = (cond.value ?? "").trim().toLowerCase();
+  const isTag = cond.field === "tags";
+  switch (cond.operator) {
+    case "is_set":
+      return hay !== "";
+    case "is_empty":
+      return hay === "";
+    case "eq":
+      return isTag
+        ? (c.tags ?? []).some((t) => t.toLowerCase() === needle)
+        : hay === needle;
+    case "neq":
+      return isTag
+        ? !(c.tags ?? []).some((t) => t.toLowerCase() === needle)
+        : hay !== needle;
+    case "contains":
+      return needle === "" || hay.includes(needle);
+    case "not_contains":
+      return needle === "" || !hay.includes(needle);
+    case "starts_with":
+      return hay.startsWith(needle);
+    default:
+      return true;
+  }
+}
+
+/** Un contact appartient au segment (OU entre groupes, ET dans un groupe). */
+export function contactMatchesSegment(c: Contact, seg: Pick<Segment, "groups">): boolean {
+  const groups = (seg.groups ?? []).filter((g) => g.conditions.length > 0);
+  if (groups.length === 0) return true;
+  return groups.some((g) => g.conditions.every((cond) => matchCondition(c, cond)));
+}
+
+/** Nombre de contacts d'un segment (pour l'affichage du compteur en direct). */
+export function segmentCount(contacts: Contact[], seg: Pick<Segment, "groups">): number {
+  return contacts.reduce((n, c) => (contactMatchesSegment(c, seg) ? n + 1 : n), 0);
 }
 
 const store = createCollectionStore<Contact>("contacts");
@@ -106,23 +227,43 @@ export async function applyContactPatch(
 
 const segmentsStore = createCollectionStore<Segment>("segments");
 
+function normalizeSegment(s: Segment): Segment {
+  // Tolère les anciens segments (modèle « filtre simple ») : groups garanti.
+  return { ...s, groups: Array.isArray(s.groups) ? s.groups : [] };
+}
+
 export function useSegments() {
-  const [segments, setSegments] = useState<Segment[]>(segmentsStore.get());
+  const [segments, setSegments] = useState<Segment[]>(() =>
+    segmentsStore.get().map(normalizeSegment),
+  );
 
   useEffect(
     () =>
       segmentsStore.subscribe(() =>
-        setSegments([...segmentsStore.get()].sort((a, b) => a.name.localeCompare(b.name))),
+        setSegments(
+          segmentsStore
+            .get()
+            .map(normalizeSegment)
+            .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")),
+        ),
       ),
     [],
   );
 
-  const addSegment = useCallback(
-    async (input: Omit<Segment, "id" | "createdAt">): Promise<Segment> => {
+  const saveSegment = useCallback(
+    async (input: { id?: string; name: string; groups: SegmentGroup[] }): Promise<Segment> => {
+      const now = new Date().toISOString();
+      const existing = input.id
+        ? segmentsStore.get().find((s) => s.id === input.id)
+        : undefined;
       const segment: Segment = {
-        ...input,
-        id: `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-        createdAt: new Date().toISOString(),
+        id:
+          input.id ??
+          `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+        name: input.name,
+        groups: input.groups,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
       };
       await segmentsStore.set(segment);
       return segment;
@@ -134,7 +275,7 @@ export function useSegments() {
     await segmentsStore.remove(id);
   }, []);
 
-  return { segments, addSegment, deleteSegment };
+  return { segments, saveSegment, deleteSegment };
 }
 
 export function useContacts() {
