@@ -14,15 +14,18 @@ export interface Loan {
   contactId: string;
   contactName: string; // dénormalisé pour l'affichage
   company: string;
+  /** Prêt = revient (démo) ; Envoi = sortie définitive (échantillon, commande…). */
+  kind: "loan" | "shipment";
   type: GloveType;
   color: GloveColor;
   size: GloveSize;
   qty: number;
-  loanedAt: string; // YYYY-MM-DD
-  dueAt: string; // YYYY-MM-DD — retour prévu
+  loanedAt: string; // YYYY-MM-DD (date de sortie)
+  dueAt: string; // YYYY-MM-DD — retour prévu (prêt uniquement)
   returnedAt: string; // "" tant que non rendu
-  status: "out" | "returned";
-  /** true si le prêt a décompté le stock (⇒ retour = réincrément). */
+  /** "out" = prêt en cours, "returned" = rendu, "sent" = envoi définitif. */
+  status: "out" | "returned" | "sent";
+  /** true si la sortie a décompté le stock (⇒ retour = réincrément). */
   stockLinked: boolean;
   feedback: string; // retour terrain, saisi au retour
   notes: string;
@@ -43,7 +46,7 @@ function makeId() {
 
 /** Un prêt est en retard s'il est toujours sorti et que la date de retour est passée. */
 export function loanOverdue(loan: Loan): boolean {
-  return loan.status === "out" && !!loan.dueAt && loan.dueAt < todayKey();
+  return loan.kind === "loan" && loan.status === "out" && !!loan.dueAt && loan.dueAt < todayKey();
 }
 
 export function useLoans() {
@@ -53,11 +56,15 @@ export function useLoans() {
   useEffect(
     () =>
       store.subscribe(() => {
-        // En prêt d'abord, puis par date de retour prévue.
+        // Prêts en cours d'abord (par retour prévu), puis le reste (récent d'abord).
         setLoans(
           [...store.get()].sort((a, b) => {
-            if (a.status !== b.status) return a.status === "out" ? -1 : 1;
-            return (a.dueAt || "9999").localeCompare(b.dueAt || "9999");
+            const rank = (l: Loan) => (l.status === "out" ? 0 : 1);
+            if (rank(a) !== rank(b)) return rank(a) - rank(b);
+            if (a.status === "out" && b.status === "out") {
+              return (a.dueAt || "9999").localeCompare(b.dueAt || "9999");
+            }
+            return (b.loanedAt || "").localeCompare(a.loanedAt || "");
           }),
         );
         setLoading(false);

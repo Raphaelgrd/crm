@@ -34,7 +34,7 @@ const NAV_ITEMS = [
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/data-room", label: "Data Room", icon: FolderLock },
   { href: "/stock", label: "Stock", icon: Package },
-  { href: "/prets", label: "Prêts G.I.E", icon: Handshake },
+  { href: "/prets", label: "Prêts & Envois", icon: Handshake },
   { href: "/conformite", label: "Conformité export", icon: ShieldCheck },
   { href: "/rapport", label: "Rapport d'activité", icon: Clock },
   { href: "/settings", label: "Paramètres", icon: Settings },

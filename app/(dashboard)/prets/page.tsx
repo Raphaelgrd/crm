@@ -48,6 +48,8 @@ export default function PretsPage() {
   const [dueAt, setDueAt] = useState(dateKeyIn(30));
   const [notes, setNotes] = useState("");
   const [decrementStock, setDecrementStock] = useState(true);
+  const [kind, setKind] = useState<"loan" | "shipment">("loan");
+  const [view, setView] = useState<"all" | "loan" | "shipment">("all");
 
   const sortedContacts = useMemo(
     () =>
@@ -59,6 +61,8 @@ export default function PretsPage() {
 
   const outCount = loans.filter((l) => l.status === "out").length;
   const overdueCount = loans.filter(loanOverdue).length;
+  const shipmentCount = loans.filter((l) => l.kind === "shipment").length;
+  const displayed = loans.filter((l) => view === "all" || l.kind === view);
   const available = levelFor(levels, type, color, size);
 
   // Conformité export du destinataire (garde-fou avant expédition).
@@ -77,6 +81,7 @@ export default function PretsPage() {
     setDueAt(dateKeyIn(30));
     setNotes("");
     setDecrementStock(true);
+    setKind("loan");
     setError("");
   };
 
@@ -109,14 +114,15 @@ export default function PretsPage() {
       contactId,
       contactName: contactFullName(contact) || contact.email,
       company: contact.company,
+      kind,
       type,
       color,
       size,
       qty,
       loanedAt,
-      dueAt,
+      dueAt: kind === "shipment" ? "" : dueAt,
       returnedAt: "",
-      status: "out",
+      status: kind === "shipment" ? "sent" : "out",
       stockLinked: decrementStock,
       feedback: "",
       notes,
@@ -124,7 +130,10 @@ export default function PretsPage() {
     await logActivity({
       contactId,
       type: "loan",
-      text: `Prêt : ${gloveLabel(type, color, size)} ×${qty} (retour prévu ${dueAt})`,
+      text:
+        kind === "shipment"
+          ? `Envoi : ${gloveLabel(type, color, size)} ×${qty}`
+          : `Prêt : ${gloveLabel(type, color, size)} ×${qty} (retour prévu ${dueAt})`,
       auto: true,
     });
     setFormOpen(false);
@@ -157,13 +166,14 @@ export default function PretsPage() {
       <div className="border-border bg-background/95 border-b px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8 lg:py-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-foreground text-xl font-bold sm:text-2xl">Prêts G.I.E</h1>
+            <h1 className="text-foreground text-xl font-bold sm:text-2xl">Prêts &amp; Envois</h1>
             <p className="text-muted-foreground mt-1 text-sm">
               {outCount} en prêt
               {overdueCount > 0 && (
                 <span className="ml-1 font-semibold text-red-600">· {overdueCount} en retard</span>
               )}{" "}
-              — suivi des démos confiées aux contacts, branché sur le stock
+              · {shipmentCount} envoi{shipmentCount > 1 ? "s" : ""} — G.I.E confiés (démo) ou
+              expédiés (définitif), branché sur le stock
             </p>
           </div>
           <button
@@ -175,18 +185,42 @@ export default function PretsPage() {
             className="bg-primary text-primary-foreground inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition-opacity hover:opacity-90"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
-            Nouveau prêt
+            Nouvelle sortie
           </button>
+        </div>
+
+        <div className="mt-4 flex gap-1.5">
+          {([
+            { id: "all", label: "Tout" },
+            { id: "loan", label: "Prêts" },
+            { id: "shipment", label: "Envois" },
+          ] as const).map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => setView(v.id)}
+              className={
+                "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors " +
+                (view === v.id
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border bg-card text-foreground hover:bg-muted")
+              }
+            >
+              {v.label}
+            </button>
+          ))}
         </div>
       </div>
 
       <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
-        {loading ? null : loans.length === 0 ? (
+        {loading ? null : displayed.length === 0 ? (
           <div className="border-border rounded-xl border border-dashed py-16 text-center">
             <Handshake className="mx-auto h-10 w-10 text-gray-300" aria-hidden="true" />
-            <p className="text-foreground mt-3 text-sm font-semibold">Aucun prêt en cours</p>
+            <p className="text-foreground mt-3 text-sm font-semibold">
+              {loans.length === 0 ? "Aucune sortie enregistrée" : "Aucun résultat pour ce filtre"}
+            </p>
             <p className="text-muted-foreground mt-1 text-sm">
-              Enregistre un prêt de G.I.E confié à un contact pour une démo terrain.
+              Enregistre un prêt (démo, revient) ou un envoi (échantillon/commande, définitif).
             </p>
           </div>
         ) : (
@@ -195,6 +229,7 @@ export default function PretsPage() {
               <thead className="bg-muted">
                 <tr>
                   <th className="text-muted-foreground px-4 py-3 text-xs font-medium">Contact</th>
+                  <th className="text-muted-foreground px-4 py-3 text-xs font-medium whitespace-nowrap">Type</th>
                   <th className="text-muted-foreground px-4 py-3 text-xs font-medium whitespace-nowrap">Gant</th>
                   <th className="text-muted-foreground px-4 py-3 text-xs font-medium whitespace-nowrap">Qté</th>
                   <th className="text-muted-foreground px-4 py-3 text-xs font-medium whitespace-nowrap">Prêté le</th>
@@ -204,7 +239,7 @@ export default function PretsPage() {
                 </tr>
               </thead>
               <tbody>
-                {loans.map((l) => {
+                {displayed.map((l) => {
                   const overdue = loanOverdue(l);
                   return (
                     <tr key={l.id} className="border-border border-t">
@@ -219,6 +254,18 @@ export default function PretsPage() {
                           </span>
                         )}
                       </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span
+                          className={
+                            "rounded-full border px-2 py-0.5 text-xs font-medium " +
+                            (l.kind === "shipment"
+                              ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                              : "border-sky-200 bg-sky-50 text-sky-700")
+                          }
+                        >
+                          {l.kind === "shipment" ? "Envoi" : "Prêt"}
+                        </span>
+                      </td>
                       <td className="text-foreground px-4 py-3 whitespace-nowrap">
                         {gloveLabel(l.type, l.color, l.size)}
                       </td>
@@ -227,12 +274,21 @@ export default function PretsPage() {
                         {formatDate(l.loanedAt)}
                       </td>
                       <td className="px-4 py-3 text-xs whitespace-nowrap">
-                        <span className={overdue ? "font-semibold text-red-600" : "text-muted-foreground"}>
-                          {formatDate(l.dueAt)}
-                        </span>
+                        {l.kind === "shipment" ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <span className={overdue ? "font-semibold text-red-600" : "text-muted-foreground"}>
+                            {formatDate(l.dueAt)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {l.status === "returned" ? (
+                        {l.kind === "shipment" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                            <PackageCheck className="h-3 w-3" aria-hidden="true" />
+                            Envoyé
+                          </span>
+                        ) : l.status === "returned" ? (
                           <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                             <PackageCheck className="h-3 w-3" aria-hidden="true" />
                             Rendu {l.returnedAt ? `le ${formatDate(l.returnedAt)}` : ""}
@@ -293,12 +349,12 @@ export default function PretsPage() {
           </div>
         )}
         <p className="text-muted-foreground mt-3 text-xs">
-          Un prêt « décompté du stock » sort la quantité du Stock ; le marquer « rendu » la
-          réintègre automatiquement.
+          Une sortie « décomptée du stock » retire la quantité du Stock. Pour un prêt, la marquer
+          « rendu » la réintègre ; un envoi est définitif.
         </p>
       </div>
 
-      {/* Modal nouveau prêt */}
+      {/* Modal nouvelle sortie */}
       {formOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -306,12 +362,38 @@ export default function PretsPage() {
         >
           <div className="bg-card w-full max-w-lg rounded-xl shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="border-border flex items-center justify-between border-b px-6 py-4">
-              <h2 className="text-foreground text-lg font-bold">Nouveau prêt</h2>
+              <h2 className="text-foreground text-lg font-bold">
+                {kind === "shipment" ? "Nouvel envoi" : "Nouveau prêt"}
+              </h2>
               <button type="button" onClick={() => setFormOpen(false)} className="hover:bg-muted rounded p-1" aria-label="Fermer">
                 <X className="h-5 w-5 text-gray-400" aria-hidden="true" />
               </button>
             </div>
             <div className="space-y-4 px-6 py-5">
+              <div>
+                <label className="text-foreground mb-1 block text-xs font-medium">Type de sortie</label>
+                <div className="flex gap-2">
+                  {([
+                    { id: "loan", label: "Prêt (revient)" },
+                    { id: "shipment", label: "Envoi (définitif)" },
+                  ] as const).map((k) => (
+                    <button
+                      key={k.id}
+                      type="button"
+                      onClick={() => setKind(k.id)}
+                      className={
+                        "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors " +
+                        (kind === k.id
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-border bg-card text-foreground hover:bg-muted")
+                      }
+                    >
+                      {k.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="text-foreground mb-1 block text-xs font-medium">Contact</label>
                 <select className={inputClass} value={contactId} onChange={(e) => setContactId(e.target.value)}>
@@ -376,13 +458,17 @@ export default function PretsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-foreground mb-1 block text-xs font-medium">Prêté le</label>
+                  <label className="text-foreground mb-1 block text-xs font-medium">
+                    {kind === "shipment" ? "Envoyé le" : "Prêté le"}
+                  </label>
                   <input type="date" className={inputClass} value={loanedAt} onChange={(e) => setLoanedAt(e.target.value)} />
                 </div>
-                <div>
-                  <label className="text-foreground mb-1 block text-xs font-medium">Retour prévu</label>
-                  <input type="date" className={inputClass} value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
-                </div>
+                {kind === "loan" && (
+                  <div>
+                    <label className="text-foreground mb-1 block text-xs font-medium">Retour prévu</label>
+                    <input type="date" className={inputClass} value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -415,7 +501,7 @@ export default function PretsPage() {
                 onClick={() => void submitLoan()}
                 className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
               >
-                Enregistrer le prêt
+                {kind === "shipment" ? "Enregistrer l'envoi" : "Enregistrer le prêt"}
               </button>
             </div>
           </div>
