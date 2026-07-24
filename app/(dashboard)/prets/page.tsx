@@ -15,6 +15,7 @@ import {
   useStock,
 } from "@/lib/stock";
 import { Loan, loanOverdue, useLoans } from "@/lib/loans";
+import { logActivity } from "@/lib/activities";
 
 const inputClass =
   "border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none";
@@ -111,6 +112,12 @@ export default function PretsPage() {
       stockLinked: decrementStock,
       feedback: "",
       notes,
+    });
+    await logActivity({
+      contactId,
+      type: "loan",
+      text: `Prêt : ${gloveLabel(type, color, size)} ×${qty} (retour prévu ${dueAt})`,
+      auto: true,
     });
     setFormOpen(false);
     resetForm();

@@ -1,6 +1,23 @@
 "use client";
 
-import { Building2, Clock, Mail, Pencil, Phone, Send, Tag, X } from "lucide-react";
+import { useState } from "react";
+import {
+  ArrowRightLeft,
+  Building2,
+  CalendarClock,
+  CheckSquare,
+  Clock,
+  Handshake,
+  Mail,
+  Pencil,
+  Phone,
+  PhoneCall,
+  Send,
+  StickyNote,
+  Tag,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   Contact,
   STAGES,
@@ -9,6 +26,31 @@ import {
   dateKeyIn,
   followUpStatus,
 } from "@/lib/contacts";
+import {
+  ACTIVITY_LABEL,
+  ActivityType,
+  MANUAL_ACTIVITY_TYPES,
+  useContactActivities,
+} from "@/lib/activities";
+
+const ACT_ICON: Record<ActivityType, typeof Mail> = {
+  note: StickyNote,
+  call: PhoneCall,
+  email: Mail,
+  meeting: CalendarClock,
+  stage: ArrowRightLeft,
+  loan: Handshake,
+  task: CheckSquare,
+};
+
+function formatDateTime(iso: string) {
+  return new Date(iso).toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 interface Props {
   contact: Contact | null;
@@ -44,6 +86,10 @@ export default function ContactDetailModal({
   onSendEmail,
   onSetFollowUp,
 }: Props) {
+  const [actType, setActType] = useState<ActivityType>("note");
+  const [actText, setActText] = useState("");
+  const { activities, addActivity, deleteActivity } = useContactActivities(contact?.id ?? "");
+
   if (!contact) return null;
   const extraEntries = Object.entries(contact.extra ?? {}).sort(([a], [b]) =>
     a.localeCompare(b),
@@ -51,6 +97,13 @@ export default function ContactDetailModal({
   const fuStatus = followUpStatus(contact);
   const fuLabel =
     fuStatus === "overdue" ? "En retard" : fuStatus === "today" ? "Aujourd'hui" : "Planifiée";
+
+  const submitActivity = async () => {
+    const text = actText.trim();
+    if (!text) return;
+    await addActivity(actType, text);
+    setActText("");
+  };
 
   return (
     <div
@@ -197,6 +250,77 @@ export default function ContactDetailModal({
               </div>
             </div>
           )}
+
+          {/* Timeline d'activité */}
+          <div>
+            <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase">Activité</p>
+            <div className="flex gap-2">
+              <select
+                value={actType}
+                onChange={(e) => setActType(e.target.value as ActivityType)}
+                className="border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 rounded-lg border px-2 py-2 text-sm focus:ring-2 focus:outline-none"
+              >
+                {MANUAL_ACTIVITY_TYPES.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={actText}
+                onChange={(e) => setActText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void submitActivity();
+                }}
+                placeholder="Ajouter une note, un appel, un échange…"
+                className="border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => void submitActivity()}
+                disabled={!actText.trim()}
+                className="bg-primary text-primary-foreground shrink-0 rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                Ajouter
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {activities.length === 0 ? (
+                <p className="text-muted-foreground text-xs">
+                  Aucune activité pour le moment. Ajoute une note ou un appel ci-dessus.
+                </p>
+              ) : (
+                activities.map((a) => {
+                  const Icon = ACT_ICON[a.type];
+                  return (
+                    <div key={a.id} className="flex items-start gap-2.5">
+                      <span className="bg-muted mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full">
+                        <Icon className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-foreground text-sm break-words">{a.text}</p>
+                        <p className="text-muted-foreground text-[11px]">
+                          {ACTIVITY_LABEL[a.type]} · {formatDateTime(a.at)}
+                          {a.auto && " · auto"}
+                        </p>
+                      </div>
+                      {!a.auto && (
+                        <button
+                          type="button"
+                          onClick={() => void deleteActivity(a.id)}
+                          className="hover:bg-muted shrink-0 rounded p-1"
+                          aria-label="Supprimer cette activité"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
 
           <div className="text-muted-foreground flex flex-wrap gap-x-6 gap-y-1 text-xs">
             <span>Créé le {formatDate(contact.createdAt)}</span>

@@ -35,6 +35,7 @@ import ContactDetailModal from "@/components/contacts/ContactDetailModal";
 import SegmentBuilderModal from "@/components/contacts/SegmentBuilderModal";
 import ColumnsPanel from "@/components/contacts/ColumnsPanel";
 import { useOrganizations } from "@/lib/organizations";
+import { logActivity } from "@/lib/activities";
 
 const selectClass =
   "border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 rounded-lg border px-2 py-1.5 text-sm focus:ring-2 focus:outline-none";
@@ -704,6 +705,12 @@ export default function ContactsPage() {
         onSent={async (c) => {
           const sentAt = new Date().toISOString();
           await updateContact(c.id, { lastEmailSentAt: sentAt });
+          await logActivity({
+            contactId: c.id,
+            type: "email",
+            text: "Mail « nouveaux arrivants » envoyé",
+            auto: true,
+          });
           setSendingTo((cur) => (cur ? { ...cur, lastEmailSentAt: sentAt } : cur));
         }}
       />
