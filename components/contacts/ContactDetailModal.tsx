@@ -7,6 +7,7 @@ import {
   CalendarClock,
   CheckSquare,
   Clock,
+  Globe,
   Handshake,
   Mail,
   Pencil,
@@ -32,6 +33,7 @@ import {
   MANUAL_ACTIVITY_TYPES,
   useContactActivities,
 } from "@/lib/activities";
+import { contactCountry, exportStatusMeta, useCompliance } from "@/lib/compliance";
 
 const ACT_ICON: Record<ActivityType, typeof Mail> = {
   note: StickyNote,
@@ -89,8 +91,11 @@ export default function ContactDetailModal({
   const [actType, setActType] = useState<ActivityType>("note");
   const [actText, setActText] = useState("");
   const { activities, addActivity, deleteActivity } = useContactActivities(contact?.id ?? "");
+  const { statusFor } = useCompliance();
 
   if (!contact) return null;
+  const country = contactCountry(contact);
+  const cMeta = exportStatusMeta(statusFor(country));
   const extraEntries = Object.entries(contact.extra ?? {}).sort(([a], [b]) =>
     a.localeCompare(b),
   );
@@ -172,6 +177,18 @@ export default function ContactDetailModal({
               <Building2 className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
               <span className="text-foreground truncate">{contact.company || "—"}</span>
             </div>
+            {country && (
+              <div className="flex items-center gap-2 text-sm sm:col-span-2">
+                <Globe className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
+                <span className="text-foreground">{country}</span>
+                <span
+                  className={"rounded-full border px-2 py-0.5 text-xs font-medium " + cMeta.badge}
+                  title="Statut de conformité export (modifiable dans Conformité export)"
+                >
+                  {cMeta.label}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Relance / prochaine action */}

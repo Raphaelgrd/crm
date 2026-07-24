@@ -15,6 +15,7 @@ import {
   FolderLock,
   Package,
   Handshake,
+  ShieldCheck,
   Settings,
   Plus,
   LogOut,
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { href: "/data-room", label: "Data Room", icon: FolderLock },
   { href: "/stock", label: "Stock", icon: Package },
   { href: "/prets", label: "Prêts G.I.E", icon: Handshake },
+  { href: "/conformite", label: "Conformité export", icon: ShieldCheck },
   { href: "/rapport", label: "Rapport d'activité", icon: Clock },
   { href: "/settings", label: "Paramètres", icon: Settings },
 ];

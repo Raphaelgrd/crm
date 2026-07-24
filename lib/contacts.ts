@@ -45,6 +45,8 @@ export interface Contact {
   nextFollowUpAt?: string;
   /** Rattachement explicite à une fiche Organisation (sinon regroupé par société). */
   organizationId?: string;
+  /** Pays (conformité export) — sinon déduit de la colonne importée « Pays ». */
+  country?: string;
   createdAt: string;
   updatedAt: string;
 }

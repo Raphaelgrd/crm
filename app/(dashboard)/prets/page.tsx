@@ -16,6 +16,7 @@ import {
 } from "@/lib/stock";
 import { Loan, loanOverdue, useLoans } from "@/lib/loans";
 import { logActivity } from "@/lib/activities";
+import { contactCountry, exportStatusMeta, useCompliance } from "@/lib/compliance";
 
 const inputClass =
   "border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none";
@@ -29,6 +30,7 @@ export default function PretsPage() {
   const { loans, loading, addLoan, updateLoan, deleteLoan } = useLoans();
   const { contacts } = useContacts();
   const { levels, addMovement } = useStock();
+  const { statusFor } = useCompliance();
 
   const [formOpen, setFormOpen] = useState(false);
   const [returning, setReturning] = useState<Loan | null>(null);
@@ -58,6 +60,12 @@ export default function PretsPage() {
   const outCount = loans.filter((l) => l.status === "out").length;
   const overdueCount = loans.filter(loanOverdue).length;
   const available = levelFor(levels, type, color, size);
+
+  // Conformité export du destinataire (garde-fou avant expédition).
+  const destContact = contacts.find((c) => c.id === contactId);
+  const destCountry = destContact ? contactCountry(destContact) : "";
+  const destStatus = statusFor(destCountry);
+  const destMeta = exportStatusMeta(destStatus);
 
   const resetForm = () => {
     setContactId("");
@@ -315,6 +323,18 @@ export default function PretsPage() {
                     </option>
                   ))}
                 </select>
+                {destCountry && destStatus !== "ok" && (
+                  <p
+                    className={
+                      "mt-2 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium " +
+                      destMeta.badge
+                    }
+                  >
+                    <span className={"h-2 w-2 rounded-full " + destMeta.dot} />
+                    Export vers {destCountry} : {destMeta.label}
+                    {destStatus === "unknown" && " — classe ce pays dans Conformité export"}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-3 gap-3">
