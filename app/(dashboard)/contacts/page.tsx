@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
+  Clock,
   Filter,
   FileUp,
   Pencil,
@@ -22,6 +23,7 @@ import {
   contactFullName,
   contactInitial,
   contactMatchesSegment,
+  followUpStatus,
   segmentCount,
   useContacts,
   useSegments,
@@ -84,6 +86,17 @@ export default function ContactsPage() {
   const [confirmDeleteSeg, setConfirmDeleteSeg] = useState<string | null>(null);
   const [colPanelOpen, setColPanelOpen] = useState(false);
   const [visibleCols, setVisibleCols] = useState<string[]>(DEFAULT_COLUMNS);
+  const [relanceOnly, setRelanceOnly] = useState(false);
+
+  // Nombre de relances à traiter (en retard + aujourd'hui) — badge du bouton.
+  const relanceDue = useMemo(
+    () =>
+      contacts.filter((c) => {
+        const s = followUpStatus(c);
+        return s === "overdue" || s === "today";
+      }).length,
+    [contacts],
+  );
 
   const activeSegment = useMemo(
     () => segments.find((s) => s.id === activeSegmentId) ?? null,
@@ -152,6 +165,16 @@ export default function ContactsPage() {
         .includes(q);
     });
   }, [contacts, search, categoryFilter, stageFilter, tagFilters, activeSegment]);
+
+  // Vue « Relances » : ne garde que les contacts avec une relance planifiée,
+  // triés du plus en retard au plus lointain.
+  const displayed = useMemo(() => {
+    if (!relanceOnly) return filtered;
+    return filtered
+      .filter((c) => followUpStatus(c) !== null)
+      .slice()
+      .sort((a, b) => (a.nextFollowUpAt ?? "").localeCompare(b.nextFollowUpAt ?? ""));
+  }, [filtered, relanceOnly]);
 
   // window.confirm est bloqué dans certains contextes (aperçu embarqué) :
   // confirmation en deux clics à la place.
@@ -419,6 +442,26 @@ export default function ContactsPage() {
             )}
           </div>
 
+          {/* Vue Relances (suivi des follow-ups) */}
+          <button
+            type="button"
+            onClick={() => setRelanceOnly((o) => !o)}
+            className={
+              "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors " +
+              (relanceOnly
+                ? "border-amber-300 bg-amber-50 text-amber-700"
+                : "border-border bg-card text-foreground hover:bg-muted")
+            }
+          >
+            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+            Relances
+            {relanceDue > 0 && (
+              <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                {relanceDue}
+              </span>
+            )}
+          </button>
+
           {/* Colonnes personnalisables (panneau latéral façon Brevo) */}
           <button
             type="button"
@@ -440,9 +483,13 @@ export default function ContactsPage() {
               Crée ton premier contact ou importe un fichier CSV.
             </p>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : displayed.length === 0 ? (
           <div className="border-border rounded-xl border border-dashed py-16 text-center">
-            <p className="text-muted-foreground text-sm">Aucun contact ne correspond aux filtres.</p>
+            <p className="text-muted-foreground text-sm">
+              {relanceOnly
+                ? "Aucune relance planifiée. Ouvre une fiche contact pour en programmer une."
+                : "Aucun contact ne correspond aux filtres."}
+            </p>
           </div>
         ) : (
           <div className="border-border bg-card overflow-x-auto rounded-xl border shadow-(--shadow-card)">
@@ -461,7 +508,7 @@ export default function ContactsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((c) => (
+                {displayed.map((c) => (
                   <tr
                     key={c.id}
                     onClick={() => setDetailContact(c)}
@@ -476,6 +523,27 @@ export default function ContactsPage() {
                           <span className="text-foreground block font-semibold whitespace-nowrap">
                             {contactFullName(c) || "—"}
                           </span>
+                          {c.nextFollowUpAt &&
+                            (() => {
+                              const s = followUpStatus(c);
+                              const cls =
+                                s === "overdue"
+                                  ? "border-red-200 bg-red-50 text-red-700"
+                                  : s === "today"
+                                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                                    : "border-emerald-200 bg-emerald-50 text-emerald-700";
+                              return (
+                                <span
+                                  className={
+                                    "mt-0.5 inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium " +
+                                    cls
+                                  }
+                                >
+                                  <Clock className="h-2.5 w-2.5" aria-hidden="true" />
+                                  Relance {formatDate(c.nextFollowUpAt)}
+                                </span>
+                              );
+                            })()}
                           {(c.tags ?? []).length > 0 && (
                             <span className="mt-0.5 flex flex-wrap gap-1">
                               {(c.tags ?? []).slice(0, 3).map((t) => (
@@ -620,6 +688,10 @@ export default function ContactsPage() {
         onSendEmail={(c) => {
           setDetailContact(null);
           setSendingTo(c);
+        }}
+        onSetFollowUp={async (c, date) => {
+          await updateContact(c.id, { nextFollowUpAt: date ?? "" });
+          setDetailContact((cur) => (cur ? { ...cur, nextFollowUpAt: date ?? "" } : cur));
         }}
       />
       <SendEmailModal

@@ -1,14 +1,28 @@
 "use client";
 
-import { Building2, Mail, Pencil, Phone, Send, Tag, X } from "lucide-react";
-import { Contact, STAGES, contactFullName, contactInitial } from "@/lib/contacts";
+import { Building2, Clock, Mail, Pencil, Phone, Send, Tag, X } from "lucide-react";
+import {
+  Contact,
+  STAGES,
+  contactFullName,
+  contactInitial,
+  dateKeyIn,
+  followUpStatus,
+} from "@/lib/contacts";
 
 interface Props {
   contact: Contact | null;
   onClose: () => void;
   onEdit: (c: Contact) => void;
   onSendEmail: (c: Contact) => void;
+  onSetFollowUp: (c: Contact, date: string | null) => void;
 }
+
+const FOLLOWUP_STYLES: Record<string, string> = {
+  overdue: "border-red-200 bg-red-50 text-red-700",
+  today: "border-amber-200 bg-amber-50 text-amber-700",
+  upcoming: "border-emerald-200 bg-emerald-50 text-emerald-700",
+};
 
 function stageColor(name: string) {
   return STAGES.find((s) => s.name === name)?.color ?? "rgb(107, 114, 128)";
@@ -23,11 +37,20 @@ function formatDate(iso?: string) {
   });
 }
 
-export default function ContactDetailModal({ contact, onClose, onEdit, onSendEmail }: Props) {
+export default function ContactDetailModal({
+  contact,
+  onClose,
+  onEdit,
+  onSendEmail,
+  onSetFollowUp,
+}: Props) {
   if (!contact) return null;
   const extraEntries = Object.entries(contact.extra ?? {}).sort(([a], [b]) =>
     a.localeCompare(b),
   );
+  const fuStatus = followUpStatus(contact);
+  const fuLabel =
+    fuStatus === "overdue" ? "En retard" : fuStatus === "today" ? "Aujourd'hui" : "Planifiée";
 
   return (
     <div
@@ -95,6 +118,54 @@ export default function ContactDetailModal({ contact, onClose, onEdit, onSendEma
             <div className="flex items-center gap-2 text-sm sm:col-span-2">
               <Building2 className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
               <span className="text-foreground truncate">{contact.company || "—"}</span>
+            </div>
+          </div>
+
+          {/* Relance / prochaine action */}
+          <div className="border-border rounded-lg border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold uppercase">
+                <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                Prochaine relance
+              </p>
+              {contact.nextFollowUpAt ? (
+                <span
+                  className={
+                    "rounded-full border px-2 py-0.5 text-xs font-medium " +
+                    (FOLLOWUP_STYLES[fuStatus ?? "upcoming"] ?? "")
+                  }
+                >
+                  {fuLabel} · {formatDate(contact.nextFollowUpAt)}
+                </span>
+              ) : (
+                <span className="text-muted-foreground text-xs">Aucune planifiée</span>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {[
+                { label: "Aujourd'hui", days: 0 },
+                { label: "+3 j", days: 3 },
+                { label: "+7 j", days: 7 },
+                { label: "+30 j", days: 30 },
+              ].map((b) => (
+                <button
+                  key={b.days}
+                  type="button"
+                  onClick={() => onSetFollowUp(contact, dateKeyIn(b.days))}
+                  className="border-border bg-card text-foreground hover:bg-muted rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
+                >
+                  {b.label}
+                </button>
+              ))}
+              {contact.nextFollowUpAt && (
+                <button
+                  type="button"
+                  onClick={() => onSetFollowUp(contact, null)}
+                  className="rounded-md px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
+                >
+                  Effacer
+                </button>
+              )}
             </div>
           </div>
 

@@ -197,16 +197,29 @@ export default function ContactFormModal({ open, initial, categories, onClose, o
             </div>
           </div>
 
-          <div>
-            <label className="text-foreground mb-1 block text-xs font-medium">
-              Tags <span className="text-muted-foreground">(séparés par des virgules)</span>
-            </label>
-            <input
-              className={inputClass}
-              value={tagsText}
-              onChange={(e) => setTagsText(e.target.value)}
-              placeholder="Institutionnel, Espagne, Salon Milipol…"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Tags <span className="text-muted-foreground">(virgules)</span>
+              </label>
+              <input
+                className={inputClass}
+                value={tagsText}
+                onChange={(e) => setTagsText(e.target.value)}
+                placeholder="Institutionnel, Espagne…"
+              />
+            </div>
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Prochaine relance <span className="text-muted-foreground">(optionnel)</span>
+              </label>
+              <input
+                type="date"
+                className={inputClass}
+                value={form.nextFollowUpAt ?? ""}
+                onChange={(e) => set("nextFollowUpAt")(e.target.value)}
+              />
+            </div>
           </div>
 
           <div>

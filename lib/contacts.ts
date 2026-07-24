@@ -41,6 +41,8 @@ export interface Contact {
   extra?: Record<string, string>;
   /** Date du dernier envoi du mail « nouveaux arrivants » depuis la fiche. */
   lastEmailSentAt?: string;
+  /** Date de la prochaine relance (YYYY-MM-DD) — pilote le tableau des relances. */
+  nextFollowUpAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -197,6 +199,34 @@ export function contactFullName(c: Pick<Contact, "firstName" | "lastName">) {
 
 export function contactInitial(c: Contact) {
   return (contactFullName(c) || c.email || "?").charAt(0).toUpperCase();
+}
+
+// --- Relances (suivi des follow-ups) ---
+
+/** Clé de date dans `days` jours (négatif = passé), au format YYYY-MM-DD. */
+export function dateKeyIn(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Clé de date du jour (YYYY-MM-DD). */
+export function todayKey(): string {
+  return dateKeyIn(0);
+}
+
+export type FollowUpStatus = "overdue" | "today" | "upcoming";
+
+/** Statut de relance d'un contact (null si aucune relance planifiée). */
+export function followUpStatus(c: Pick<Contact, "nextFollowUpAt">): FollowUpStatus | null {
+  if (!c.nextFollowUpAt) return null;
+  const today = todayKey();
+  if (c.nextFollowUpAt < today) return "overdue";
+  if (c.nextFollowUpAt === today) return "today";
+  return "upcoming";
 }
 
 // --- Événements CRM (consommés par le moteur d'automatisations) ---
