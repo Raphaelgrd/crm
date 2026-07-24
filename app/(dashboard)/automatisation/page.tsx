@@ -14,7 +14,7 @@ import {
   UserPlus,
   Zap,
 } from "lucide-react";
-import { Action, useAutomations } from "@/lib/automations";
+import { Action, Trigger, useAutomations } from "@/lib/automations";
 import { applyContactPatch, contactFullName, useContacts } from "@/lib/contacts";
 import {
   contactVariables,
@@ -43,6 +43,43 @@ const ACTION_ICON: Record<Action["type"], typeof Mail> = {
   set_category: Tag,
 };
 
+// Modèles d'automatisation prêts à l'emploi. Ajoutés DÉSACTIVÉS : c'est à
+// l'utilisateur de les activer avec l'interrupteur. N'utilisent que des actions
+// sans dépendance (tâches) pour fonctionner immédiatement, même sans template.
+const PRESETS: { name: string; description: string; trigger: Trigger; actions: Action[] }[] = [
+  {
+    name: "Nouveau contact → tâche de qualification",
+    description: "À chaque nouveau contact, crée une tâche de qualification à J+2.",
+    trigger: { type: "contact_created", stage: "" },
+    actions: [{ type: "create_task", title: "Qualifier le nouveau contact", dueInDays: 2 }],
+  },
+  {
+    name: "RDV pris → préparer le rendez-vous",
+    description: "Quand un contact passe en « RDV pris », crée une tâche de préparation le jour même.",
+    trigger: { type: "stage_changed", stage: "RDV pris" },
+    actions: [{ type: "create_task", title: "Préparer et confirmer le RDV", dueInDays: 0 }],
+  },
+  {
+    name: "Pré-qualifié → envoyer la proposition",
+    description: "Dès qu'un contact est « Pré-qualifié », crée une tâche « Envoyer la proposition » à J+1.",
+    trigger: { type: "stage_changed", stage: "Pré-qualifié" },
+    actions: [{ type: "create_task", title: "Envoyer la proposition commerciale", dueInDays: 1 }],
+  },
+  {
+    name: "À rappeler → tâche de relance",
+    description: "Quand un contact passe en « À rappeler », crée une tâche de relance à J+2.",
+    trigger: { type: "stage_changed", stage: "À rappeler" },
+    actions: [{ type: "create_task", title: "Rappeler ce contact", dueInDays: 2 }],
+  },
+  {
+    name: "Contrat signé → lancer la livraison",
+    description:
+      "Quand un contact passe en « Converti (contrat signé) », crée une tâche de livraison / onboarding à J+1.",
+    trigger: { type: "stage_changed", stage: "Converti (contrat signé)" },
+    actions: [{ type: "create_task", title: "Lancer la livraison / onboarding", dueInDays: 1 }],
+  },
+];
+
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", {
     day: "numeric",
@@ -53,7 +90,7 @@ function formatDateTime(iso: string) {
 }
 
 export default function AutomationsPage() {
-  const { automations, log, queue, loading, updateAutomation, deleteAutomation, removeFromQueue } =
+  const { automations, log, queue, loading, addAutomation, updateAutomation, deleteAutomation, removeFromQueue } =
     useAutomations();
   const { contacts } = useContacts();
   const { templates } = useTemplates();
@@ -213,6 +250,67 @@ export default function AutomationsPage() {
             })}
           </div>
         )}
+
+        {/* Modèles prêts à l'emploi */}
+        <div>
+          <h2 className="text-foreground mb-1 flex items-center gap-2 text-sm font-bold uppercase">
+            <Zap className="h-4 w-4 text-indigo-500" aria-hidden="true" />
+            Modèles prêts à l&apos;emploi
+          </h2>
+          <p className="text-muted-foreground mb-3 text-xs">
+            Ajoute-les d&apos;un clic — ils arrivent <strong>désactivés</strong>. À toi de les
+            activer avec l&apos;interrupteur quand tu es prêt.
+          </p>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {PRESETS.map((p) => {
+              const already = automations.some((a) => a.name === p.name);
+              const TriggerIcon = p.trigger.type === "contact_created" ? UserPlus : ArrowRightLeft;
+              return (
+                <div key={p.name} className="border-border bg-card rounded-2xl border p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-foreground text-base font-bold">{p.name}</h3>
+                      <p className="text-muted-foreground mt-0.5 text-sm">{p.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={already}
+                      onClick={() => void addAutomation({ ...p, active: false })}
+                      className={
+                        "shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors " +
+                        (already
+                          ? "bg-muted text-muted-foreground cursor-default"
+                          : "bg-primary text-primary-foreground hover:opacity-90")
+                      }
+                    >
+                      {already ? "Ajouté" : "Ajouter"}
+                    </button>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                      <TriggerIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                      {p.trigger.type === "contact_created"
+                        ? "Nouveau contact"
+                        : `Étape → ${p.trigger.stage || "toutes"}`}
+                    </span>
+                    {p.actions.map((action, i) => {
+                      const Icon = ACTION_ICON[action.type];
+                      return (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
+                        >
+                          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                          {actionChip(action, templateName)}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         {/* File d'attente d'emails */}
         {queue.length > 0 && (
