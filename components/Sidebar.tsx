@@ -6,6 +6,7 @@ import { initials, signOutRapport, useCrmUser } from "@/lib/rapport";
 import {
   LayoutDashboard,
   Users,
+  Building2,
   Calendar,
   Columns3,
   Zap,
@@ -24,6 +25,7 @@ import {
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/contacts", label: "Contacts", icon: Users },
+  { href: "/organisations", label: "Organisations", icon: Building2 },
   { href: "/agenda", label: "Agenda", icon: Calendar },
   { href: "/closing", label: "Closing", icon: Columns3 },
   { href: "/automatisation", label: "Automatisations", icon: Zap },

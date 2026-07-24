@@ -9,11 +9,13 @@ import {
   STAGES,
   StageName,
 } from "@/lib/contacts";
+import { Organization } from "@/lib/organizations";
 
 interface Props {
   open: boolean;
   initial?: Contact | null;
   categories: string[];
+  organizations: Organization[];
   onClose: () => void;
   onSave: (input: ContactInput) => Promise<void>;
 }
@@ -34,7 +36,14 @@ const EMPTY: ContactInput = {
 const inputClass =
   "border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none";
 
-export default function ContactFormModal({ open, initial, categories, onClose, onSave }: Props) {
+export default function ContactFormModal({
+  open,
+  initial,
+  categories,
+  organizations,
+  onClose,
+  onSave,
+}: Props) {
   const [form, setForm] = useState<ContactInput>(EMPTY);
   const [tagsText, setTagsText] = useState("");
   const [extraRows, setExtraRows] = useState<{ key: string; value: string }[]>([]);
@@ -153,14 +162,33 @@ export default function ContactFormModal({ open, initial, categories, onClose, o
             </div>
           </div>
 
-          <div>
-            <label className="text-foreground mb-1 block text-xs font-medium">Société</label>
-            <input
-              className={inputClass}
-              value={form.company}
-              onChange={(e) => set("company")(e.target.value)}
-              placeholder="Acme SAS"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">Société</label>
+              <input
+                className={inputClass}
+                value={form.company}
+                onChange={(e) => set("company")(e.target.value)}
+                placeholder="Acme SAS"
+              />
+            </div>
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Organisation <span className="text-muted-foreground">(fiche)</span>
+              </label>
+              <select
+                className={inputClass}
+                value={form.organizationId ?? ""}
+                onChange={(e) => set("organizationId")(e.target.value)}
+              >
+                <option value="">— Auto (par société) —</option>
+                {organizations.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

@@ -34,6 +34,7 @@ import SendEmailModal from "@/components/contacts/SendEmailModal";
 import ContactDetailModal from "@/components/contacts/ContactDetailModal";
 import SegmentBuilderModal from "@/components/contacts/SegmentBuilderModal";
 import ColumnsPanel from "@/components/contacts/ColumnsPanel";
+import { useOrganizations } from "@/lib/organizations";
 
 const selectClass =
   "border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 rounded-lg border px-2 py-1.5 text-sm focus:ring-2 focus:outline-none";
@@ -66,6 +67,7 @@ const COLUMNS_KEY = "netforce.contacts.columns";
 export default function ContactsPage() {
   const { contacts, loading, addContact, updateContact, deleteContact, importContacts } =
     useContacts();
+  const { organizations } = useOrganizations();
 
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -662,6 +664,7 @@ export default function ContactsPage() {
         open={formOpen}
         initial={editing}
         categories={categories}
+        organizations={organizations}
         onClose={() => setFormOpen(false)}
         onSave={async (input) => {
           if (editing) {

@@ -43,6 +43,8 @@ export interface Contact {
   lastEmailSentAt?: string;
   /** Date de la prochaine relance (YYYY-MM-DD) — pilote le tableau des relances. */
   nextFollowUpAt?: string;
+  /** Rattachement explicite à une fiche Organisation (sinon regroupé par société). */
+  organizationId?: string;
   createdAt: string;
   updatedAt: string;
 }
