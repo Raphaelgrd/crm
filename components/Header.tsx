@@ -19,9 +19,10 @@ export function Header() {
             <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
           <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="text-foreground text-base font-bold sm:text-lg">
-              Netforce
-            </span>
+            <div className="rounded-md bg-[#1C1917] px-3 py-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/netforce-logo.svg" alt="Netforce" className="h-6 w-auto object-contain" />
+            </div>
           </div>
           {userName && (
             <span className="text-muted-foreground hidden text-sm sm:inline">
