@@ -1,110 +1,183 @@
 "use client";
 
-import { Palette, Plus } from "lucide-react";
+import { useMemo } from "react";
+import { useContacts } from "@/lib/contacts";
+import { useAgenda } from "@/lib/agenda";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { Users, UserPlus, CheckSquare, Clock } from "lucide-react";
 
-// ⚠️ Simplifié : la vraie page utilise `react-grid-layout` (widgets déplaçables /
-// redimensionnables à la souris) + un graphique Recharts ("Évolution des Contacts").
-// Reproduire le drag & drop pixel-perfect est un gros chantier à part — ici les 4
-// cartes KPI sont fidèles (mêmes libellés, mêmes couleurs), posées en grille CSS
-// statique. Si tu veux vraiment le drag & drop plus tard, dis-le moi et on ajoute
-// `react-grid-layout` en dépendance.
+function monthKey(iso: string) {
+  return iso.slice(0, 7); // "2025-03"
+}
 
-const KPI_CARDS = [
-  {
-    label: "Total Contacts",
-    value: 0,
-    accent: "bg-amber-500",
-    note: "vs mois dernier",
-    trend: "↑ 0%",
-  },
-  {
-    label: "Nouveaux ce Mois",
-    value: 0,
-    accent: "bg-emerald-500",
-    note: "contacts créés",
-  },
-  {
-    label: "Tâches Complétées",
-    value: 0,
-    accent: "bg-blue-500",
-    note: "sur 0 au total",
-  },
-  {
-    label: "Tâches en Attente",
-    value: 0,
-    accent: "bg-amber-500",
-    note: "à traiter",
-  },
-];
+function monthLabel(key: string) {
+  const [y, m] = key.split("-");
+  return new Date(Number(y), Number(m) - 1).toLocaleDateString("fr-FR", {
+    month: "short",
+    year: "2-digit",
+  });
+}
 
 export default function DashboardPage() {
+  const { contacts, loading: loadingContacts } = useContacts();
+  const { events, loading: loadingAgenda } = useAgenda();
+
+  const now = new Date();
+  const currentMonth = monthKey(now.toISOString());
+
+  const totalContacts = contacts.length;
+
+  const newThisMonth = useMemo(
+    () => contacts.filter((c) => monthKey(c.createdAt) === currentMonth).length,
+    [contacts, currentMonth],
+  );
+
+  const tasks = useMemo(() => events.filter((e) => e.type === "tache"), [events]);
+  const tasksDone = tasks.filter((t) => t.done).length;
+  const tasksPending = tasks.filter((t) => !t.done).length;
+
+  // Contacts créés par mois (6 derniers mois)
+  const chartData = useMemo(() => {
+    const months: string[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push(monthKey(d.toISOString()));
+    }
+    return months.map((m) => ({
+      month: monthLabel(m),
+      contacts: contacts.filter((c) => monthKey(c.createdAt) === m).length,
+    }));
+  }, [contacts]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loading = loadingContacts || loadingAgenda;
+
+  const kpis = [
+    {
+      label: "Total Contacts",
+      value: totalContacts,
+      icon: Users,
+      accent: "bg-amber-500",
+      note: "dans la base",
+    },
+    {
+      label: "Nouveaux ce mois",
+      value: newThisMonth,
+      icon: UserPlus,
+      accent: "bg-emerald-500",
+      note: "contacts créés",
+    },
+    {
+      label: "Tâches complétées",
+      value: tasksDone,
+      icon: CheckSquare,
+      accent: "bg-blue-500",
+      note: `sur ${tasks.length} au total`,
+    },
+    {
+      label: "Tâches en attente",
+      value: tasksPending,
+      icon: Clock,
+      accent: "bg-amber-500",
+      note: "à traiter",
+    },
+  ];
+
   return (
     <div className="h-full w-full min-w-0">
-      <div className="border-b border-gray-200 bg-white px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">
-              Tableau de Bord
-            </h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Vue d&apos;ensemble de votre activité
-            </p>
-          </div>
-          <div className="shrink-0">
-            <div className="flex items-center gap-2">
-              <button
-                title="Changer la couleur du thème"
-                className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border border-gray-200 bg-white shadow-sm transition-all duration-150 hover:bg-gray-50 hover:shadow-md active:scale-[0.98]"
-              >
-                <Palette className="h-4 w-4 text-gray-600" aria-hidden="true" />
-              </button>
-              <button className="dash-btn inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium shadow-sm transition-all duration-150 hover:shadow-md active:scale-[0.98]">
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Ajouter un Widget
-              </button>
-            </div>
-          </div>
+      <div className="border-b border-border bg-background px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
+        <div className="min-w-0">
+          <h1 className="text-foreground text-xl font-bold sm:text-2xl">Tableau de bord</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Vue d&apos;ensemble de votre activité</p>
         </div>
       </div>
 
       <div className="p-4 sm:p-6">
+        {/* KPI cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {KPI_CARDS.map((card) => (
-            <div
-              key={card.label}
-              className="group relative flex h-full flex-col justify-between overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-md"
-            >
-              <div className={`absolute top-0 left-0 h-1 w-full ${card.accent}`} />
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">{card.label}</p>
-                  <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900">
-                    {card.value}
-                  </p>
+          {kpis.map((card) => {
+            const Icon = card.icon;
+            return (
+              <div
+                key={card.label}
+                className="border-border bg-card relative flex flex-col justify-between overflow-hidden rounded-2xl border p-5 shadow-sm"
+              >
+                <div className={`absolute top-0 left-0 h-1 w-full ${card.accent}`} />
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-muted-foreground text-sm font-medium">{card.label}</p>
+                    <p className="text-foreground mt-2 text-3xl font-bold tracking-tight">
+                      {loading ? (
+                        <span className="inline-block h-8 w-12 animate-pulse rounded bg-current opacity-10" />
+                      ) : (
+                        card.value
+                      )}
+                    </p>
+                  </div>
+                  <div className="bg-muted ml-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+                    <Icon className="text-muted-foreground h-5 w-5" aria-hidden="true" />
+                  </div>
                 </div>
+                <p className="text-muted-foreground mt-3 text-xs">{card.note}</p>
               </div>
-              <div className="mt-3 flex items-center gap-2">
-                {card.trend && (
-                  <span className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-600">
-                    {card.trend}
-                  </span>
-                )}
-                <span className="text-xs text-gray-400">{card.note}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Placeholder pour le graphique "Évolution des Contacts" (Recharts) */}
-        <div className="mt-6 flex h-72 flex-col rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <div className="mb-4">
-            <h3 className="text-base font-semibold text-gray-900">
-              Évolution des Contacts
-            </h3>
-            <p className="mt-0.5 text-xs text-gray-400">Contacts créés par mois</p>
-          </div>
-          <div className="flex flex-1 items-center justify-center text-sm text-gray-400">
-            Graphique à brancher (recharts + données réelles de la DB)
+        {/* Chart */}
+        <div className="border-border bg-card mt-6 rounded-2xl border p-5 shadow-sm">
+          <h3 className="text-foreground text-base font-semibold">Évolution des contacts</h3>
+          <p className="text-muted-foreground mt-0.5 text-xs">Contacts créés par mois (6 derniers mois)</p>
+          <div className="mt-4 h-64">
+            {loading ? (
+              <div className="bg-muted flex h-full items-center justify-center rounded-xl">
+                <span className="text-muted-foreground text-sm">Chargement…</span>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 11 }}
+                    className="fill-muted-foreground"
+                  />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} className="fill-muted-foreground" />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 8,
+                      fontSize: 12,
+                      border: "1px solid var(--border)",
+                      background: "var(--card)",
+                      color: "var(--foreground)",
+                    }}
+                    formatter={(v: number) => [v, "Contacts"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="contacts"
+                    stroke="#6366f1"
+                    strokeWidth={2}
+                    fill="url(#grad)"
+                    dot={{ r: 3, fill: "#6366f1" }}
+                    activeDot={{ r: 5 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
