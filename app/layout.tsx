@@ -3,7 +3,13 @@ import type { ReactNode } from "react";
 
 export const metadata = {
   title: "Netforce",
-  description: "Netforce CRM",
+  description: "Netforce CRM — Gestion de contacts et activité commerciale",
+  themeColor: "#1C1917",
+  appleWebApp: {
+    capable: true,
+    title: "Netforce",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({
