@@ -164,7 +164,7 @@ export default function DashboardPage() {
                       background: "var(--card)",
                       color: "var(--foreground)",
                     }}
-                    formatter={(v: number) => [v, "Contacts"]}
+                    formatter={(v) => [v, "Contacts"]}
                   />
                   <Area
                     type="monotone"
