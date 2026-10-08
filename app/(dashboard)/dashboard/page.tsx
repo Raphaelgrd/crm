@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useContacts } from "@/lib/contacts";
 import { useAgenda } from "@/lib/agenda";
+import { useStock } from "@/lib/stock";
 import {
   AreaChart,
   Area,
@@ -12,7 +13,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Users, UserPlus, CheckSquare, Clock } from "lucide-react";
+import { Users, UserPlus, CheckSquare, Package } from "lucide-react";
 
 function monthKey(iso: string) {
   return iso.slice(0, 7); // "2025-03"
@@ -29,6 +30,7 @@ function monthLabel(key: string) {
 export default function DashboardPage() {
   const { contacts, loading: loadingContacts } = useContacts();
   const { events, loading: loadingAgenda } = useAgenda();
+  const { levels, loading: loadingStock } = useStock();
 
   const now = new Date();
   const currentMonth = monthKey(now.toISOString());
@@ -42,7 +44,7 @@ export default function DashboardPage() {
 
   const tasks = useMemo(() => events.filter((e) => e.type === "tache"), [events]);
   const tasksDone = tasks.filter((t) => t.done).length;
-  const tasksPending = tasks.filter((t) => !t.done).length;
+  const totalGants = useMemo(() => levels.reduce((sum, l) => sum + l.qty, 0), [levels]);
 
   // Contacts créés par mois (6 derniers mois)
   const chartData = useMemo(() => {
@@ -57,7 +59,7 @@ export default function DashboardPage() {
     }));
   }, [contacts]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const loading = loadingContacts || loadingAgenda;
+  const loading = loadingContacts || loadingAgenda || loadingStock;
 
   const kpis = [
     {
@@ -82,11 +84,11 @@ export default function DashboardPage() {
       note: `sur ${tasks.length} au total`,
     },
     {
-      label: "Tâches en attente",
-      value: tasksPending,
-      icon: Clock,
-      accent: "bg-amber-500",
-      note: "à traiter",
+      label: "Total gants en stock",
+      value: totalGants,
+      icon: Package,
+      accent: "bg-violet-500",
+      note: "paires toutes tailles",
     },
   ];
 
