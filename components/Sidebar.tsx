@@ -61,7 +61,9 @@ export function Sidebar() {
             src="/netforce-logo.svg"
           />
         ) : (
-          <span className="text-sidebar-foreground font-bold text-lg select-none">N</span>
+          <svg viewBox="0 0 306 267" className="h-7 w-7" fill="white" aria-label="Netforce">
+            <path d="M0 262.053V48.5568C0 18.4978 16.5694 0 43.5429 0C55.4882 0 64.7363 3.85371 75.1403 13.488L229.66 154.534V4.23909H305.956V218.12C305.956 247.794 289.387 266.677 262.413 266.677C250.468 266.677 241.22 262.438 230.43 252.418L76.6817 112.143V262.053H0Z" />
+          </svg>
         )}
       </div>
 
