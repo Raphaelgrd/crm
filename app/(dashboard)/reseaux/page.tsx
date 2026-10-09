@@ -27,7 +27,7 @@ function todayDate() {
 
 interface AddModalProps {
   onClose: () => void;
-  onSave: (input: SocialSnapshotInput) => Promise<void>;
+  onSave: (input: SocialSnapshotInput) => Promise<unknown>;
 }
 
 function AddModal({ onClose, onSave }: AddModalProps) {
