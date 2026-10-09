@@ -24,7 +24,8 @@ type Field =
   | "company"
   | "category"
   | "tags"
-  | "notes";
+  | "notes"
+  | "stage";
 
 const FIELD_LABELS: Record<Field, string> = {
   firstName: "Prénom",
@@ -35,6 +36,7 @@ const FIELD_LABELS: Record<Field, string> = {
   category: "Catégorie",
   tags: "Tags",
   notes: "Notes",
+  stage: "Étape",
 };
 const FIELDS = Object.keys(FIELD_LABELS) as Field[];
 
@@ -45,9 +47,10 @@ const AUTO_MATCH: Record<Field, RegExp> = {
   email: /^(e-?mail|courriel|mail)$/i,
   phone: /^(t[ée]l[ée]phone|tel|phone|mobile|portable)$/i,
   company: /^(soci[ée]t[ée]|entreprise|company|organisation)$/i,
-  category: /^(cat[ée]gorie|category|type)$/i,
+  category: /^(cat[ée]gorie|category|type|statut)$/i,
   tags: /^(tags?|listes?|segments?)$/i,
   notes: /^(notes?|commentaires?)$/i,
+  stage: /^([ée]tape|stage)$/i,
 };
 
 // Destination d'une colonne CSV : ignorée, champ standard, ou attribut
@@ -172,9 +175,10 @@ export default function ImportCsvModal({ open, existingAttributes, onClose, onIm
     setError("");
     setImporting(true);
     try {
+      const stageNames = new Set(STAGES.map((s) => s.name));
       const inputs: ContactInput[] = csv.rows
         .map((row) => {
-          const base = {
+          const base: Record<string, string> = {
             firstName: "",
             lastName: "",
             email: "",
@@ -182,6 +186,7 @@ export default function ImportCsvModal({ open, existingAttributes, onClose, onIm
             company: "",
             category: "",
             notes: "",
+            stage: "",
           };
           let tags: string[] = [];
           const extra: Record<string, string> = {};
@@ -198,10 +203,26 @@ export default function ImportCsvModal({ open, existingAttributes, onClose, onIm
               extra[d.name.trim()] = value;
             }
           });
+          // Normalize category: "Club investisseur" → "Investisseur"
+          let category = base.category || "";
+          if (category === "Club investisseur") category = "Investisseur";
+          // If the mapped category value is actually a stage name, treat it as stage
+          let resolvedStage: StageName = defaultStage;
+          if (base.stage && stageNames.has(base.stage as StageName)) {
+            resolvedStage = base.stage as StageName;
+          } else if (!base.stage && category && stageNames.has(category as StageName)) {
+            resolvedStage = category as StageName;
+            category = "";
+          }
           return {
-            ...base,
-            category: base.category || DEFAULT_CATEGORIES[0],
-            stage: defaultStage,
+            firstName: base.firstName,
+            lastName: base.lastName,
+            email: base.email,
+            phone: base.phone,
+            company: base.company,
+            notes: base.notes,
+            category: category || DEFAULT_CATEGORIES[0],
+            stage: resolvedStage,
             tags,
             extra,
           };

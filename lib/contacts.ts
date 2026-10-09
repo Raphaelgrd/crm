@@ -23,6 +23,10 @@ export const DEFAULT_CATEGORIES = [
   "Client",
   "Partenaire",
   "Fournisseur",
+  "Investisseur",
+  "Distributeur",
+  "Ambassadeur",
+  "Institutionnel",
 ];
 
 export interface Contact {
