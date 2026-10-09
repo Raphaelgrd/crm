@@ -789,9 +789,26 @@ function BlockSettings({ block, onChange }: {
       {block.type === "image" && (
         <>
           <div>
-            <label className={labelClass}>URL de l&apos;image</label>
-            <input className={inputClass} placeholder="https://…/image.png"
-              value={(block.props as ImageProps).src}
+            <label className={labelClass}>Image</label>
+            <label className="border-border bg-card text-foreground hover:bg-muted mb-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors">
+              <ImageIcon className="h-4 w-4" aria-hidden="true" />
+              Choisir depuis le PC
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => onChange({ src: reader.result as string });
+                  reader.readAsDataURL(file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <input className={inputClass} placeholder="…ou coller une URL"
+              value={(block.props as ImageProps).src.startsWith("data:") ? "" : (block.props as ImageProps).src}
               onChange={(e) => onChange({ src: e.target.value })} />
           </div>
           <div>
