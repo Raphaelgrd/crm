@@ -72,7 +72,7 @@ export default function DashboardPage() {
   };
 
   const now = new Date();
-  const currentMonth = monthKey(now.toISOString());
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
   const totalContacts = contacts.length;
 
@@ -100,7 +100,7 @@ export default function DashboardPage() {
     const list: string[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      list.push(monthKey(d.toISOString()));
+      list.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
     }
     return list;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
