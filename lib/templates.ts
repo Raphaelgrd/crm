@@ -71,6 +71,8 @@ export interface EmailTemplate {
   subject: string;
   blocks: EmailBlock[];
   settings: TemplateSettings;
+  /** Corps du message pour les types SMS et Note (plain text). */
+  plainText?: string;
   /** "welcome" = mail relié au bouton d'envoi des fiches client. */
   special?: "welcome";
   createdAt: string;
@@ -141,6 +143,9 @@ export function makeBlock(type: BlockType): EmailBlock {
 
 /** Résumé texte d'un template pour la carte de la galerie. */
 export function templatePreview(t: EmailTemplate): string {
+  if (t.type !== "Email" && t.plainText) {
+    return t.plainText.replace(/\s+/g, " ").trim().slice(0, 140);
+  }
   for (const b of t.blocks) {
     if (b.type === "text" || b.type === "heading") {
       const text = (b.props as TextProps).text.replace(/\s+/g, " ").trim();
@@ -148,6 +153,11 @@ export function templatePreview(t: EmailTemplate): string {
     }
   }
   return "";
+}
+
+/** Renvoie le corps plain-text pour les types SMS / Note. */
+export function renderPlainText(t: EmailTemplate): string {
+  return t.plainText ?? "";
 }
 
 // --- Rendu HTML email (tableaux + styles inline, compatible clients mail) ---
