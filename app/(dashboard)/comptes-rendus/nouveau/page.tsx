@@ -215,6 +215,10 @@ export default function NewMeetingPage() {
   const [speechSupported, setSpeechSupported] = useState(true);
   const recRef = useRef<ISpeechRecognition | null>(null);
   const shouldRestartRef = useRef(false);
+  const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
+  const [extraSpeakers, setExtraSpeakers] = useState<string[]>([]);
+  const [speakerInput, setSpeakerInput] = useState("");
+  const [showSpeakerInput, setShowSpeakerInput] = useState(false);
 
   // Step 3 — content
   const [summary, setSummary] = useState("");
@@ -280,6 +284,24 @@ export default function NewMeetingPage() {
       shouldRestartRef.current = true;
       startRecognition();
     }
+  }
+
+  function insertSpeaker(name: string) {
+    setCurrentSpeaker(name);
+    setTranscript((p) => {
+      const trimmed = p.trimEnd();
+      return trimmed ? `${trimmed}\n\n${name} : ` : `${name} : `;
+    });
+    setInterim("");
+  }
+
+  function addExtraSpeaker() {
+    const name = speakerInput.trim();
+    if (!name) return;
+    setExtraSpeakers((p) => (p.includes(name) ? p : [...p, name]));
+    setSpeakerInput("");
+    setShowSpeakerInput(false);
+    insertSpeaker(name);
   }
 
   // Stop recording when leaving step
@@ -403,68 +425,131 @@ export default function NewMeetingPage() {
       )}
 
       {/* ── Step 1: Recording ── */}
-      {step === 1 && (
-        <div className="space-y-6">
-          {!speechSupported ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 text-sm text-amber-800 dark:text-amber-300">
-              <p className="font-medium mb-1">Transcription non disponible</p>
-              <p>Ton navigateur ne supporte pas la Web Speech API. Utilise Chrome ou Edge pour cette fonctionnalité. Tu peux aussi saisir la transcription manuellement ci-dessous.</p>
+      {step === 1 && (() => {
+        const participantContacts = contacts.filter((c) => participantIds.includes(c.id));
+        const allSpeakers = [
+          ...participantContacts.map((c) => `${c.firstName} ${c.lastName}`),
+          ...participantFree,
+          ...extraSpeakers,
+        ];
+        return (
+          <div className="space-y-5">
+            {!speechSupported && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 text-sm text-amber-800 dark:text-amber-300">
+                <p className="font-medium mb-1">Transcription non disponible</p>
+                <p>Ton navigateur ne supporte pas la Web Speech API. Utilise Chrome ou Edge. Tu peux aussi saisir la transcription manuellement ci-dessous.</p>
+              </div>
+            )}
+
+            {speechSupported && (
+              <>
+                {/* Mic button */}
+                <div className="flex flex-col items-center pt-4 pb-2 gap-3">
+                  <button
+                    onClick={toggleRecording}
+                    className={`h-20 w-20 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 ${
+                      isRecording ? "bg-red-500 hover:bg-red-600 animate-pulse" : "bg-primary hover:opacity-90"
+                    }`}
+                  >
+                    {isRecording ? <MicOff className="h-8 w-8 text-white" /> : <Mic className="h-8 w-8 text-white" />}
+                  </button>
+                  <p className="text-sm text-muted-foreground">
+                    {isRecording ? "Enregistrement en cours… Clique pour arrêter" : "Clique pour démarrer l'enregistrement"}
+                  </p>
+                </div>
+
+                {/* Speaker chips */}
+                <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Clique sur un nom dès que cette personne commence à parler
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {allSpeakers.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => insertSpeaker(name)}
+                        className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                          currentSpeaker === name
+                            ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                            : "border-border bg-card hover:bg-accent"
+                        }`}
+                      >
+                        {name}
+                      </button>
+                    ))}
+
+                    {showSpeakerInput ? (
+                      <div className="flex gap-1">
+                        <input
+                          autoFocus
+                          type="text"
+                          value={speakerInput}
+                          onChange={(e) => setSpeakerInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); addExtraSpeaker(); }
+                            if (e.key === "Escape") { setShowSpeakerInput(false); setSpeakerInput(""); }
+                          }}
+                          placeholder="Nom…"
+                          className="w-28 px-2 py-1 text-sm border border-border rounded-full bg-input focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                        <button type="button" onClick={addExtraSpeaker} className="px-2 py-1 text-sm rounded-full bg-primary text-primary-foreground hover:opacity-90">
+                          OK
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowSpeakerInput(true)}
+                        className="px-3 py-1.5 text-sm rounded-full border border-dashed border-border text-muted-foreground hover:bg-accent transition-colors"
+                      >
+                        + Autre
+                      </button>
+                    )}
+                  </div>
+
+                  {isRecording && currentSpeaker && (
+                    <p className="text-xs text-muted-foreground">
+                      🎙 <span className="font-medium text-foreground">{currentSpeaker}</span> parle…
+                      {interim && <span className="italic"> {interim}</span>}
+                    </p>
+                  )}
+                  {isRecording && !currentSpeaker && interim && (
+                    <p className="text-xs text-muted-foreground italic">{interim}</p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Editable transcript */}
+            <div>
+              <label className="block text-sm font-medium mb-1.5">
+                Transcription{isRecording ? " (en direct)" : ""}
+              </label>
+              <textarea
+                rows={10}
+                placeholder="La transcription s'affiche ici automatiquement. Tu peux aussi la saisir ou la coller manuellement."
+                value={transcript + (!currentSpeaker && isRecording && interim ? interim : "")}
+                onChange={(e) => { if (!isRecording) setTranscript(e.target.value); }}
+                readOnly={isRecording}
+                className={`w-full px-3 py-2.5 text-sm border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-ring resize-none font-mono ${isRecording ? "opacity-80 cursor-default" : ""}`}
+              />
             </div>
-          ) : (
-            <div className="flex flex-col items-center py-6 gap-4">
-              <button
-                onClick={toggleRecording}
-                className={`h-20 w-20 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 ${
-                  isRecording
-                    ? "bg-red-500 hover:bg-red-600 animate-pulse"
-                    : "bg-primary hover:opacity-90"
-                }`}
-              >
-                {isRecording ? (
-                  <MicOff className="h-8 w-8 text-white" />
-                ) : (
-                  <Mic className="h-8 w-8 text-white" />
-                )}
+
+            <div className="flex justify-between gap-3">
+              <button onClick={() => setStep(0)} className="px-4 py-2.5 text-sm border border-border rounded-lg hover:bg-accent transition-colors">
+                Retour
               </button>
-              <p className="text-sm text-muted-foreground">
-                {isRecording ? "Enregistrement en cours… Clique pour arrêter" : "Clique pour démarrer l'enregistrement"}
-              </p>
-              {isRecording && interim && (
-                <p className="text-sm text-muted-foreground italic max-w-md text-center">{interim}</p>
-              )}
+              <button
+                onClick={() => { if (isRecording) stopRecognition(); setStep(2); }}
+                className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+              >
+                Suivant <ArrowRight className="h-4 w-4" />
+              </button>
             </div>
-          )}
-
-          {/* Editable transcript */}
-          <div>
-            <label className="block text-sm font-medium mb-1.5">
-              Transcription{isRecording ? " (en direct)" : ""}
-            </label>
-            <textarea
-              rows={10}
-              placeholder="La transcription s'affiche ici automatiquement. Tu peux aussi la saisir ou la coller manuellement."
-              value={transcript + (isRecording && interim ? interim : "")}
-              onChange={(e) => {
-                if (!isRecording) setTranscript(e.target.value);
-              }}
-              readOnly={isRecording}
-              className={`w-full px-3 py-2.5 text-sm border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-ring resize-none ${isRecording ? "opacity-80 cursor-default" : ""}`}
-            />
           </div>
-
-          <div className="flex justify-between gap-3">
-            <button onClick={() => setStep(0)} className="px-4 py-2.5 text-sm border border-border rounded-lg hover:bg-accent transition-colors">
-              Retour
-            </button>
-            <button
-              onClick={() => { if (isRecording) stopRecognition(); setStep(2); }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
-            >
-              Suivant <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Step 2: Content ── */}
       {step === 2 && (
