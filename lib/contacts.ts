@@ -414,5 +414,21 @@ export function useContacts() {
     [],
   );
 
-  return { contacts, loading, addContact, updateContact, deleteContact, importContacts };
+  const updateManyContacts = useCallback(
+    async (ids: string[], patch: Partial<ContactInput>): Promise<void> => {
+      const now = new Date().toISOString();
+      for (const id of ids) {
+        await store.update(id, { ...patch, updatedAt: now });
+      }
+    },
+    [],
+  );
+
+  const deleteManyContacts = useCallback(async (ids: string[]): Promise<void> => {
+    for (const id of ids) {
+      await store.remove(id);
+    }
+  }, []);
+
+  return { contacts, loading, addContact, updateContact, deleteContact, importContacts, updateManyContacts, deleteManyContacts };
 }

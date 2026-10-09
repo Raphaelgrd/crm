@@ -21,11 +21,13 @@ import {
   LogOut,
   PanelLeftOpen,
   PanelLeftClose,
+  TrendingUp,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/contacts", label: "Contacts", icon: Users },
+  { href: "/investisseurs", label: "Pipeline levée", icon: TrendingUp },
   { href: "/organisations", label: "Organisations", icon: Building2 },
   { href: "/agenda", label: "Agenda", icon: Calendar },
   { href: "/closing", label: "Closing", icon: Columns3 },

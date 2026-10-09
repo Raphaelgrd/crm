@@ -15,6 +15,9 @@ import {
   Trash2,
   Users,
   X,
+  CheckSquare,
+  Square,
+  ScanSearch,
 } from "lucide-react";
 import {
   Contact,
@@ -34,6 +37,7 @@ import SendEmailModal from "@/components/contacts/SendEmailModal";
 import ContactDetailModal from "@/components/contacts/ContactDetailModal";
 import SegmentBuilderModal from "@/components/contacts/SegmentBuilderModal";
 import ColumnsPanel from "@/components/contacts/ColumnsPanel";
+import DuplicatesModal from "@/components/contacts/DuplicatesModal";
 import { useOrganizations } from "@/lib/organizations";
 import { logActivity } from "@/lib/activities";
 
@@ -66,7 +70,7 @@ const DEFAULT_COLUMNS = BASE_COLUMNS.map((c) => c.id);
 const COLUMNS_KEY = "netforce.contacts.columns";
 
 export default function ContactsPage() {
-  const { contacts, loading, addContact, updateContact, deleteContact, importContacts } =
+  const { contacts, loading, addContact, updateContact, deleteContact, importContacts, updateManyContacts, deleteManyContacts } =
     useContacts();
   const { organizations } = useOrganizations();
 
@@ -90,6 +94,11 @@ export default function ContactsPage() {
   const [colPanelOpen, setColPanelOpen] = useState(false);
   const [visibleCols, setVisibleCols] = useState<string[]>(DEFAULT_COLUMNS);
   const [relanceOnly, setRelanceOnly] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkStage, setBulkStage] = useState("");
+  const [bulkCategory, setBulkCategory] = useState("");
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 
   // Nombre de relances à traiter (en retard + aujourd'hui) — badge du bouton.
   const relanceDue = useMemo(
@@ -190,6 +199,47 @@ export default function ContactsPage() {
     await deleteContact(c.id);
   };
 
+  const allDisplayedSelected = displayed.length > 0 && displayed.every((c) => selectedIds.has(c.id));
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelectAll = () => {
+    if (allDisplayedSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(displayed.map((c) => c.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const applyBulkStage = async () => {
+    if (!bulkStage) return;
+    await updateManyContacts([...selectedIds], { stage: bulkStage as import("@/lib/contacts").StageName });
+    setSelectedIds(new Set());
+    setBulkStage("");
+  };
+
+  const applyBulkCategory = async () => {
+    if (!bulkCategory) return;
+    await updateManyContacts([...selectedIds], { category: bulkCategory });
+    setSelectedIds(new Set());
+    setBulkCategory("");
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirmBulkDelete) { setConfirmBulkDelete(true); return; }
+    await deleteManyContacts([...selectedIds]);
+    setSelectedIds(new Set());
+    setConfirmBulkDelete(false);
+  };
+
   return (
     <div className="h-full">
       <div className="border-border bg-background/95 border-b px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8 lg:py-6">
@@ -202,6 +252,15 @@ export default function ContactsPage() {
             </p>
           </div>
           <div className="flex shrink-0 gap-3">
+            <button
+              type="button"
+              onClick={() => setDuplicatesOpen(true)}
+              className="border-border bg-card text-foreground hover:bg-muted focus-visible:ring-primary inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold shadow-sm transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+              title="Détecter les doublons"
+            >
+              <ScanSearch className="h-4 w-4" aria-hidden="true" />
+              Doublons
+            </button>
             <button
               type="button"
               onClick={() => setImportOpen(true)}
@@ -478,6 +537,85 @@ export default function ContactsPage() {
       </div>
 
       <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
+        {/* Bulk action bar */}
+        {someSelected && (
+          <div className="bg-primary/5 border-primary/20 mb-3 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3">
+            <span className="text-primary text-sm font-semibold">
+              {selectedIds.size} sélectionné{selectedIds.size > 1 ? "s" : ""}
+            </span>
+            <div className="flex items-center gap-2">
+              <select
+                className={selectClass + " text-xs"}
+                value={bulkStage}
+                onChange={(e) => setBulkStage(e.target.value)}
+              >
+                <option value="">Changer l&apos;étape…</option>
+                {STAGES.map((s) => (
+                  <option key={s.name} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+              {bulkStage && (
+                <button
+                  type="button"
+                  onClick={() => void applyBulkStage()}
+                  className="bg-primary text-primary-foreground rounded-lg px-3 py-1.5 text-xs font-semibold hover:opacity-90"
+                >
+                  Appliquer
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                className={selectClass + " text-xs"}
+                value={bulkCategory}
+                onChange={(e) => setBulkCategory(e.target.value)}
+              >
+                <option value="">Changer la catégorie…</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              {bulkCategory && (
+                <button
+                  type="button"
+                  onClick={() => void applyBulkCategory()}
+                  className="bg-primary text-primary-foreground rounded-lg px-3 py-1.5 text-xs font-semibold hover:opacity-90"
+                >
+                  Appliquer
+                </button>
+              )}
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              {confirmBulkDelete ? (
+                <button
+                  type="button"
+                  onClick={() => void handleBulkDelete()}
+                  onBlur={() => setConfirmBulkDelete(false)}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white"
+                >
+                  Confirmer la suppression ?
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void handleBulkDelete()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Supprimer
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { setSelectedIds(new Set()); setConfirmBulkDelete(false); }}
+                className="text-muted-foreground hover:text-foreground text-xs"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading ? null : contacts.length === 0 ? (
           <div className="border-border rounded-xl border border-dashed py-16 text-center">
             <Users className="mx-auto h-10 w-10 text-gray-300" aria-hidden="true" />
@@ -499,6 +637,15 @@ export default function ContactsPage() {
             <table className="w-full text-left text-sm">
               <thead className="bg-muted">
                 <tr>
+                  <th className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer rounded"
+                      checked={allDisplayedSelected}
+                      onChange={toggleSelectAll}
+                      aria-label="Tout sélectionner"
+                    />
+                  </th>
                   <th className="text-muted-foreground px-4 py-3 text-xs font-medium">Nom</th>
                   {orderedCols.map((id) => (
                     <th key={id} className="text-muted-foreground px-4 py-3 text-xs font-medium whitespace-nowrap">
@@ -515,8 +662,17 @@ export default function ContactsPage() {
                   <tr
                     key={c.id}
                     onClick={() => setDetailContact(c)}
-                    className="border-border hover:bg-muted/50 cursor-pointer border-t transition-colors"
+                    className={`border-border hover:bg-muted/50 cursor-pointer border-t transition-colors ${selectedIds.has(c.id) ? "bg-primary/5" : ""}`}
                   >
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 cursor-pointer rounded"
+                        checked={selectedIds.has(c.id)}
+                        onChange={() => toggleSelect(c.id)}
+                        aria-label={`Sélectionner ${c.firstName} ${c.lastName}`}
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
@@ -730,6 +886,11 @@ export default function ContactsPage() {
         initial={visibleCols}
         onClose={() => setColPanelOpen(false)}
         onSave={saveColumns}
+      />
+      <DuplicatesModal
+        open={duplicatesOpen}
+        contacts={contacts}
+        onClose={() => setDuplicatesOpen(false)}
       />
     </div>
   );
