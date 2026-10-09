@@ -13,7 +13,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Users, UserPlus, CheckSquare, Package } from "lucide-react";
+import { Users, UserPlus, CheckSquare, Package, TrendingUp } from "lucide-react";
 
 function monthKey(iso: string) {
   return iso.slice(0, 7); // "2025-03"
@@ -45,6 +45,23 @@ export default function DashboardPage() {
   const tasks = useMemo(() => events.filter((e) => e.type === "tache"), [events]);
   const tasksDone = tasks.filter((t) => t.done).length;
   const totalGants = useMemo(() => levels.reduce((sum, l) => sum + l.qty, 0), [levels]);
+
+  const { totalInvest, investorCount } = useMemo(() => {
+    let total = 0;
+    let count = 0;
+    for (const c of contacts) {
+      const raw = c.extra?.["Investissement"] ?? "";
+      const val = parseInt(raw.replace(/\s/g, ""), 10);
+      if (!isNaN(val) && val > 0) {
+        total += val;
+        count++;
+      }
+    }
+    return { totalInvest: total, investorCount: count };
+  }, [contacts]);
+
+  const formatEur = (n: number) =>
+    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
   // Contacts créés par mois (6 derniers mois)
   const chartData = useMemo(() => {
@@ -102,6 +119,31 @@ export default function DashboardPage() {
       </div>
 
       <div className="p-4 sm:p-6">
+        {/* Investment banner */}
+        <div className="relative mb-4 overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-5 shadow-sm dark:border-amber-900/40 dark:from-amber-950/30 dark:to-orange-950/20">
+          <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-amber-400 to-orange-400" />
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                Total intentions d&apos;investissement
+              </p>
+              <p className="mt-1 text-4xl font-bold tracking-tight text-amber-900 dark:text-amber-100">
+                {loading ? (
+                  <span className="inline-block h-10 w-36 animate-pulse rounded bg-amber-200 opacity-50 dark:bg-amber-800" />
+                ) : (
+                  formatEur(totalInvest)
+                )}
+              </p>
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                {loading ? "" : `${investorCount} investisseur${investorCount > 1 ? "s" : ""} pré-inscrits`}
+              </p>
+            </div>
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-100 dark:bg-amber-900/50">
+              <TrendingUp className="h-7 w-7 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+            </div>
+          </div>
+        </div>
+
         {/* KPI cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {kpis.map((card) => {
