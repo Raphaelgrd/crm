@@ -48,6 +48,75 @@ function sorted(list: SocialSnapshot[]): SocialSnapshot[] {
   return [...list].sort((a, b) => b.date.localeCompare(a.date));
 }
 
+// --- Meta (Facebook + Instagram) integration ---
+
+export interface MetaConfig {
+  pageToken: string;    // permanent page access token
+  pageId: string;
+  pageName?: string;
+  igAccountId?: string; // linked Instagram Business/Creator account
+  igUsername?: string;
+}
+
+const META_CONFIG_KEY = "netforce.meta.config";
+
+export function loadMetaConfig(): MetaConfig | null {
+  try {
+    const raw = localStorage.getItem(META_CONFIG_KEY);
+    return raw ? (JSON.parse(raw) as MetaConfig) : null;
+  } catch { return null; }
+}
+
+export function saveMetaConfig(config: MetaConfig): void {
+  try { localStorage.setItem(META_CONFIG_KEY, JSON.stringify(config)); } catch {}
+}
+
+export function clearMetaConfig(): void {
+  try { localStorage.removeItem(META_CONFIG_KEY); } catch {}
+}
+
+export interface FacebookStats { pageName: string; followers: number; likes: number }
+export interface InstagramStats { username: string; followers: number; mediaCount: number }
+
+async function graphFetch<T>(path: string, token: string, fields: string): Promise<T> {
+  const url = `https://graph.facebook.com/v21.0/${path}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`;
+  const res = await fetch(url);
+  const data = await res.json() as T & { error?: { message: string } };
+  if (!res.ok || (data as { error?: { message: string } }).error) {
+    throw new Error(((data as { error?: { message: string } }).error?.message) ?? `Graph API error (${res.status})`);
+  }
+  return data;
+}
+
+export async function fetchFacebookStats(config: MetaConfig): Promise<FacebookStats> {
+  const data = await graphFetch<{ name: string; followers_count: number; fan_count: number }>(
+    config.pageId, config.pageToken, "name,followers_count,fan_count",
+  );
+  return { pageName: data.name, followers: data.followers_count ?? data.fan_count ?? 0, likes: data.fan_count ?? 0 };
+}
+
+export async function detectInstagramAccount(config: MetaConfig): Promise<{ id: string; username: string; followers: number; mediaCount: number } | null> {
+  try {
+    const pageData = await graphFetch<{ instagram_business_account?: { id: string } }>(
+      config.pageId, config.pageToken, "instagram_business_account",
+    );
+    const igId = pageData.instagram_business_account?.id;
+    if (!igId) return null;
+    const igData = await graphFetch<{ username: string; followers_count: number; media_count: number }>(
+      igId, config.pageToken, "username,followers_count,media_count",
+    );
+    return { id: igId, username: igData.username, followers: igData.followers_count ?? 0, mediaCount: igData.media_count ?? 0 };
+  } catch { return null; }
+}
+
+export async function fetchInstagramStats(config: MetaConfig): Promise<InstagramStats> {
+  if (!config.igAccountId) throw new Error("Aucun compte Instagram lié à cette page.");
+  const data = await graphFetch<{ username: string; followers_count: number; media_count: number }>(
+    config.igAccountId, config.pageToken, "username,followers_count,media_count",
+  );
+  return { username: data.username, followers: data.followers_count ?? 0, mediaCount: data.media_count ?? 0 };
+}
+
 // --- YouTube integration ---
 
 export interface YouTubeConfig {

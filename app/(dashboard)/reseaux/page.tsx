@@ -22,6 +22,13 @@ import {
   saveYouTubeConfig,
   clearYouTubeConfig,
   fetchYouTubeStats,
+  MetaConfig,
+  loadMetaConfig,
+  saveMetaConfig,
+  clearMetaConfig,
+  fetchFacebookStats,
+  fetchInstagramStats,
+  detectInstagramAccount,
 } from "@/lib/social";
 
 function formatNumber(n: number) {
@@ -153,6 +160,118 @@ function AddModal({ onClose, onSave }: AddModalProps) {
   );
 }
 
+// --- Meta (Facebook + Instagram) config modal ---
+interface MetaModalProps {
+  initial: MetaConfig | null;
+  onSave: (config: MetaConfig) => void;
+  onDisconnect: () => void;
+  onClose: () => void;
+}
+
+function MetaModal({ initial, onSave, onDisconnect, onClose }: MetaModalProps) {
+  const [pageToken, setPageToken] = useState(initial?.pageToken ?? "");
+  const [pageId, setPageId] = useState(initial?.pageId ?? "");
+  const [testing, setTesting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!pageToken.trim() || !pageId.trim()) return;
+    setTesting(true);
+    setError(null);
+    try {
+      const fbStats = await fetchFacebookStats({ pageToken: pageToken.trim(), pageId: pageId.trim() });
+      const ig = await detectInstagramAccount({ pageToken: pageToken.trim(), pageId: pageId.trim() });
+      onSave({
+        pageToken: pageToken.trim(),
+        pageId: pageId.trim(),
+        pageName: fbStats.pageName,
+        igAccountId: ig?.id,
+        igUsername: ig?.username,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-card w-full max-w-lg rounded-2xl shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="border-border flex items-center justify-between border-b px-6 py-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-[10px] font-bold text-white shadow-sm">fb</div>
+            <h2 className="text-foreground text-lg font-bold">Connecter Facebook &amp; Instagram</h2>
+          </div>
+          <button type="button" onClick={onClose} className="hover:bg-muted rounded p-1 transition-colors">
+            <X className="h-5 w-5 text-gray-400" />
+          </button>
+        </div>
+        <div className="space-y-4 px-6 py-5">
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-300">
+            <p className="font-semibold mb-1.5">Comment obtenir un token de Page permanent</p>
+            <ol className="list-decimal list-inside space-y-1 text-blue-700 dark:text-blue-400">
+              <li>Va sur <span className="font-mono">developers.facebook.com</span> → crée une app (type Entreprise)</li>
+              <li>Ouvre le <span className="font-mono">Graph API Explorer</span> → sélectionne ton app</li>
+              <li>Clique sur <strong>Get Token</strong> → coche : <span className="font-mono">pages_show_list</span>, <span className="font-mono">pages_read_engagement</span>, <span className="font-mono">instagram_basic</span></li>
+              <li>Clique <strong>(i)</strong> sur le token → <strong>Open in Access Token Tool</strong> → <strong>Extend Access Token</strong> (60 jours)</li>
+              <li>Reviens dans l'Explorer avec ce token → requête <span className="font-mono">me/accounts</span> → copie le <span className="font-mono">access_token</span> de ta Page (ce token est permanent)</li>
+              <li>L'ID de page se trouve aussi dans <span className="font-mono">me/accounts</span> → champ <span className="font-mono">id</span></li>
+            </ol>
+          </div>
+          <div>
+            <label className="text-foreground mb-1.5 block text-sm font-medium">ID de la page Facebook</label>
+            <input
+              type="text"
+              value={pageId}
+              onChange={(e) => setPageId(e.target.value)}
+              placeholder="Ex : 123456789012345"
+              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
+          <div>
+            <label className="text-foreground mb-1.5 block text-sm font-medium">Token de Page (permanent)</label>
+            <input
+              type="password"
+              value={pageToken}
+              onChange={(e) => setPageToken(e.target.value)}
+              placeholder="EAAxxxxx..."
+              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <p className="text-muted-foreground mt-1 text-[10px]">Instagram est détecté automatiquement si ta page est liée à un compte Business/Creator</p>
+          </div>
+          {error && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-400">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              {error}
+            </div>
+          )}
+        </div>
+        <div className="border-border flex items-center justify-between border-t px-6 py-4">
+          {initial && (
+            <button type="button" onClick={onDisconnect} className="text-xs text-red-500 underline underline-offset-2 hover:text-red-700">
+              Déconnecter
+            </button>
+          )}
+          <div className="ml-auto flex gap-2">
+            <button type="button" onClick={onClose} className="border-border bg-card text-foreground rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800">
+              Annuler
+            </button>
+            <button
+              type="button"
+              disabled={testing || !pageToken.trim() || !pageId.trim()}
+              onClick={handleSave}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {testing ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" />Test en cours…</> : "Tester et connecter"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- YouTube config modal ---
 interface YTModalProps {
   initial: YouTubeConfig | null;
@@ -273,12 +392,60 @@ export default function ReseauxPage() {
   const [ytSyncing, setYtSyncing] = useState(false);
   const [ytError, setYtError] = useState<string | null>(null);
   const [ytLastSync, setYtLastSync] = useState<string | null>(null);
+  const [metaModalOpen, setMetaModalOpen] = useState(false);
+  const [metaConfig, setMetaConfig] = useState<MetaConfig | null>(null);
+  const [metaSyncing, setMetaSyncing] = useState(false);
+  const [metaError, setMetaError] = useState<string | null>(null);
+  const [metaLastSync, setMetaLastSync] = useState<string | null>(null);
   const [activeChart, setActiveChart] = useState<"followers" | "views">("followers");
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<SocialPlatform>>(
     new Set(PLATFORMS.map((p) => p.name)),
   );
 
-  useEffect(() => { setYtConfig(loadYouTubeConfig()); }, []);
+  useEffect(() => {
+    setYtConfig(loadYouTubeConfig());
+    setMetaConfig(loadMetaConfig());
+  }, []);
+
+  const handleMetaSave = (config: MetaConfig) => {
+    saveMetaConfig(config);
+    setMetaConfig(config);
+    setMetaModalOpen(false);
+  };
+
+  const handleMetaDisconnect = () => {
+    clearMetaConfig();
+    setMetaConfig(null);
+    setMetaModalOpen(false);
+  };
+
+  const syncMeta = async () => {
+    if (!metaConfig) return;
+    setMetaSyncing(true);
+    setMetaError(null);
+    const today = new Date();
+    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    try {
+      const [fbStats, igStats] = await Promise.allSettled([
+        fetchFacebookStats(metaConfig),
+        metaConfig.igAccountId ? fetchInstagramStats(metaConfig) : Promise.reject(new Error("no ig")),
+      ]);
+      if (fbStats.status === "fulfilled") {
+        await addSnapshot({ platform: "Facebook", followers: fbStats.value.followers, posts: 0, views: 0, date });
+      }
+      if (igStats.status === "fulfilled") {
+        await addSnapshot({ platform: "Instagram", followers: igStats.value.followers, posts: igStats.value.mediaCount, views: 0, date });
+      }
+      if (fbStats.status === "rejected" && igStats.status === "rejected") {
+        throw fbStats.reason as Error;
+      }
+      setMetaLastSync(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
+    } catch (e) {
+      setMetaError(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setMetaSyncing(false);
+    }
+  };
 
   const handleYtSave = (config: YouTubeConfig) => {
     saveYouTubeConfig(config);
@@ -413,18 +580,61 @@ export default function ReseauxPage() {
               </div>
             </div>
 
-            {/* Other platforms — coming soon */}
-            {(["Instagram", "LinkedIn", "TikTok"] as const).map((name) => (
-              <div key={name} className="border-border bg-card/50 flex items-center gap-3 rounded-2xl border border-dashed p-4 opacity-60">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${PLATFORMS.find((p) => p.name === name)?.gradient ?? ""} text-xs font-bold text-white shadow-sm`}>
-                  {name.slice(0, 2)}
+            {/* Facebook + Instagram (same Meta token) */}
+            <div className="border-border bg-card flex items-center justify-between gap-3 rounded-2xl border p-4 shadow-sm sm:col-span-2 lg:col-span-1">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex shrink-0 flex-col gap-1">
+                  <div className="flex h-5 w-10 items-center justify-center rounded-md bg-gradient-to-br from-blue-500 to-blue-600 text-[9px] font-bold text-white shadow-sm">fb</div>
+                  <div className="flex h-5 w-10 items-center justify-center rounded-md bg-gradient-to-br from-pink-500 to-orange-400 text-[9px] font-bold text-white shadow-sm">IG</div>
                 </div>
-                <div>
-                  <p className="text-foreground text-sm font-semibold">{name}</p>
-                  <p className="text-muted-foreground text-[10px]">Prochainement</p>
+                <div className="min-w-0">
+                  <p className="text-foreground text-sm font-semibold">Facebook &amp; Instagram</p>
+                  {metaConfig ? (
+                    <p className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 text-[10px] font-medium truncate">
+                      <CheckCircle2 className="h-3 w-3 shrink-0" />
+                      {metaConfig.pageName ?? metaConfig.pageId}
+                      {metaConfig.igUsername && ` · @${metaConfig.igUsername}`}
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground text-[10px]">Non connecté</p>
+                  )}
+                  {metaLastSync && <p className="text-muted-foreground text-[10px]">Sync à {metaLastSync}</p>}
+                  {metaError && (
+                    <p className="text-red-500 flex items-center gap-1 text-[10px]">
+                      <AlertCircle className="h-3 w-3 shrink-0" />{metaError}
+                    </p>
+                  )}
                 </div>
               </div>
-            ))}
+              <div className="flex shrink-0 items-center gap-1.5">
+                {metaConfig && (
+                  <button
+                    onClick={syncMeta}
+                    disabled={metaSyncing}
+                    className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-100 disabled:opacity-50 dark:bg-blue-950/30 dark:text-blue-400"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${metaSyncing ? "animate-spin" : ""}`} />
+                    {metaSyncing ? "Sync…" : "Sync"}
+                  </button>
+                )}
+                <button
+                  onClick={() => setMetaModalOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                  {metaConfig ? "Modifier" : "Configurer"}
+                </button>
+              </div>
+            </div>
+
+            {/* TikTok — coming soon */}
+            <div className="border-border bg-card/50 flex items-center gap-3 rounded-2xl border border-dashed p-4 opacity-60">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 text-xs font-bold text-white shadow-sm">TT</div>
+              <div>
+                <p className="text-foreground text-sm font-semibold">TikTok</p>
+                <p className="text-muted-foreground text-[10px]">Prochainement</p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -670,6 +880,15 @@ export default function ReseauxPage() {
           onSave={handleYtSave}
           onDisconnect={handleYtDisconnect}
           onClose={() => setYtModalOpen(false)}
+        />
+      )}
+
+      {metaModalOpen && (
+        <MetaModal
+          initial={metaConfig}
+          onSave={handleMetaSave}
+          onDisconnect={handleMetaDisconnect}
+          onClose={() => setMetaModalOpen(false)}
         />
       )}
     </div>
