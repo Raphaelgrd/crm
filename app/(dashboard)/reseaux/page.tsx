@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus, X, Trash2, TrendingUp, Users, FileText, Eye } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, X, Trash2, TrendingUp, Users, FileText, Eye, RefreshCw, Settings2, CheckCircle2, AlertCircle } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -12,7 +12,17 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { PLATFORMS, SocialPlatform, SocialSnapshotInput, useSocial } from "@/lib/social";
+import {
+  PLATFORMS,
+  SocialPlatform,
+  SocialSnapshotInput,
+  useSocial,
+  YouTubeConfig,
+  loadYouTubeConfig,
+  saveYouTubeConfig,
+  clearYouTubeConfig,
+  fetchYouTubeStats,
+} from "@/lib/social";
 
 function formatNumber(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M`;
@@ -143,6 +153,109 @@ function AddModal({ onClose, onSave }: AddModalProps) {
   );
 }
 
+// --- YouTube config modal ---
+interface YTModalProps {
+  initial: YouTubeConfig | null;
+  onSave: (config: YouTubeConfig) => void;
+  onDisconnect: () => void;
+  onClose: () => void;
+}
+
+function YouTubeModal({ initial, onSave, onDisconnect, onClose }: YTModalProps) {
+  const [apiKey, setApiKey] = useState(initial?.apiKey ?? "");
+  const [channelInput, setChannelInput] = useState(initial?.channelInput ?? "");
+  const [testing, setTesting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!apiKey.trim() || !channelInput.trim()) return;
+    setTesting(true);
+    setError(null);
+    try {
+      const stats = await fetchYouTubeStats({ apiKey: apiKey.trim(), channelInput: channelInput.trim() });
+      onSave({ apiKey: apiKey.trim(), channelInput: channelInput.trim(), channelTitle: stats.channelTitle });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-card w-full max-w-md rounded-2xl shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="border-border flex items-center justify-between border-b px-6 py-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-red-600 text-[10px] font-bold text-white shadow-sm">YT</div>
+            <h2 className="text-foreground text-lg font-bold">Connecter YouTube</h2>
+          </div>
+          <button type="button" onClick={onClose} className="hover:bg-muted rounded p-1 transition-colors">
+            <X className="h-5 w-5 text-gray-400" />
+          </button>
+        </div>
+        <div className="space-y-4 px-6 py-5">
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-300">
+            <p className="font-semibold mb-1">Comment obtenir une clé API YouTube</p>
+            <ol className="list-decimal list-inside space-y-0.5 text-blue-700 dark:text-blue-400">
+              <li>Aller sur console.cloud.google.com</li>
+              <li>Créer un projet → Activer "YouTube Data API v3"</li>
+              <li>Identifiants → Créer une clé API</li>
+              <li>Restreindre la clé à cette API (optionnel mais recommandé)</li>
+            </ol>
+          </div>
+          <div>
+            <label className="text-foreground mb-1.5 block text-sm font-medium">Clé API Google</label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="AIzaSy..."
+              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-400"
+            />
+          </div>
+          <div>
+            <label className="text-foreground mb-1.5 block text-sm font-medium">Handle ou ID de ta chaîne</label>
+            <input
+              type="text"
+              value={channelInput}
+              onChange={(e) => setChannelInput(e.target.value)}
+              placeholder="@NetforceBoxing ou UCxxxx..."
+              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+            />
+            <p className="text-muted-foreground mt-1 text-[10px]">Trouve l'ID sur studio.youtube.com → Paramètres → Informations sur la chaîne</p>
+          </div>
+          {error && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-400">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              {error}
+            </div>
+          )}
+        </div>
+        <div className="border-border flex items-center justify-between border-t px-6 py-4">
+          {initial && (
+            <button type="button" onClick={onDisconnect} className="text-xs text-red-500 underline underline-offset-2 hover:text-red-700">
+              Déconnecter
+            </button>
+          )}
+          <div className="ml-auto flex gap-2">
+            <button type="button" onClick={onClose} className="border-border bg-card text-foreground rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800">
+              Annuler
+            </button>
+            <button
+              type="button"
+              disabled={testing || !apiKey.trim() || !channelInput.trim()}
+              onClick={handleSave}
+              className="inline-flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50"
+            >
+              {testing ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" />Test en cours…</> : "Tester et connecter"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const PLATFORM_CHART_COLORS: Record<SocialPlatform, string> = {
   Instagram: "#E1306C",
   LinkedIn: "#0A66C2",
@@ -155,10 +268,46 @@ const PLATFORM_CHART_COLORS: Record<SocialPlatform, string> = {
 export default function ReseauxPage() {
   const { snapshots, loading, addSnapshot, deleteSnapshot, latestByPlatform, historyByPlatform } = useSocial();
   const [addOpen, setAddOpen] = useState(false);
+  const [ytModalOpen, setYtModalOpen] = useState(false);
+  const [ytConfig, setYtConfig] = useState<YouTubeConfig | null>(null);
+  const [ytSyncing, setYtSyncing] = useState(false);
+  const [ytError, setYtError] = useState<string | null>(null);
+  const [ytLastSync, setYtLastSync] = useState<string | null>(null);
   const [activeChart, setActiveChart] = useState<"followers" | "views">("followers");
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<SocialPlatform>>(
     new Set(PLATFORMS.map((p) => p.name)),
   );
+
+  useEffect(() => { setYtConfig(loadYouTubeConfig()); }, []);
+
+  const handleYtSave = (config: YouTubeConfig) => {
+    saveYouTubeConfig(config);
+    setYtConfig(config);
+    setYtModalOpen(false);
+  };
+
+  const handleYtDisconnect = () => {
+    clearYouTubeConfig();
+    setYtConfig(null);
+    setYtModalOpen(false);
+  };
+
+  const syncYouTube = async () => {
+    if (!ytConfig) return;
+    setYtSyncing(true);
+    setYtError(null);
+    try {
+      const stats = await fetchYouTubeStats(ytConfig);
+      const today = new Date();
+      const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      await addSnapshot({ platform: "YouTube", followers: stats.subscribers, posts: stats.videos, views: stats.views, date });
+      setYtLastSync(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
+    } catch (e) {
+      setYtError(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setYtSyncing(false);
+    }
+  };
 
   const togglePlatform = (p: SocialPlatform) => {
     setSelectedPlatforms((prev) => {
@@ -216,6 +365,69 @@ export default function ReseauxPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        {/* Connexions automatiques */}
+        <div className="mb-6">
+          <h2 className="text-foreground mb-3 text-sm font-semibold">Connexions</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {/* YouTube */}
+            <div className="border-border bg-card flex items-center justify-between gap-3 rounded-2xl border p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-red-600 text-xs font-bold text-white shadow-sm">YT</div>
+                <div>
+                  <p className="text-foreground text-sm font-semibold">YouTube</p>
+                  {ytConfig ? (
+                    <p className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 text-[10px] font-medium">
+                      <CheckCircle2 className="h-3 w-3" />
+                      {ytConfig.channelTitle ?? ytConfig.channelInput}
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground text-[10px]">Non connecté</p>
+                  )}
+                  {ytLastSync && <p className="text-muted-foreground text-[10px]">Sync à {ytLastSync}</p>}
+                  {ytError && (
+                    <p className="text-red-500 flex items-center gap-1 text-[10px]">
+                      <AlertCircle className="h-3 w-3" />{ytError}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {ytConfig && (
+                  <button
+                    onClick={syncYouTube}
+                    disabled={ytSyncing}
+                    className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50 dark:bg-red-950/30 dark:text-red-400"
+                    title="Synchroniser maintenant"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${ytSyncing ? "animate-spin" : ""}`} />
+                    {ytSyncing ? "Sync…" : "Sync"}
+                  </button>
+                )}
+                <button
+                  onClick={() => setYtModalOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                  {ytConfig ? "Modifier" : "Configurer"}
+                </button>
+              </div>
+            </div>
+
+            {/* Other platforms — coming soon */}
+            {(["Instagram", "LinkedIn", "TikTok"] as const).map((name) => (
+              <div key={name} className="border-border bg-card/50 flex items-center gap-3 rounded-2xl border border-dashed p-4 opacity-60">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${PLATFORMS.find((p) => p.name === name)?.gradient ?? ""} text-xs font-bold text-white shadow-sm`}>
+                  {name.slice(0, 2)}
+                </div>
+                <div>
+                  <p className="text-foreground text-sm font-semibold">{name}</p>
+                  <p className="text-muted-foreground text-[10px]">Prochainement</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Platform cards */}
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {PLATFORMS.map((platform) => {
@@ -449,6 +661,15 @@ export default function ReseauxPage() {
         <AddModal
           onClose={() => setAddOpen(false)}
           onSave={addSnapshot}
+        />
+      )}
+
+      {ytModalOpen && (
+        <YouTubeModal
+          initial={ytConfig}
+          onSave={handleYtSave}
+          onDisconnect={handleYtDisconnect}
+          onClose={() => setYtModalOpen(false)}
         />
       )}
     </div>

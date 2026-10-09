@@ -48,6 +48,66 @@ function sorted(list: SocialSnapshot[]): SocialSnapshot[] {
   return [...list].sort((a, b) => b.date.localeCompare(a.date));
 }
 
+// --- YouTube integration ---
+
+export interface YouTubeConfig {
+  apiKey: string;
+  channelInput: string; // @handle, channel ID (UC...), or username
+  channelTitle?: string;
+}
+
+const YT_CONFIG_KEY = "netforce.youtube.config";
+
+export function loadYouTubeConfig(): YouTubeConfig | null {
+  try {
+    const raw = localStorage.getItem(YT_CONFIG_KEY);
+    return raw ? (JSON.parse(raw) as YouTubeConfig) : null;
+  } catch { return null; }
+}
+
+export function saveYouTubeConfig(config: YouTubeConfig): void {
+  try { localStorage.setItem(YT_CONFIG_KEY, JSON.stringify(config)); } catch {}
+}
+
+export function clearYouTubeConfig(): void {
+  try { localStorage.removeItem(YT_CONFIG_KEY); } catch {}
+}
+
+export interface YouTubeStats {
+  channelTitle: string;
+  subscribers: number;
+  videos: number;
+  views: number;
+}
+
+export async function fetchYouTubeStats(config: YouTubeConfig): Promise<YouTubeStats> {
+  const params = new URLSearchParams({ part: "statistics,snippet", key: config.apiKey });
+  const input = config.channelInput.trim();
+  if (input.startsWith("UC")) params.set("id", input);
+  else if (input.startsWith("@")) params.set("forHandle", input);
+  else params.set("forUsername", input);
+
+  const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?${params.toString()}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { error?: { message?: string } };
+    throw new Error(err?.error?.message ?? `Erreur YouTube API (${res.status})`);
+  }
+  const data = await res.json() as {
+    items?: Array<{
+      snippet: { title: string };
+      statistics: { subscriberCount: string; videoCount: string; viewCount: string };
+    }>;
+  };
+  if (!data.items?.length) throw new Error("Chaîne introuvable. Vérifie le handle ou l'ID.");
+  const item = data.items[0];
+  return {
+    channelTitle: item.snippet.title,
+    subscribers: parseInt(item.statistics.subscriberCount, 10) || 0,
+    videos: parseInt(item.statistics.videoCount, 10) || 0,
+    views: parseInt(item.statistics.viewCount, 10) || 0,
+  };
+}
+
 export function useSocial() {
   const [snapshots, setSnapshots] = useState<SocialSnapshot[]>(sorted(store.get()));
   const [loading, setLoading] = useState(!store.ready());
