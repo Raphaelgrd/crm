@@ -31,7 +31,7 @@ export default function InvestisseursPage() {
   const [dragging, setDragging] = useState<string | null>(null);
 
   const investors = useMemo(
-    () => contacts.filter((c) => c.category === "Investisseur"),
+    () => contacts.filter((c) => c.category === "Investisseur" && parseInvest(c) > 0),
     [contacts],
   );
 
