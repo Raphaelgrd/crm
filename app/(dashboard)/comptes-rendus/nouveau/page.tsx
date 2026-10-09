@@ -12,6 +12,7 @@ import type { ContactInput, Contact } from "@/lib/contacts";
 // ── Web Speech API types ─────────────────────────────────────────────────────
 
 interface ISpeechRecognitionEvent {
+  resultIndex: number;
   results: {
     length: number;
     [i: number]: { isFinal: boolean; 0: { transcript: string } };
@@ -342,7 +343,7 @@ export default function NewMeetingPage() {
     rec.onresult = (ev: ISpeechRecognitionEvent) => {
       let final = "";
       let inter = "";
-      for (let i = 0; i < ev.results.length; i++) {
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
         if (ev.results[i].isFinal) final += ev.results[i][0].transcript + " ";
         else inter += ev.results[i][0].transcript;
       }
