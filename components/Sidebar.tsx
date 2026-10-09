@@ -23,6 +23,7 @@ import {
   PanelLeftClose,
   TrendingUp,
   Share2,
+  ClipboardList,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/investisseurs", label: "Pipeline levée", icon: TrendingUp },
   { href: "/reseaux", label: "Réseaux sociaux", icon: Share2 },
+  { href: "/comptes-rendus", label: "Comptes rendus", icon: ClipboardList },
   { href: "/organisations", label: "Organisations", icon: Building2 },
   { href: "/agenda", label: "Agenda", icon: Calendar },
   { href: "/closing", label: "Closing", icon: Columns3 },
