@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Mic, MicOff, Plus, Trash2, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Mic, MicOff, Plus, Trash2, Check, Loader2, UserPlus } from "lucide-react";
 import { useMeetings, makeMeetingTask, buildEmailBody, formatMeetingDate } from "@/lib/meetings";
 import type { MeetingTask, MeetingMinutesInput } from "@/lib/meetings";
 import { useContacts } from "@/lib/contacts";
+import type { ContactInput, Contact } from "@/lib/contacts";
 
 // ── Web Speech API types ─────────────────────────────────────────────────────
 
@@ -42,31 +43,72 @@ function ParticipantPicker({
   selectedFree,
   onChangeIds,
   onChangeFree,
+  onCreateContact,
 }: {
   selectedIds: string[];
   selectedFree: string[];
   onChangeIds: (ids: string[]) => void;
   onChangeFree: (names: string[]) => void;
+  onCreateContact: (input: ContactInput) => Promise<Contact>;
 }) {
   const { contacts } = useContacts();
   const [query, setQuery] = useState("");
-  const [freeInput, setFreeInput] = useState("");
+
+  // inline create form
+  const [showCreate, setShowCreate] = useState(false);
+  const [createFirst, setCreateFirst] = useState("");
+  const [createLast, setCreateLast] = useState("");
+  const [createEmail, setCreateEmail] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const filtered = query
-    ? contacts.filter((c) =>
-        `${c.firstName} ${c.lastName} ${c.email}`.toLowerCase().includes(query.toLowerCase()),
-      ).slice(0, 6)
+    ? contacts
+        .filter((c) =>
+          `${c.firstName} ${c.lastName} ${c.email}`.toLowerCase().includes(query.toLowerCase()),
+        )
+        .slice(0, 6)
     : [];
+
+  const showDropdown = query.length > 0 && !showCreate;
 
   function toggleContact(id: string) {
     onChangeIds(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
   }
 
-  function addFree() {
-    const name = freeInput.trim();
-    if (!name || selectedFree.includes(name)) return;
-    onChangeFree([...selectedFree, name]);
-    setFreeInput("");
+  function openCreate() {
+    const parts = query.trim().split(/\s+/);
+    setCreateFirst(parts[0] ?? "");
+    setCreateLast(parts.slice(1).join(" "));
+    setCreateEmail("");
+    setShowCreate(true);
+    setQuery("");
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    const first = createFirst.trim();
+    const last = createLast.trim();
+    if (!first) return;
+    setCreating(true);
+    try {
+      const contact = await onCreateContact({
+        firstName: first,
+        lastName: last,
+        email: createEmail.trim(),
+        phone: "",
+        company: "",
+        category: "Prospect",
+        stage: "Nouveau",
+        notes: "",
+      });
+      onChangeIds([...selectedIds, contact.id]);
+      setShowCreate(false);
+      setCreateFirst("");
+      setCreateLast("");
+      setCreateEmail("");
+    } finally {
+      setCreating(false);
+    }
   }
 
   const selectedContacts = contacts.filter((c) => selectedIds.includes(c.id));
@@ -79,27 +121,31 @@ function ParticipantPicker({
           {selectedContacts.map((c) => (
             <span key={c.id} className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-primary/10 text-primary border border-primary/20">
               {c.firstName} {c.lastName}
-              <button onClick={() => toggleContact(c.id)} className="hover:opacity-70">×</button>
+              <button type="button" onClick={() => toggleContact(c.id)} className="hover:opacity-70">×</button>
             </span>
           ))}
           {selectedFree.map((n) => (
             <span key={n} className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-muted text-muted-foreground border border-border">
               {n}
-              <button onClick={() => onChangeFree(selectedFree.filter((x) => x !== n))} className="hover:opacity-70">×</button>
+              <button type="button" onClick={() => onChangeFree(selectedFree.filter((x) => x !== n))} className="hover:opacity-70">×</button>
             </span>
           ))}
         </div>
       )}
 
-      {/* Search CRM contacts */}
-      <input
-        type="text"
-        placeholder="Chercher un contact CRM…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-ring"
-      />
-      {filtered.length > 0 && (
+      {/* Search */}
+      {!showCreate && (
+        <input
+          type="text"
+          placeholder="Chercher ou créer un participant…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+      )}
+
+      {/* Dropdown */}
+      {showDropdown && (
         <div className="border border-border rounded-lg overflow-hidden divide-y divide-border">
           {filtered.map((c) => (
             <button
@@ -118,23 +164,74 @@ function ParticipantPicker({
               {selectedIds.includes(c.id) && <Check className="h-4 w-4 text-primary ml-auto shrink-0" />}
             </button>
           ))}
+          {/* Create option */}
+          <button
+            type="button"
+            onClick={openCreate}
+            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left text-primary hover:bg-primary/5 transition-colors"
+          >
+            <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <UserPlus className="h-3.5 w-3.5 text-primary" />
+            </div>
+            <span>
+              {filtered.length === 0
+                ? `Créer « ${query} »`
+                : `Créer un nouveau contact`}
+            </span>
+          </button>
         </div>
       )}
 
-      {/* Free-text participant */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          placeholder="Ajouter un nom libre (ex : Marie Dupont)…"
-          value={freeInput}
-          onChange={(e) => setFreeInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFree(); } }}
-          className="flex-1 px-3 py-2 text-sm border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-        <button type="button" onClick={addFree} className="px-3 py-2 text-sm bg-muted hover:bg-accent rounded-lg transition-colors">
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
+      {/* Inline create form */}
+      {showCreate && (
+        <form onSubmit={(e) => void handleCreate(e)} className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+          <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+            <UserPlus className="h-3.5 w-3.5" /> Nouveau contact
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              autoFocus
+              required
+              type="text"
+              placeholder="Prénom *"
+              value={createFirst}
+              onChange={(e) => setCreateFirst(e.target.value)}
+              className="px-3 py-2 text-sm border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <input
+              type="text"
+              placeholder="Nom"
+              value={createLast}
+              onChange={(e) => setCreateLast(e.target.value)}
+              className="px-3 py-2 text-sm border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <input
+            type="email"
+            placeholder="Email (optionnel)"
+            value={createEmail}
+            onChange={(e) => setCreateEmail(e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => { setShowCreate(false); setQuery(""); }}
+              className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-accent transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={creating || !createFirst.trim()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+              Créer et ajouter
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
@@ -194,7 +291,7 @@ const STEPS = ["Infos", "Enregistrement", "Contenu"] as const;
 export default function NewMeetingPage() {
   const router = useRouter();
   const { saveMeeting } = useMeetings();
-  const { contacts } = useContacts();
+  const { contacts, addContact } = useContacts();
 
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -410,6 +507,7 @@ export default function NewMeetingPage() {
               selectedFree={participantFree}
               onChangeIds={setParticipantIds}
               onChangeFree={setParticipantFree}
+              onCreateContact={addContact}
             />
           </div>
           <div className="pt-2 flex justify-end">
