@@ -322,6 +322,8 @@ export default function NewMeetingPage() {
   const [summary, setSummary] = useState("");
   const [decisions, setDecisions] = useState<string[]>([""]);
   const [tasks, setTasks] = useState<MeetingTask[]>([makeMeetingTask()]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // ── Speech helpers ──
 
@@ -406,6 +408,45 @@ export default function NewMeetingPage() {
   useEffect(() => {
     if (step !== 1 && isRecording) stopRecognition();
   }, [step, isRecording, stopRecognition]);
+
+  // ── AI auto-analysis ──
+
+  async function goToStep2() {
+    if (isRecording) stopRecognition();
+    setStep(2);
+
+    const participantContacts = contacts.filter((c) => participantIds.includes(c.id));
+    const allNames = [
+      ...participantContacts.map((c) => `${c.firstName} ${c.lastName}`),
+      ...participantFree,
+    ];
+
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/ai/meeting-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, date, participants: allNames, transcript, summary: "", decisions: [] }),
+      });
+      const data = await res.json() as {
+        summary?: string;
+        decisions?: string[];
+        tasks?: { description: string; assigneeName?: string }[];
+        error?: string;
+      };
+      if (data.error) { setAiError(data.error); return; }
+      if (data.summary) setSummary(data.summary);
+      if (data.decisions?.length) setDecisions(data.decisions);
+      if (data.tasks?.length) {
+        setTasks(data.tasks.map((t) => ({ ...makeMeetingTask(t.description), assigneeName: t.assigneeName ?? "" })));
+      }
+    } catch {
+      setAiError("Erreur réseau — réessaie.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   // ── Save ──
 
@@ -640,7 +681,7 @@ export default function NewMeetingPage() {
                 Retour
               </button>
               <button
-                onClick={() => { if (isRecording) stopRecognition(); setStep(2); }}
+                onClick={() => void goToStep2()}
                 className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
               >
                 Suivant <ArrowRight className="h-4 w-4" />
@@ -653,6 +694,17 @@ export default function NewMeetingPage() {
       {/* ── Step 2: Content ── */}
       {step === 2 && (
         <div className="space-y-6">
+          {aiLoading && (
+            <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-primary">
+              <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+              Analyse en cours par l'IA… Les champs seront pré-remplis automatiquement.
+            </div>
+          )}
+          {aiError && (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {aiError}
+            </div>
+          )}
           {/* Summary */}
           <div>
             <label className="block text-sm font-medium mb-1.5">Résumé</label>
