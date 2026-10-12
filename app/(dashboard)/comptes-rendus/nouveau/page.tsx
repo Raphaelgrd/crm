@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Mic, MicOff, Plus, Trash2, Check, Loader2, UserPlus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Mic, MicOff, Plus, Trash2, Check, Loader2, UserPlus, Monitor } from "lucide-react";
 import { useMeetings, makeMeetingTask, buildEmailBody, formatMeetingDate } from "@/lib/meetings";
 import type { MeetingTask, MeetingMinutesInput } from "@/lib/meetings";
 import { useContacts } from "@/lib/contacts";
@@ -307,12 +307,16 @@ export default function NewMeetingPage() {
   const [participantFree, setParticipantFree] = useState<string[]>([]);
 
   // Step 2 — recording
+  const [audioMode, setAudioMode] = useState<"mic" | "display">("mic");
   const [isRecording, setIsRecording] = useState(false);
+  const [recordError, setRecordError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState("");
   const [interim, setInterim] = useState("");
   const [speechSupported, setSpeechSupported] = useState(true);
   const recRef = useRef<ISpeechRecognition | null>(null);
   const shouldRestartRef = useRef(false);
+  const displayStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
   const [extraSpeakers, setExtraSpeakers] = useState<string[]>([]);
   const [speakerInput, setSpeakerInput] = useState("");
@@ -377,12 +381,72 @@ export default function NewMeetingPage() {
     recRef.current = null;
   }, []);
 
+  // ── Display capture helpers ──
+
+  async function transcribeChunk(blob: Blob) {
+    try {
+      const fd = new FormData();
+      fd.append("audio", blob, "audio.webm");
+      const res = await fetch("/api/ai/transcribe", { method: "POST", body: fd });
+      const data = (await res.json()) as { text?: string; error?: string };
+      if (data.text?.trim()) {
+        setTranscript((p) => {
+          const trimmed = p.trimEnd();
+          return trimmed ? `${trimmed} ${data.text!}` : data.text!;
+        });
+      }
+    } catch { /* ignore chunk errors silently */ }
+  }
+
+  async function startDisplayCapture() {
+    setRecordError(null);
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+      displayStreamRef.current = stream;
+
+      if (!stream.getAudioTracks().length) {
+        stream.getTracks().forEach((t) => t.stop());
+        setRecordError("Aucun audio capturé. Coche « Partager l'audio de l'onglet » lors du partage.");
+        return;
+      }
+
+      const audioStream = new MediaStream(stream.getAudioTracks());
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm";
+      const recorder = new MediaRecorder(audioStream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 500) void transcribeChunk(e.data);
+      };
+
+      stream.getTracks().forEach((t) => t.addEventListener("ended", stopDisplayCapture));
+
+      recorder.start(8000);
+      setIsRecording(true);
+    } catch (err) {
+      if ((err as Error).name !== "NotAllowedError") {
+        setRecordError("Impossible d'accéder au partage d'écran.");
+      }
+    }
+  }
+
+  function stopDisplayCapture() {
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
+    displayStreamRef.current?.getTracks().forEach((t) => t.stop());
+    displayStreamRef.current = null;
+    setIsRecording(false);
+  }
+
   function toggleRecording() {
     if (isRecording) {
-      stopRecognition();
+      if (audioMode === "display") stopDisplayCapture();
+      else stopRecognition();
     } else {
-      shouldRestartRef.current = true;
-      startRecognition();
+      if (audioMode === "display") void startDisplayCapture();
+      else { shouldRestartRef.current = true; startRecognition(); }
     }
   }
 
@@ -406,13 +470,20 @@ export default function NewMeetingPage() {
 
   // Stop recording when leaving step
   useEffect(() => {
-    if (step !== 1 && isRecording) stopRecognition();
-  }, [step, isRecording, stopRecognition]);
+    if (step !== 1 && isRecording) {
+      if (audioMode === "display") stopDisplayCapture();
+      else stopRecognition();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, isRecording]);
 
   // ── AI auto-analysis ──
 
   async function goToStep2() {
-    if (isRecording) stopRecognition();
+    if (isRecording) {
+      if (audioMode === "display") stopDisplayCapture();
+      else stopRecognition();
+    }
     setStep(2);
 
     const participantContacts = contacts.filter((c) => participantIds.includes(c.id));
@@ -574,16 +645,46 @@ export default function NewMeetingPage() {
         ];
         return (
           <div className="space-y-5">
-            {!speechSupported && (
+            {/* Source mode toggle */}
+            <div className="flex items-center justify-center">
+              <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-muted/40 p-1">
+                <button
+                  type="button"
+                  onClick={() => { if (isRecording) toggleRecording(); setAudioMode("mic"); setRecordError(null); }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    audioMode === "mic" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Mic className="h-3.5 w-3.5" /> Micro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { if (isRecording) toggleRecording(); setAudioMode("display"); setRecordError(null); }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    audioMode === "display" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Monitor className="h-3.5 w-3.5" /> Teams / Meet
+                </button>
+              </div>
+            </div>
+
+            {recordError && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                {recordError}
+              </div>
+            )}
+
+            {!speechSupported && audioMode === "mic" && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 text-sm text-amber-800 dark:text-amber-300">
                 <p className="font-medium mb-1">Transcription non disponible</p>
                 <p>Ton navigateur ne supporte pas la Web Speech API. Utilise Chrome ou Edge. Tu peux aussi saisir la transcription manuellement ci-dessous.</p>
               </div>
             )}
 
-            {speechSupported && (
+            {(speechSupported || audioMode === "display") && (
               <>
-                {/* Mic button */}
+                {/* Record button */}
                 <div className="flex flex-col items-center pt-4 pb-2 gap-3">
                   <button
                     onClick={toggleRecording}
@@ -591,11 +692,29 @@ export default function NewMeetingPage() {
                       isRecording ? "bg-red-500 hover:bg-red-600 animate-pulse" : "bg-primary hover:opacity-90"
                     }`}
                   >
-                    {isRecording ? <MicOff className="h-8 w-8 text-white" /> : <Mic className="h-8 w-8 text-white" />}
+                    {isRecording
+                      ? <MicOff className="h-8 w-8 text-white" />
+                      : audioMode === "display"
+                        ? <Monitor className="h-8 w-8 text-white" />
+                        : <Mic className="h-8 w-8 text-white" />}
                   </button>
                   <p className="text-sm text-muted-foreground">
-                    {isRecording ? "Enregistrement en cours… Clique pour arrêter" : "Clique pour démarrer l'enregistrement"}
+                    {isRecording
+                      ? "Enregistrement en cours… Clique pour arrêter"
+                      : audioMode === "display"
+                        ? "Clique pour partager l'onglet Teams ou Meet"
+                        : "Clique pour démarrer l'enregistrement"}
                   </p>
+                  {audioMode === "display" && !isRecording && (
+                    <p className="text-xs text-muted-foreground text-center max-w-xs">
+                      Sélectionne l'onglet Teams ou Meet et coche <strong>« Partager l'audio de l'onglet »</strong>
+                    </p>
+                  )}
+                  {audioMode === "display" && isRecording && (
+                    <p className="text-xs text-muted-foreground">
+                      Transcription toutes les ~8 secondes via Whisper…
+                    </p>
+                  )}
                 </div>
 
                 {/* Speaker chips */}
@@ -648,13 +767,13 @@ export default function NewMeetingPage() {
                     )}
                   </div>
 
-                  {isRecording && currentSpeaker && (
+                  {isRecording && audioMode === "mic" && currentSpeaker && (
                     <p className="text-xs text-muted-foreground">
-                      🎙 <span className="font-medium text-foreground">{currentSpeaker}</span> parle…
+                      <span className="font-medium text-foreground">{currentSpeaker}</span> parle…
                       {interim && <span className="italic"> {interim}</span>}
                     </p>
                   )}
-                  {isRecording && !currentSpeaker && interim && (
+                  {isRecording && audioMode === "mic" && !currentSpeaker && interim && (
                     <p className="text-xs text-muted-foreground italic">{interim}</p>
                   )}
                 </div>
