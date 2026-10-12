@@ -9,11 +9,13 @@ import {
   Clock,
   Globe,
   Handshake,
+  Loader2,
   Mail,
   Pencil,
   Phone,
   PhoneCall,
   Send,
+  Sparkles,
   StickyNote,
   Tag,
   Trash2,
@@ -90,6 +92,9 @@ export default function ContactDetailModal({
 }: Props) {
   const [actType, setActType] = useState<ActivityType>("note");
   const [actText, setActText] = useState("");
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const { activities, addActivity, deleteActivity } = useContactActivities(contact?.id ?? "");
   const { statusFor } = useCompliance();
 
@@ -102,6 +107,26 @@ export default function ContactDetailModal({
   const fuStatus = followUpStatus(contact);
   const fuLabel =
     fuStatus === "overdue" ? "En retard" : fuStatus === "today" ? "Aujourd'hui" : "Planifiée";
+
+  const handleAiSummarize = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    setAiSummary(null);
+    try {
+      const res = await fetch("/api/ai/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contact, activities }),
+      });
+      const data = await res.json() as { summary?: string; error?: string };
+      if (data.error) setAiError(data.error);
+      else setAiSummary(data.summary ?? "");
+    } catch {
+      setAiError("Erreur réseau — réessaie.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const submitActivity = async () => {
     const text = actText.trim();
@@ -237,6 +262,40 @@ export default function ContactDetailModal({
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Résumé IA */}
+          <div className="border-border rounded-lg border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold uppercase">
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                Synthèse IA
+              </p>
+              <button
+                type="button"
+                onClick={() => void handleAiSummarize()}
+                disabled={aiLoading}
+                className="bg-primary text-primary-foreground inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                {aiLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                {aiLoading ? "Génération…" : aiSummary ? "Regénérer" : "Résumer"}
+              </button>
+            </div>
+            {aiError && (
+              <p className="mt-2 text-xs text-red-600">{aiError}</p>
+            )}
+            {aiSummary && !aiLoading && (
+              <p className="text-foreground mt-2 text-sm leading-relaxed">{aiSummary}</p>
+            )}
+            {!aiSummary && !aiLoading && !aiError && (
+              <p className="text-muted-foreground mt-1 text-xs">
+                Clique sur « Résumer » pour générer une synthèse via ton IA locale (Ollama).
+              </p>
+            )}
           </div>
 
           {contact.notes && (
