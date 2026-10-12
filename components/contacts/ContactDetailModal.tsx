@@ -98,8 +98,8 @@ export default function ContactDetailModal({
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [docTemplateId, setDocTemplateId] = useState("");
   const [docModalTemplateId, setDocModalTemplateId] = useState<string | null>(null);
+  const [docDropdownOpen, setDocDropdownOpen] = useState(false);
   const { activities, addActivity, deleteActivity } = useContactActivities(contact?.id ?? "");
   const { statusFor } = useCompliance();
   const { templates: docTemplates } = useDocumentTemplates();
@@ -304,42 +304,6 @@ export default function ContactDetailModal({
             )}
           </div>
 
-          {/* Documents légaux */}
-          <div className="border-border rounded-lg border p-3">
-            <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold uppercase mb-2">
-              <FileSignature className="h-3.5 w-3.5" aria-hidden="true" />
-              Documents légaux
-            </p>
-            {docTemplates.length === 0 ? (
-              <p className="text-muted-foreground text-xs">
-                Aucun modèle. Crée-en un dans{" "}
-                <a href="/documents" className="text-primary hover:underline">Documents légaux</a>.
-              </p>
-            ) : (
-              <div className="flex gap-2">
-                <select
-                  value={docTemplateId}
-                  onChange={(e) => setDocTemplateId(e.target.value)}
-                  className="flex-1 px-2 py-1.5 text-sm border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Choisir un modèle…</option>
-                  {docTemplates.map((t) => (
-                    <option key={t.id} value={t.id}>{t.type} — {t.name}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={!docTemplateId}
-                  onClick={() => setDocModalTemplateId(docTemplateId)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0"
-                >
-                  <FileSignature className="h-3.5 w-3.5" />
-                  Générer
-                </button>
-              </div>
-            )}
-          </div>
-
           {contact.notes && (
             <div>
               <p className="text-muted-foreground mb-1 text-xs font-semibold uppercase">Notes</p>
@@ -451,7 +415,7 @@ export default function ContactDetailModal({
           </div>
         </div>
 
-        <div className="border-border flex justify-end gap-3 border-t px-6 py-4">
+        <div className="border-border flex items-center justify-between gap-3 border-t px-6 py-4">
           <button
             type="button"
             onClick={() => onSendEmail(contact)}
@@ -461,14 +425,61 @@ export default function ContactDetailModal({
             <Send className="h-4 w-4" aria-hidden="true" />
             Envoyer le mail
           </button>
-          <button
-            type="button"
-            onClick={() => onEdit(contact)}
-            className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
-          >
-            <Pencil className="h-4 w-4" aria-hidden="true" />
-            Modifier
-          </button>
+
+          <div className="flex gap-2">
+            {/* Documents dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setDocDropdownOpen((v) => !v)}
+                className="border-border bg-card text-foreground hover:bg-muted inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors"
+              >
+                <FileSignature className="h-4 w-4" aria-hidden="true" />
+                NDA / MOU
+                <span className="text-xs opacity-60">▾</span>
+              </button>
+              {docDropdownOpen && (
+                <div
+                  className="absolute bottom-full mb-2 right-0 w-64 rounded-xl border border-border bg-card shadow-lg z-10 overflow-hidden"
+                  onMouseLeave={() => setDocDropdownOpen(false)}
+                >
+                  {docTemplates.length === 0 ? (
+                    <div className="px-4 py-3 text-xs text-muted-foreground">
+                      Aucun modèle.{" "}
+                      <a href="/documents" className="text-primary hover:underline">
+                        Créer un modèle →
+                      </a>
+                    </div>
+                  ) : (
+                    docTemplates.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => { setDocModalTemplateId(t.id); setDocDropdownOpen(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left hover:bg-accent transition-colors"
+                      >
+                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
+                          t.type === "NDA" ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
+                          : t.type === "MOU" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                          : "bg-muted text-muted-foreground"
+                        }`}>{t.type}</span>
+                        <span className="truncate">{t.name}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onEdit(contact)}
+              className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+              Modifier
+            </button>
+          </div>
         </div>
       </div>
 
