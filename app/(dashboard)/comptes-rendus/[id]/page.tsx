@@ -3,16 +3,64 @@
 import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Mail, Trash2, Check, Square } from "lucide-react";
-import { useMeetings, formatMeetingDate, buildEmailBody } from "@/lib/meetings";
+import { ArrowLeft, Mail, Trash2, Check, Square, Sparkles, Loader2 } from "lucide-react";
+import { useMeetings, formatMeetingDate, buildEmailBody, makeMeetingTask } from "@/lib/meetings";
 
 export default function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { meetings, loading, deleteMeeting, patchTask } = useMeetings();
+  const { meetings, loading, deleteMeeting, patchTask, saveMeeting } = useMeetings();
   const [deleting, setDeleting] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiApplied, setAiApplied] = useState(false);
 
   const meeting = meetings.find((m) => m.id === id);
+
+  async function handleAiSummarize() {
+    if (!meeting) return;
+    setAiLoading(true);
+    setAiError(null);
+    setAiApplied(false);
+    try {
+      const res = await fetch("/api/ai/meeting-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: meeting.title,
+          date: meeting.date,
+          participants: meeting.participantNames,
+          transcript: meeting.transcript,
+          summary: meeting.summary,
+          decisions: meeting.decisions,
+        }),
+      });
+      const data = await res.json() as {
+        summary?: string;
+        decisions?: string[];
+        tasks?: { description: string; assigneeName?: string }[];
+        error?: string;
+      };
+      if (data.error) { setAiError(data.error); return; }
+      const newTasks = (data.tasks ?? []).map((t) =>
+        makeMeetingTask(t.description)
+      ).map((t, i) => ({ ...t, assigneeName: (data.tasks ?? [])[i]?.assigneeName ?? "" }));
+      await saveMeeting(
+        {
+          ...meeting,
+          summary: data.summary ?? meeting.summary,
+          decisions: data.decisions?.length ? data.decisions : meeting.decisions,
+          tasks: [...meeting.tasks, ...newTasks],
+        },
+        meeting.id,
+      );
+      setAiApplied(true);
+    } catch {
+      setAiError("Erreur réseau — réessaie.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   function openMailto() {
     if (!meeting) return;
@@ -51,6 +99,15 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="flex gap-2 shrink-0">
           <button
+            onClick={() => void handleAiSummarize()}
+            disabled={aiLoading}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50"
+            title="Générer un résumé, des décisions et des tâches par IA"
+          >
+            {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {aiLoading ? "Analyse…" : aiApplied ? "Réanalysé ✓" : "Analyser par IA"}
+          </button>
+          <button
             onClick={openMailto}
             className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-border hover:bg-accent transition-colors"
           >
@@ -71,6 +128,12 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
           </button>
         </div>
       </div>
+
+      {aiError && (
+        <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {aiError}
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* Summary */}
