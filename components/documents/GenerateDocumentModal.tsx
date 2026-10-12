@@ -51,15 +51,36 @@ export default function GenerateDocumentModal({ contact, template, onClose }: Pr
     setTimeout(() => setCopied(false), 2000);
   }
 
-  function handleDownload() {
-    const blob = new Blob([document], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = window.document.createElement("a");
+  async function handleDownload() {
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF({ unit: "mm", format: "a4" });
+
+    const margin = 20;
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const contentW = pageW - margin * 2;
+    const lineH = 5.5;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+
+    const lines = pdf.splitTextToSize(document, contentW) as string[];
+    let y = margin;
+
+    for (const line of lines) {
+      if (y + lineH > pageH - margin) {
+        pdf.addPage();
+        y = margin;
+      }
+      // Bold for lines that look like section titles (ALL CAPS or short + colon)
+      const isTitle = /^[A-ZÀÂÇÉÈÊËÎÏÔÙÛÜ\s\d–—.]{4,}$/.test(line.trim()) && line.trim().length < 60;
+      pdf.setFont("helvetica", isTitle ? "bold" : "normal");
+      pdf.text(line, margin, y);
+      y += lineH;
+    }
+
     const contactName = [contact.firstName, contact.lastName].filter(Boolean).join("_") || contact.email;
-    a.href = url;
-    a.download = `${template.type}_${contactName}_${new Date().toISOString().slice(0, 10)}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    pdf.save(`${template.type}_${contactName}_${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
   // Count remaining [À COMPLÉTER] placeholders
@@ -148,11 +169,11 @@ export default function GenerateDocumentModal({ contact, template, onClose }: Pr
                 {copied ? "Copié !" : "Copier"}
               </button>
               <button
-                onClick={handleDownload}
+                onClick={() => void handleDownload()}
                 className="flex items-center gap-1.5 px-3 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
               >
                 <Download className="h-4 w-4" />
-                Télécharger .txt
+                Télécharger PDF
               </button>
             </div>
           </div>

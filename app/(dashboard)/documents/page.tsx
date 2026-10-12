@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Pencil, Trash2, FileSignature, Check, X, Info } from "lucide-react";
+import { useRef, useState } from "react";
+import { Plus, Pencil, Trash2, FileSignature, Check, X, Info, Upload, Loader2 } from "lucide-react";
 import {
   useDocumentTemplates,
   DocumentType,
@@ -46,6 +46,44 @@ export default function DocumentsPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setExtracting(true);
+    setExtractError(null);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]); // strip data:...;base64,
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch("/api/documents/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: base64, mimeType: file.type }),
+      });
+      const data = await res.json() as { text?: string; error?: string };
+      if (data.error) { setExtractError(data.error); return; }
+      setForm((f) => ({
+        ...f,
+        name: f.name || file.name.replace(/\.(docx?|pdf)$/i, ""),
+        content: data.text ?? "",
+      }));
+    } catch {
+      setExtractError("Erreur lors de la lecture du fichier.");
+    } finally {
+      setExtracting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   function openCreate() {
     setEditingId(null);
@@ -179,25 +217,40 @@ export default function DocumentsPage() {
               </div>
             </div>
 
-            {/* Default template loaders */}
-            {!editingId && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Partir d'un modèle par défaut :</span>
-                <button
-                  type="button"
-                  onClick={() => loadDefault("NDA")}
-                  className="text-xs px-2.5 py-1 rounded border border-violet-200 text-violet-700 dark:border-violet-800 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
-                >
-                  Modèle NDA
-                </button>
-                <button
-                  type="button"
-                  onClick={() => loadDefault("MOU")}
-                  className="text-xs px-2.5 py-1 rounded border border-blue-200 text-blue-700 dark:border-blue-800 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                >
-                  Modèle MOU
-                </button>
-              </div>
+            {/* File upload */}
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".docx,.doc,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="hidden"
+                onChange={(e) => void handleFileUpload(e)}
+              />
+              <button
+                type="button"
+                disabled={extracting}
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50"
+              >
+                {extracting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                {extracting ? "Extraction…" : "Importer DOCX / PDF"}
+              </button>
+              {!editingId && (
+                <>
+                  <span className="text-xs text-muted-foreground">ou partir d'un modèle :</span>
+                  <button type="button" onClick={() => loadDefault("NDA")}
+                    className="text-xs px-2.5 py-1 rounded border border-violet-200 text-violet-700 dark:border-violet-800 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors">
+                    Modèle NDA
+                  </button>
+                  <button type="button" onClick={() => loadDefault("MOU")}
+                    className="text-xs px-2.5 py-1 rounded border border-blue-200 text-blue-700 dark:border-blue-800 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                    Modèle MOU
+                  </button>
+                </>
+              )}
+            </div>
+            {extractError && (
+              <p className="text-xs text-destructive">{extractError}</p>
             )}
 
             <div>
