@@ -32,8 +32,10 @@ ${actLog}
 
 Synthèse (sois direct, pas de titre, pas de liste, juste un paragraphe) :`;
 
+  const ollamaBase = process.env.OLLAMA_URL ?? "http://localhost:11434";
+
   try {
-    const res = await fetch("http://localhost:11434/api/generate", {
+    const res = await fetch(`${ollamaBase}/api/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -52,7 +54,7 @@ Synthèse (sois direct, pas de titre, pas de liste, juste un paragraphe) :`;
     return Response.json({ summary: data.response.trim() });
   } catch {
     return Response.json(
-      { error: "Impossible de joindre Ollama. Vérifie que le serveur tourne (ollama serve)." },
+      { error: `Impossible de joindre Ollama (${ollamaBase}). Vérifie que le serveur tourne (ollama serve) ou configure OLLAMA_URL dans .env.local.` },
       { status: 503 },
     );
   }
