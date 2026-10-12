@@ -7,6 +7,7 @@ import {
   CalendarClock,
   CheckSquare,
   Clock,
+  FileSignature,
   Globe,
   Handshake,
   Loader2,
@@ -36,6 +37,8 @@ import {
   useContactActivities,
 } from "@/lib/activities";
 import { contactCountry, exportStatusMeta, useCompliance } from "@/lib/compliance";
+import { useDocumentTemplates } from "@/lib/documentTemplates";
+import GenerateDocumentModal from "@/components/documents/GenerateDocumentModal";
 
 const ACT_ICON: Record<ActivityType, typeof Mail> = {
   note: StickyNote,
@@ -95,8 +98,11 @@ export default function ContactDetailModal({
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [docTemplateId, setDocTemplateId] = useState("");
+  const [docModalTemplateId, setDocModalTemplateId] = useState<string | null>(null);
   const { activities, addActivity, deleteActivity } = useContactActivities(contact?.id ?? "");
   const { statusFor } = useCompliance();
+  const { templates: docTemplates } = useDocumentTemplates();
 
   if (!contact) return null;
   const country = contactCountry(contact);
@@ -293,8 +299,44 @@ export default function ContactDetailModal({
             )}
             {!aiSummary && !aiLoading && !aiError && (
               <p className="text-muted-foreground mt-1 text-xs">
-                Clique sur « Résumer » pour générer une synthèse via ton IA locale (Ollama).
+                Clique sur « Résumer » pour générer une synthèse via l'IA.
               </p>
+            )}
+          </div>
+
+          {/* Documents légaux */}
+          <div className="border-border rounded-lg border p-3">
+            <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold uppercase mb-2">
+              <FileSignature className="h-3.5 w-3.5" aria-hidden="true" />
+              Documents légaux
+            </p>
+            {docTemplates.length === 0 ? (
+              <p className="text-muted-foreground text-xs">
+                Aucun modèle. Crée-en un dans{" "}
+                <a href="/documents" className="text-primary hover:underline">Documents légaux</a>.
+              </p>
+            ) : (
+              <div className="flex gap-2">
+                <select
+                  value={docTemplateId}
+                  onChange={(e) => setDocTemplateId(e.target.value)}
+                  className="flex-1 px-2 py-1.5 text-sm border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">Choisir un modèle…</option>
+                  {docTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.type} — {t.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!docTemplateId}
+                  onClick={() => setDocModalTemplateId(docTemplateId)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0"
+                >
+                  <FileSignature className="h-3.5 w-3.5" />
+                  Générer
+                </button>
+              </div>
             )}
           </div>
 
@@ -429,6 +471,17 @@ export default function ContactDetailModal({
           </button>
         </div>
       </div>
+
+      {docModalTemplateId && (() => {
+        const tpl = docTemplates.find((t) => t.id === docModalTemplateId);
+        return tpl ? (
+          <GenerateDocumentModal
+            contact={contact}
+            template={tpl}
+            onClose={() => setDocModalTemplateId(null)}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
