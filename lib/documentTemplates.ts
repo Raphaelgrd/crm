@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createCollectionStore } from "@/lib/firebase";
 
-export type DocumentType = "NDA" | "MOU" | "Autre";
+export type DocumentType = "NDA" | "MOU" | "CERFA" | "Autre";
 
 export interface DocumentTemplate {
   id: string;
@@ -154,3 +154,78 @@ Pour la Partie A                          Pour la Partie B
 {{signataire}}                            {{client_nom_complet}}
 
 _____________________                     _____________________`;
+
+export const DEFAULT_CERFA_TEMPLATE = `DEMANDE DE LICENCE D'EXPORTATION — MATÉRIELS DE DÉFENSE
+(Référence : CERFA 12949)
+
+Date de la demande : {{date}}
+
+───────────────────────────────────────────
+SECTION 1 — EXPORTATEUR (DEMANDEUR)
+
+Raison sociale : {{notre_societe}}
+Adresse : {{notre_adresse}}
+Représentant habilité : {{signataire}}
+Numéro SIRET : [À COMPLÉTER]
+Numéro d'agrément armurier : [À COMPLÉTER]
+
+───────────────────────────────────────────
+SECTION 2 — DESTINATAIRE FINAL
+
+Nom / Raison sociale : {{client_societe}}
+Représentant : {{client_nom_complet}}
+Email : {{client_email}}
+Téléphone : {{client_telephone}}
+Pays de destination finale : {{client_pays}}
+Adresse complète : [À COMPLÉTER]
+
+───────────────────────────────────────────
+SECTION 3 — DÉSIGNATION DES MATÉRIELS
+
+Désignation du produit : Gant à Impulsion Électrique (G.I.E) — E-StunGlove
+Référence ML (liste commune UE) : ML7 — Équipements d'application de la loi
+Classification export control : [À COMPLÉTER]
+Quantité demandée : [À COMPLÉTER] unités
+Valeur unitaire HT : [À COMPLÉTER] €
+Valeur totale HT : [À COMPLÉTER] €
+
+───────────────────────────────────────────
+SECTION 4 — UTILISATION FINALE
+
+Objet de l'exportation : {{objet_accord}}
+Utilisateur final déclaré : [forces de l'ordre / administration pénitentiaire / autre — À COMPLÉTER]
+Usage : Équipements de neutralisation à létalité contrôlée
+
+───────────────────────────────────────────
+SECTION 5 — DÉCLARATIONS
+
+Le soussigné déclare :
+• Que les informations ci-dessus sont exactes et sincères ;
+• Que les matériels ne seront pas réexportés sans accord préalable de l'autorité compétente française ;
+• Que l'utilisation finale sera conforme à la destination déclarée ;
+• Que le destinataire a été dûment informé des restrictions applicables.
+
+───────────────────────────────────────────
+SECTION 6 — DOCUMENTS JOINTS
+
+□ Certificat d'utilisation finale (CUF) signé par le destinataire
+□ Copie du contrat commercial
+□ Agrément armurier en cours de validité
+□ [À COMPLÉTER — autres documents requis]
+
+───────────────────────────────────────────
+
+Fait à [ville], le {{date}}.
+
+Signature et cachet du demandeur :
+
+{{signataire}}
+{{notre_societe}}
+
+_____________________
+
+Réservé à l'administration :
+Numéro de licence : ___________________
+Date d'attribution : ___________________
+Validité : ___ mois
+Autorité signataire : ___________________`;

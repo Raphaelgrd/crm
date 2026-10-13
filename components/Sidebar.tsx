@@ -27,24 +27,46 @@ import {
   ClipboardList,
 } from "lucide-react";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/contacts", label: "Contacts", icon: Users },
-  { href: "/investisseurs", label: "Pipeline levée", icon: TrendingUp },
-  { href: "/reseaux", label: "Réseaux sociaux", icon: Share2 },
-  { href: "/comptes-rendus", label: "Comptes rendus", icon: ClipboardList },
-  { href: "/organisations", label: "Organisations", icon: Building2 },
-  { href: "/agenda", label: "Agenda", icon: Calendar },
-  { href: "/closing", label: "Closing", icon: Columns3 },
-  { href: "/automatisation", label: "Automatisations", icon: Zap },
-  { href: "/templates", label: "Templates", icon: FileText },
-  { href: "/documents", label: "Documents légaux", icon: FileSignature },
-  { href: "/data-room", label: "Data Room", icon: FolderLock },
-  { href: "/stock", label: "Stock", icon: Package },
-  { href: "/prets", label: "Prêts & Envois", icon: Handshake },
-  { href: "/conformite", label: "Conformité export", icon: ShieldCheck },
-  { href: "/rapport", label: "Rapport d'activité", icon: Clock },
-  { href: "/settings", label: "Paramètres", icon: Settings },
+const NAV_GROUPS = [
+  {
+    label: null,
+    items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }],
+  },
+  {
+    label: "Commercial",
+    items: [
+      { href: "/contacts", label: "Contacts", icon: Users },
+      { href: "/investisseurs", label: "Pipeline levée", icon: TrendingUp },
+      { href: "/closing", label: "Closing", icon: Columns3 },
+      { href: "/organisations", label: "Organisations", icon: Building2 },
+    ],
+  },
+  {
+    label: "Contenu",
+    items: [
+      { href: "/comptes-rendus", label: "Comptes rendus", icon: ClipboardList },
+      { href: "/templates", label: "Templates", icon: FileText },
+      { href: "/documents", label: "Documents légaux", icon: FileSignature },
+    ],
+  },
+  {
+    label: "Opérations",
+    items: [
+      { href: "/stock", label: "Stock", icon: Package },
+      { href: "/prets", label: "Prêts & Envois", icon: Handshake },
+      { href: "/conformite", label: "Conformité export", icon: ShieldCheck },
+      { href: "/data-room", label: "Data Room", icon: FolderLock },
+    ],
+  },
+  {
+    label: "Outils",
+    items: [
+      { href: "/agenda", label: "Agenda", icon: Calendar },
+      { href: "/reseaux", label: "Réseaux sociaux", icon: Share2 },
+      { href: "/automatisation", label: "Automatisations", icon: Zap },
+      { href: "/rapport", label: "Rapport d'activité", icon: Clock },
+    ],
+  },
 ];
 
 export function Sidebar() {
@@ -77,32 +99,65 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-3">
-        <div className="px-2">
-          <div className="space-y-1">
-            {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-              const active = pathname === href;
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  title={label}
-                  className={
-                    `flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-colors duration-150 active:scale-[0.97] ` +
-                    (expanded ? "px-3" : "justify-center px-2") +
-                    " " +
-                    (active
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground")
-                  }
-                >
-                  <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                  {expanded && (
-                    <span className="whitespace-nowrap overflow-hidden">{label}</span>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
+        <div className="px-2 space-y-1">
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={gi}>
+              {group.label && expanded && (
+                <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40 select-none">
+                  {group.label}
+                </p>
+              )}
+              {group.label && !expanded && gi > 0 && (
+                <div className="my-2 mx-2 border-t border-sidebar-border/50" />
+              )}
+              {group.items.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href || pathname.startsWith(href + "/");
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    title={label}
+                    className={
+                      `flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-colors duration-150 active:scale-[0.97] ` +
+                      (expanded ? "px-3" : "justify-center px-2") +
+                      " " +
+                      (active
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground")
+                    }
+                  >
+                    <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                    {expanded && (
+                      <span className="whitespace-nowrap overflow-hidden">{label}</span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+        {/* Paramètres en bas de nav */}
+        <div className="px-2 mt-2 pt-2 border-t border-sidebar-border/50">
+          {(() => {
+            const active = pathname === "/settings";
+            return (
+              <Link
+                href="/settings"
+                title="Paramètres"
+                className={
+                  `flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-colors duration-150 active:scale-[0.97] ` +
+                  (expanded ? "px-3" : "justify-center px-2") +
+                  " " +
+                  (active
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground")
+                }
+              >
+                <Settings className="h-5 w-5 shrink-0" aria-hidden="true" />
+                {expanded && <span className="whitespace-nowrap overflow-hidden">Paramètres</span>}
+              </Link>
+            );
+          })()}
         </div>
       </nav>
 
