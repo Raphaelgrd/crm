@@ -73,7 +73,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { name } = useCrmUser();
   const userInitial = initials(name) || "?";
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   return (
     <div
