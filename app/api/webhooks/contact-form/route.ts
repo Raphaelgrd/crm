@@ -87,6 +87,8 @@ export async function POST(req: NextRequest) {
   const phone = str(b.phone);
   const company = str(b.companyName) || str(b.company);
   const amount = str(b.amount);
+  // La page Investisseurs lit extra["Investissement"] comme un nombre entier.
+  const amountDigits = amount.replace(/\D/g, "");
   const country = str(b.country);
   const city = str(b.city);
 
@@ -113,7 +115,7 @@ export async function POST(req: NextRequest) {
       contactId = makeId("c");
       const extra: Record<string, string> = { Source: "Site web" };
       if (subjects.length) extra["Sujets"] = subjects.join(", ");
-      if (amount) extra["Montant"] = amount;
+      if (amountDigits) extra["Investissement"] = amountDigits;
       if (city) extra["Ville"] = city;
       if (typeof b.consent === "boolean") extra["Consentement"] = b.consent ? "Oui" : "Non";
       await setDoc(doc(firestore, "contacts", contactId), {
@@ -140,6 +142,9 @@ export async function POST(req: NextRequest) {
       const data = found.data();
       if (!data.phone && phone) patch.phone = phone;
       if (!data.company && company) patch.company = company;
+      if (amountDigits && !data.extra?.["Investissement"]) {
+        patch["extra.Investissement"] = amountDigits;
+      }
       await updateDoc(found.ref, patch);
     }
 
