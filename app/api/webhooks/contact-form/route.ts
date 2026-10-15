@@ -91,6 +91,8 @@ export async function POST(req: NextRequest) {
   const amountDigits = amount.replace(/\D/g, "");
   const country = str(b.country);
   const city = str(b.city);
+  // Provenance du visiteur (ex. « linkedin (social) »), envoyée par le site.
+  const source = str(b.source).slice(0, 120);
 
   const note = [
     `Formulaire site web${subjects.length ? ` — ${subjects.join(", ")}` : ""}`,
@@ -114,6 +116,7 @@ export async function POST(req: NextRequest) {
     if (existing.empty) {
       contactId = makeId("c");
       const extra: Record<string, string> = { Source: "Site web" };
+      if (source) extra["Provenance"] = source;
       if (subjects.length) extra["Sujets"] = subjects.join(", ");
       if (amountDigits) extra["Investissement"] = amountDigits;
       if (city) extra["Ville"] = city;
@@ -128,7 +131,7 @@ export async function POST(req: NextRequest) {
         category,
         stage: "Nouveau",
         notes: note,
-        tags: ["Site web"],
+        tags: source ? ["Site web", `Via ${source.split(" ")[0]}`] : ["Site web"],
         extra,
         ...(country ? { country } : {}),
         createdAt: now,
