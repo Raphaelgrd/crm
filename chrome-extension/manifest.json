@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Netforce Meeting Recorder",
+  "version": "1.0.0",
+  "description": "Détecte et transcrit automatiquement les réunions Teams et Google Meet dans le CRM Netforce",
+  "permissions": [
+    "tabs",
+    "tabCapture",
+    "storage",
+    "offscreen",
+    "notifications",
+    "scripting"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Netforce Recorder"
+  },
+  "options_page": "options.html",
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}

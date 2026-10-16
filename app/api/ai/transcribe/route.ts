@@ -1,5 +1,15 @@
 import { NextRequest } from "next/server";
 
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS });
+}
+
 export async function POST(req: NextRequest) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return Response.json({ error: "Clé GROQ_API_KEY manquante." }, { status: 500 });
@@ -27,5 +37,5 @@ export async function POST(req: NextRequest) {
   }
 
   const data = (await res.json()) as { text?: string };
-  return Response.json({ text: data.text ?? "" });
+  return Response.json({ text: data.text ?? "" }, { headers: CORS });
 }

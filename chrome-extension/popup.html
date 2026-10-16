@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Netforce Recorder</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 260px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      background: #0f0f0f;
+      color: #f0f0f0;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid #222;
+    }
+    .logo { font-weight: 700; font-size: 14px; letter-spacing: -0.3px; }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #555; margin-left: auto; flex-shrink: 0;
+    }
+    .dot.active { background: #ef4444; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .body { padding: 14px 16px; }
+    .status-text { color: #888; margin-bottom: 12px; line-height: 1.4; }
+    .status-text.recording { color: #f0f0f0; }
+    .timer { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+    .label { font-size: 11px; color: #555; margin-bottom: 14px; }
+    .transcript-preview {
+      background: #1a1a1a;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 11px;
+      color: #999;
+      line-height: 1.5;
+      max-height: 80px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .transcript-preview.visible { display: block; }
+    .btn {
+      width: 100%;
+      padding: 9px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-stop { background: #ef4444; color: #fff; }
+    .btn-settings {
+      background: #1a1a1a;
+      color: #888;
+      margin-top: 8px;
+      font-weight: 400;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span class="logo">Netforce Recorder</span>
+    <div class="dot" id="dot"></div>
+  </div>
+  <div class="body">
+    <p class="status-text" id="statusText">En attente d'une réunion Teams ou Google Meet…</p>
+    <div id="recordingInfo" style="display:none">
+      <div class="timer" id="timer">00:00</div>
+      <div class="label">Enregistrement en cours</div>
+      <div class="transcript-preview" id="preview"></div>
+      <button class="btn btn-stop" id="btnStop">Arrêter l'enregistrement</button>
+    </div>
+    <button class="btn btn-settings" id="btnSettings">Paramètres</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

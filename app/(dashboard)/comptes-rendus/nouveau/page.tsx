@@ -477,6 +477,19 @@ export default function NewMeetingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, isRecording]);
 
+  // Receive transcript injected by the Chrome extension
+  useEffect(() => {
+    function onExtensionTranscript(e: Event) {
+      const detail = (e as CustomEvent<{ transcript: string }>).detail;
+      if (detail?.transcript) {
+        setTranscript(detail.transcript);
+        setStep(1);
+      }
+    }
+    document.addEventListener("netforce-transcript", onExtensionTranscript);
+    return () => document.removeEventListener("netforce-transcript", onExtensionTranscript);
+  }, []);
+
   // ── AI auto-analysis ──
 
   async function goToStep2() {
