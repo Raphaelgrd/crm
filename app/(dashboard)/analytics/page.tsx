@@ -29,6 +29,7 @@ type Report = {
     abandonByField: { form: string; field: string; count: number }[] | null;
     formsByName: { form: string; event: string; count: number }[] | null;
     tiers: Item[] | null; ctas: Item[] | null; mapCountries: Item[] | null; languages: Item[] | null;
+    investorSteps: { step: number; name: string; users: number }[] | null;
   };
 };
 
@@ -56,6 +57,7 @@ const FIELD_NAMES: Record<string, string> = {
   telephone: "Téléphone", entreprise: "Entreprise", fonction: "Fonction", ville: "Ville", pays: "Pays",
   connucomment: "Comment nous a connu", connaissaitactivite: "Connaissait l'activité", modeinvest: "Mode d'investissement",
   horizon: "Horizon", dejainvesti: "Déjà investi", criteres: "Critères", observations: "Observations", consentement: "Consentement",
+  identite: "Nom et prénom", coordonnees: "Téléphone et e-mail", localisation: "Ville et pays",
 };
 const FORM_NAMES: Record<string, string> = { contact: "Contact", distributeur: "Distributeur (carte)", investisseur: "Questionnaire investisseur" };
 const DEVICE_NAMES: Record<string, string> = { desktop: "Ordinateur", mobile: "Mobile", tablet: "Tablette" };
@@ -274,7 +276,7 @@ export default function AnalyticsPage() {
                   {data.details.abandonByField ? (
                     <Bars
                       items={data.details.abandonByField.map((a) => ({
-                        label: `${FIELD_NAMES[a.field] ?? a.field} — ${FORM_NAMES[a.form] ?? a.form}`,
+                        label: `${FIELD_NAMES[a.field.toLowerCase()] ?? a.field} — ${FORM_NAMES[a.form] ?? a.form}`,
                         value: a.count,
                       }))}
                       empty="Aucun abandon sur la période."
@@ -285,6 +287,27 @@ export default function AnalyticsPage() {
                 </div>
               </Card>
             </div>
+
+            <Card
+              title="Questionnaire investisseur : progression étape par étape"
+              hint="Nombre de visiteurs ayant atteint chaque écran — la chute entre deux barres montre où ils abandonnent"
+            >
+              {data.details.investorSteps ? (
+                <Bars
+                  items={data.details.investorSteps.map((s, i, all) => {
+                    const first = all[0]?.users || 1;
+                    return {
+                      label: `${s.step}. ${FIELD_NAMES[s.name.toLowerCase()] ?? s.name}`,
+                      value: s.users,
+                      extra: `${Math.round((s.users / first) * 100)} %`,
+                    };
+                  })}
+                  empty="Aucun questionnaire ouvert sur la période."
+                />
+              ) : (
+                <NeedsDimension name="step + step_name" />
+              )}
+            </Card>
 
             <div className="grid gap-4 lg:grid-cols-3">
               <Card title="Pages les plus vues">

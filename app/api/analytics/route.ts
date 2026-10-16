@@ -64,13 +64,15 @@ export async function GET(req: NextRequest) {
       ]);
 
     // Détails disponibles une fois les dimensions personnalisées déclarées dans GA4.
-    const [abandonByField, formsByName, tiers, ctas, mapCountries, languages] = await Promise.all([
+    const [abandonByField, formsByName, tiers, ctas, mapCountries, languages, investorSteps] = await Promise.all([
       optional({ ...range, dimensions: [{ name: "customEvent:form" }, { name: "customEvent:last_field" }], metrics: [{ name: "eventCount" }], dimensionFilter: ev(["form_abandon"]), orderBys: [{ metric: { metricName: "eventCount" }, desc: true }], limit: 20 }),
       optional({ ...range, dimensions: [{ name: "customEvent:form" }, { name: "eventName" }], metrics: [{ name: "eventCount" }], dimensionFilter: ev(["form_start", "form_error", "form_abandon"]) }),
       optional({ ...range, dimensions: [{ name: "customEvent:tier" }], metrics: [{ name: "eventCount" }], dimensionFilter: ev(["investment_tier_click"]), orderBys: [{ metric: { metricName: "eventCount" }, desc: true }] }),
       optional({ ...range, dimensions: [{ name: "customEvent:cta" }], metrics: [{ name: "eventCount" }], dimensionFilter: ev(["cta_click"]), orderBys: [{ metric: { metricName: "eventCount" }, desc: true }], limit: 10 }),
       optional({ ...range, dimensions: [{ name: "customEvent:country" }], metrics: [{ name: "eventCount" }], dimensionFilter: ev(["map_country_click"]), orderBys: [{ metric: { metricName: "eventCount" }, desc: true }], limit: 10 }),
       optional({ ...range, dimensions: [{ name: "customEvent:language" }], metrics: [{ name: "eventCount" }], dimensionFilter: ev(["language_change"]) }),
+      // Questionnaire investisseur : visiteurs ayant atteint chaque étape (= barre de progression).
+      optional({ ...range, dimensions: [{ name: "customEvent:step" }, { name: "customEvent:step_name" }], metrics: [{ name: "totalUsers" }], dimensionFilter: ev(["form_step"]) }),
     ]);
 
     const t = totals[0]?.mets ?? [0, 0, 0, 0, 0];
@@ -109,6 +111,11 @@ export async function GET(req: NextRequest) {
         ctas: ctas?.map((r) => ({ label: r.dims[0], count: r.mets[0] })) ?? null,
         mapCountries: mapCountries?.map((r) => ({ label: r.dims[0], count: r.mets[0] })) ?? null,
         languages: languages?.map((r) => ({ label: r.dims[0], count: r.mets[0] })) ?? null,
+        investorSteps:
+          investorSteps
+            ?.map((r) => ({ step: Number(r.dims[0]) || 0, name: r.dims[1], users: r.mets[0] }))
+            .filter((r) => r.step > 0)
+            .sort((a, b) => a.step - b.step) ?? null,
       },
     });
   } catch (err) {
