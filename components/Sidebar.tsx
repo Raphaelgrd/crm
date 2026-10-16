@@ -25,6 +25,7 @@ import {
   TrendingUp,
   Share2,
   ClipboardList,
+  BarChart3,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -62,6 +63,7 @@ const NAV_GROUPS = [
     label: "Outils",
     items: [
       { href: "/agenda", label: "Agenda", icon: Calendar },
+      { href: "/analytics", label: "Analytics site", icon: BarChart3 },
       { href: "/reseaux", label: "Réseaux sociaux", icon: Share2 },
       { href: "/automatisation", label: "Automatisations", icon: Zap },
       { href: "/rapport", label: "Rapport d'activité", icon: Clock },
