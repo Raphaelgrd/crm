@@ -13,6 +13,7 @@ import {
   Send,
   Settings2,
   Tag,
+  TrendingUp,
   Trash2,
   Users,
   X,
@@ -22,12 +23,14 @@ import {
 } from "lucide-react";
 import {
   Contact,
+  DEFAULT_CATEGORIES,
   Segment,
   STAGES,
   contactFullName,
   contactInitial,
   contactMatchesSegment,
   followUpStatus,
+  formatPhone,
   segmentCount,
   useContacts,
   useSegments,
@@ -96,6 +99,7 @@ export default function ContactsPage() {
   const [colPanelOpen, setColPanelOpen] = useState(false);
   const [visibleCols, setVisibleCols] = useState<string[]>(DEFAULT_COLUMNS);
   const [relanceOnly, setRelanceOnly] = useState(false);
+  const [pipelineOnly, setPipelineOnly] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkStage, setBulkStage] = useState("");
   const [bulkCategory, setBulkCategory] = useState("");
@@ -144,7 +148,10 @@ export default function ContactsPage() {
   );
 
   const categories = useMemo(
-    () => Array.from(new Set(contacts.map((c) => c.category).filter(Boolean))).sort(),
+    () =>
+      Array.from(
+        new Set([...DEFAULT_CATEGORIES, ...contacts.map((c) => c.category).filter(Boolean)]),
+      ).sort(),
     [contacts],
   );
 
@@ -181,11 +188,28 @@ export default function ContactsPage() {
     });
   }, [contacts, search, categoryFilter, stageFilter, tagFilters, activeSegment]);
 
+  const pipelineCount = useMemo(
+    () =>
+      contacts.filter(
+        (c) =>
+          c.category === "Investisseur" &&
+          parseInt((c.extra?.["Investissement"] ?? "").replace(/[\s ]/g, ""), 10) > 0,
+      ).length,
+    [contacts],
+  );
+
   // Vue « Relances » : ne garde que les contacts avec une relance planifiée,
   // triés du plus en retard au plus lointain.
   const displayed = useMemo(() => {
-    if (!relanceOnly) return filtered;
-    return filtered
+    let base = filtered;
+    if (pipelineOnly)
+      base = base.filter(
+        (c) =>
+          c.category === "Investisseur" &&
+          parseInt((c.extra?.["Investissement"] ?? "").replace(/[\s ]/g, ""), 10) > 0,
+      );
+    if (!relanceOnly) return base;
+    return base
       .filter((c) => followUpStatus(c) !== null)
       .slice()
       .sort((a, b) => (a.nextFollowUpAt ?? "").localeCompare(b.nextFollowUpAt ?? ""));
@@ -515,6 +539,24 @@ export default function ContactsPage() {
             )}
           </div>
 
+          {/* Vue Pipeline investisseurs */}
+          <button
+            type="button"
+            onClick={() => setPipelineOnly((o) => !o)}
+            className={
+              "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors " +
+              (pipelineOnly
+                ? "border-amber-300 bg-amber-50 text-amber-700"
+                : "border-border bg-card text-foreground hover:bg-muted")
+            }
+          >
+            <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" />
+            Investisseurs
+            <span className="text-[10px] font-semibold opacity-60">
+              {pipelineCount}
+            </span>
+          </button>
+
           {/* Vue Relances (suivi des follow-ups) */}
           <button
             type="button"
@@ -737,7 +779,7 @@ export default function ContactsPage() {
                     {orderedCols.map((id) => (
                       <td key={id} className="text-foreground px-4 py-3 whitespace-nowrap">
                         {id === "email" && (c.email || "—")}
-                        {id === "phone" && (c.phone || "—")}
+                        {id === "phone" && (c.phone ? formatPhone(c.phone) : "—")}
                         {id === "company" && (c.company || "—")}
                         {id === "category" &&
                           (c.category ? (

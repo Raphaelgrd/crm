@@ -29,6 +29,7 @@ import {
   contactInitial,
   dateKeyIn,
   followUpStatus,
+  formatPhone,
 } from "@/lib/contacts";
 import {
   ACTIVITY_LABEL,
@@ -202,7 +203,7 @@ export default function ContactDetailModal({
             </div>
             <div className="flex items-center gap-2 text-sm">
               <Phone className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
-              <span className="text-foreground truncate">{contact.phone || "—"}</span>
+              <span className="text-foreground truncate">{contact.phone ? formatPhone(contact.phone) : "—"}</span>
             </div>
             <div className="flex items-center gap-2 text-sm sm:col-span-2">
               <Building2 className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />

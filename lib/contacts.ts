@@ -205,6 +205,31 @@ export function contactFullName(c: Pick<Contact, "firstName" | "lastName">) {
   return [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
 }
 
+/** Format a phone number with spaces for readability.
+ *  +33612345678 → +33 6 12 34 56 78
+ *  0612345678   → 06 12 34 56 78
+ *  Other formats are returned grouped by pairs of digits.
+ */
+export function formatPhone(raw: string): string {
+  if (!raw) return raw;
+  const cleaned = raw.replace(/[\s\-.() ]/g, "");
+  // French +33 XXXXXXXXX (12 chars total)
+  if (/^\+33\d{9}$/.test(cleaned)) {
+    const d = cleaned.slice(3); // 9 digits
+    return `+33 ${d[0]} ${d.slice(1, 3)} ${d.slice(3, 5)} ${d.slice(5, 7)} ${d.slice(7, 9)}`;
+  }
+  // French 0X XXXXXXXX (10 digits)
+  if (/^0\d{9}$/.test(cleaned)) {
+    return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4, 6)} ${cleaned.slice(6, 8)} ${cleaned.slice(8, 10)}`;
+  }
+  // Generic international: keep + prefix, group remaining digits by 2
+  const prefix = cleaned.startsWith("+") ? "+" : "";
+  const digits = cleaned.replace(/^\+/, "");
+  if (!/^\d+$/.test(digits)) return raw; // contains non-digits, leave as-is
+  const pairs = digits.match(/.{1,2}/g) ?? [];
+  return prefix + pairs.join(" ");
+}
+
 export function contactInitial(c: Contact) {
   return (contactFullName(c) || c.email || "?").charAt(0).toUpperCase();
 }
