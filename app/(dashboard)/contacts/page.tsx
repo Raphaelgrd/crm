@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   Clock,
+  Download,
   Filter,
   FileUp,
   Pencil,
@@ -38,6 +39,7 @@ import ContactDetailModal from "@/components/contacts/ContactDetailModal";
 import SegmentBuilderModal from "@/components/contacts/SegmentBuilderModal";
 import ColumnsPanel from "@/components/contacts/ColumnsPanel";
 import DuplicatesModal from "@/components/contacts/DuplicatesModal";
+import ExportModal from "@/components/contacts/ExportModal";
 import { useOrganizations } from "@/lib/organizations";
 import { logActivity } from "@/lib/activities";
 
@@ -99,6 +101,7 @@ export default function ContactsPage() {
   const [bulkCategory, setBulkCategory] = useState("");
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [duplicatesOpen, setDuplicatesOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // Nombre de relances à traiter (en retard + aujourd'hui) — badge du bouton.
   const relanceDue = useMemo(
@@ -260,6 +263,14 @@ export default function ContactsPage() {
             >
               <ScanSearch className="h-4 w-4" aria-hidden="true" />
               Doublons
+            </button>
+            <button
+              type="button"
+              onClick={() => setExportOpen(true)}
+              className="border-border bg-card text-foreground hover:bg-muted focus-visible:ring-primary inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold shadow-sm transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              Exporter
             </button>
             <button
               type="button"
@@ -673,7 +684,7 @@ export default function ContactsPage() {
                         aria-label={`Sélectionner ${c.firstName} ${c.lastName}`}
                       />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
                           {contactInitial(c)}
@@ -891,6 +902,13 @@ export default function ContactsPage() {
         open={duplicatesOpen}
         contacts={contacts}
         onClose={() => setDuplicatesOpen(false)}
+      />
+      <ExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        contacts={contacts}
+        filteredContacts={displayed}
+        extraKeys={allExtraKeys}
       />
     </div>
   );
