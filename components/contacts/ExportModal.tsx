@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, X } from "lucide-react";
 import type { Contact } from "@/lib/contacts";
 
@@ -54,10 +54,17 @@ export default function ExportModal({ open, onClose, contacts, filteredContacts,
   const extraFields: Field[] = extraKeys.map((k) => ({ id: `extra:${k}`, label: k }));
   const allFields = [...CORE_FIELDS, ...extraFields];
 
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(["firstName", "lastName", "email", "phone", "company", "stage"]),
-  );
+  const DEFAULT_SELECTED = ["firstName", "lastName", "email", "phone", "company", "stage"];
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(DEFAULT_SELECTED));
   const [scope, setScope] = useState<"filtered" | "all">("filtered");
+
+  useEffect(() => {
+    if (open) {
+      setSelected(new Set(DEFAULT_SELECTED));
+      setScope("filtered");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
 
