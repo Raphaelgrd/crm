@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Download, X } from "lucide-react";
-import type { Contact } from "@/lib/contacts";
+import { formatPhone, type Contact } from "@/lib/contacts";
 
 interface Field {
   id: string;
@@ -30,6 +30,7 @@ function formatValue(contact: Contact, fieldId: string): string {
     const key = fieldId.slice(6);
     return contact.extra?.[key] ?? "";
   }
+  if (fieldId === "phone") return contact.phone ? formatPhone(contact.phone) : "";
   const val = (contact as unknown as Record<string, unknown>)[fieldId];
   if (val === null || val === undefined) return "";
   return String(val);
