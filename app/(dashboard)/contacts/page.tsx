@@ -191,9 +191,7 @@ export default function ContactsPage() {
   const pipelineCount = useMemo(
     () =>
       contacts.filter(
-        (c) =>
-          c.category === "Investisseur" &&
-          parseInt((c.extra?.["Investissement"] ?? "").replace(/[\s ]/g, ""), 10) > 0,
+        (c) => parseInt((c.extra?.["Investissement"] ?? "").replace(/[\s  ]/g, ""), 10) > 0,
       ).length,
     [contacts],
   );
@@ -204,16 +202,14 @@ export default function ContactsPage() {
     let base = filtered;
     if (pipelineOnly)
       base = base.filter(
-        (c) =>
-          c.category === "Investisseur" &&
-          parseInt((c.extra?.["Investissement"] ?? "").replace(/[\s ]/g, ""), 10) > 0,
+        (c) => parseInt((c.extra?.["Investissement"] ?? "").replace(/[\s  ]/g, ""), 10) > 0,
       );
     if (!relanceOnly) return base;
     return base
       .filter((c) => followUpStatus(c) !== null)
       .slice()
       .sort((a, b) => (a.nextFollowUpAt ?? "").localeCompare(b.nextFollowUpAt ?? ""));
-  }, [filtered, relanceOnly]);
+  }, [filtered, relanceOnly, pipelineOnly]);
 
   // window.confirm est bloqué dans certains contextes (aperçu embarqué) :
   // confirmation en deux clics à la place.
