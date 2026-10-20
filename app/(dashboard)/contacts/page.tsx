@@ -948,6 +948,11 @@ export default function ContactsPage() {
           await updateContact(c.id, { nextFollowUpAt: date ?? "" });
           setDetailContact((cur) => (cur ? { ...cur, nextFollowUpAt: date ?? "" } : cur));
         }}
+        onUpdateCategory={async (category) => {
+          if (!detailContact) return;
+          await updateContact(detailContact.id, { category });
+          setDetailContact((cur) => (cur ? { ...cur, category } : cur));
+        }}
       />
       <SendEmailModal
         open={sendingTo !== null}
