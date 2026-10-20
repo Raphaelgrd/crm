@@ -49,6 +49,20 @@ import { logActivity } from "@/lib/activities";
 const selectClass =
   "border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 rounded-lg border px-2 py-1.5 text-sm focus:ring-2 focus:outline-none";
 
+const CATEGORY_COLORS: Record<string, { bg: string; text: string; ring: string }> = {
+  "Investisseur":  { bg: "bg-amber-100 dark:bg-amber-950/50",   text: "text-amber-800 dark:text-amber-300",  ring: "ring-amber-400" },
+  "Distributeur":  { bg: "bg-blue-100 dark:bg-blue-950/50",     text: "text-blue-800 dark:text-blue-300",    ring: "ring-blue-400" },
+  "Institutionnel":{ bg: "bg-purple-100 dark:bg-purple-950/50", text: "text-purple-800 dark:text-purple-300",ring: "ring-purple-400" },
+  "Banque":        { bg: "bg-green-100 dark:bg-green-950/50",   text: "text-green-800 dark:text-green-300",  ring: "ring-green-400" },
+  "Fournisseur":   { bg: "bg-orange-100 dark:bg-orange-950/50", text: "text-orange-800 dark:text-orange-300",ring: "ring-orange-400" },
+  "Prospect":      { bg: "bg-sky-100 dark:bg-sky-950/50",       text: "text-sky-800 dark:text-sky-300",      ring: "ring-sky-400" },
+  "Client":        { bg: "bg-emerald-100 dark:bg-emerald-950/50",text:"text-emerald-800 dark:text-emerald-300",ring:"ring-emerald-400" },
+};
+
+function categoryStyle(cat: string) {
+  return CATEGORY_COLORS[cat] ?? { bg: "bg-muted", text: "text-foreground", ring: "ring-gray-400" };
+}
+
 function stageColor(name: string) {
   return STAGES.find((s) => s.name === name)?.color ?? "rgb(107, 114, 128)";
 }
@@ -106,6 +120,15 @@ export default function ContactsPage() {
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [duplicatesOpen, setDuplicatesOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [categoryPopoverId, setCategoryPopoverId] = useState<string | null>(null);
+
+  // Ferme le popover catégorie si on clique en dehors
+  useEffect(() => {
+    if (!categoryPopoverId) return;
+    const handler = () => setCategoryPopoverId(null);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [categoryPopoverId]);
 
   // Nombre de relances à traiter (en retard + aujourd'hui) — badge du bouton.
   const relanceDue = useMemo(
@@ -778,20 +801,35 @@ export default function ContactsPage() {
                         {id === "phone" && (c.phone ? formatPhone(c.phone) : "—")}
                         {id === "company" && (c.company || "—")}
                         {id === "category" && (
-                          <select
-                            className="border-border bg-muted text-foreground hover:bg-muted/80 cursor-pointer rounded-full border-0 px-2.5 py-0.5 text-xs font-medium focus:ring-2 focus:ring-primary/30 focus:outline-none"
-                            value={c.category ?? ""}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              void updateContact(c.id, { category: e.target.value });
-                            }}
-                          >
-                            {!c.category && <option value="">—</option>}
-                            {categories.map((cat) => (
-                              <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                          </select>
+                          <div className="relative" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => setCategoryPopoverId(categoryPopoverId === c.id ? null : c.id)}
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium transition-opacity hover:opacity-80 ${categoryStyle(c.category ?? "").bg} ${categoryStyle(c.category ?? "").text}`}
+                            >
+                              {c.category || "—"}
+                              <svg className="h-3 w-3 opacity-50" viewBox="0 0 12 12" fill="currentColor"><path d="M6 8L2 4h8L6 8z"/></svg>
+                            </button>
+                            {categoryPopoverId === c.id && (
+                              <div className="border-border bg-card absolute top-full left-0 z-50 mt-1 min-w-max rounded-xl border p-1.5 shadow-lg">
+                                {categories.map((cat) => (
+                                  <button
+                                    key={cat}
+                                    type="button"
+                                    onClick={() => {
+                                      void updateContact(c.id, { category: cat });
+                                      setCategoryPopoverId(null);
+                                    }}
+                                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-80 ${c.category === cat ? `${categoryStyle(cat).bg} ${categoryStyle(cat).text} ring-1 ${categoryStyle(cat).ring}` : "hover:bg-muted text-foreground"}`}
+                                  >
+                                    <span className={`h-2 w-2 rounded-full ${categoryStyle(cat).bg.replace("bg-", "bg-").split(" ")[0]}`} style={{ background: CATEGORY_COLORS[cat] ? undefined : "#9ca3af" }} />
+                                    {cat}
+                                    {c.category === cat && <svg className="ml-auto h-3 w-3" viewBox="0 0 12 12" fill="currentColor"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         )}
                         {id === "stage" && (
                           <span className="inline-flex items-center gap-1.5 text-xs font-medium">
