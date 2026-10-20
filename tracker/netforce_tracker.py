@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 Netforce Tracker — suivi d'activité bureau
 Envoie toutes les minutes l'app active vers Firestore.
