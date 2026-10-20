@@ -777,14 +777,22 @@ export default function ContactsPage() {
                         {id === "email" && (c.email || "—")}
                         {id === "phone" && (c.phone ? formatPhone(c.phone) : "—")}
                         {id === "company" && (c.company || "—")}
-                        {id === "category" &&
-                          (c.category ? (
-                            <span className="bg-muted text-foreground rounded-full px-2.5 py-0.5 text-xs font-medium">
-                              {c.category}
-                            </span>
-                          ) : (
-                            "—"
-                          ))}
+                        {id === "category" && (
+                          <select
+                            className="border-border bg-muted text-foreground hover:bg-muted/80 cursor-pointer rounded-full border-0 px-2.5 py-0.5 text-xs font-medium focus:ring-2 focus:ring-primary/30 focus:outline-none"
+                            value={c.category ?? ""}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              void updateContact(c.id, { category: e.target.value });
+                            }}
+                          >
+                            {!c.category && <option value="">—</option>}
+                            {categories.map((cat) => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                        )}
                         {id === "stage" && (
                           <span className="inline-flex items-center gap-1.5 text-xs font-medium">
                             <span
