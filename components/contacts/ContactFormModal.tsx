@@ -194,18 +194,15 @@ export default function ContactFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-foreground mb-1 block text-xs font-medium">Catégorie</label>
-              <input
+              <select
                 className={inputClass}
-                list="contact-categories"
                 value={form.category}
                 onChange={(e) => set("category")(e.target.value)}
-                placeholder="Prospect"
-              />
-              <datalist id="contact-categories">
+              >
                 {allCategories.map((c) => (
-                  <option key={c} value={c} />
+                  <option key={c} value={c}>{c}</option>
                 ))}
-              </datalist>
+              </select>
             </div>
             <div>
               <label className="text-foreground mb-1 block text-xs font-medium">
