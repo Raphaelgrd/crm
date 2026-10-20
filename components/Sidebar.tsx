@@ -27,6 +27,7 @@ import {
   ClipboardList,
   BarChart3,
   Mail,
+  Monitor,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -65,6 +66,7 @@ const NAV_GROUPS = [
     items: [
       { href: "/agenda", label: "Agenda", icon: Calendar },
       { href: "/emails", label: "Emails", icon: Mail },
+      { href: "/equipe", label: "Équipe", icon: Monitor },
       { href: "/analytics", label: "Analytics site", icon: BarChart3 },
       { href: "/reseaux", label: "Réseaux sociaux", icon: Share2 },
       { href: "/automatisation", label: "Automatisations", icon: Zap },
