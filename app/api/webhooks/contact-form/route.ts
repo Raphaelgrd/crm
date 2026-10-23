@@ -91,6 +91,8 @@ export async function POST(req: NextRequest) {
   const amountDigits = amount.replace(/\D/g, "");
   const country = str(b.country);
   const city = str(b.city);
+  const siret = str(b.siret).replace(/\s/g, "").slice(0, 14);
+  const activities = str(b.activities).slice(0, 1000);
   // Provenance du visiteur (ex. « linkedin (social) »), envoyée par le site.
   const source = str(b.source).slice(0, 120);
 
@@ -98,6 +100,9 @@ export async function POST(req: NextRequest) {
     `Formulaire site web${subjects.length ? ` — ${subjects.join(", ")}` : ""}`,
     amount && `Montant : ${amount}`,
     city && `Ville : ${city}`,
+    country && `Pays : ${country}`,
+    siret && `SIRET : ${siret}`,
+    activities && `Activités : ${activities}`,
     message,
   ]
     .filter(Boolean)
@@ -120,6 +125,8 @@ export async function POST(req: NextRequest) {
       if (subjects.length) extra["Sujets"] = subjects.join(", ");
       if (amountDigits) extra["Investissement"] = amountDigits;
       if (city) extra["Ville"] = city;
+      if (siret) extra["SIRET"] = siret;
+      if (activities) extra["Activités"] = activities;
       if (typeof b.consent === "boolean") extra["Consentement"] = b.consent ? "Oui" : "Non";
       await setDoc(doc(firestore, "contacts", contactId), {
         id: contactId,
@@ -148,6 +155,8 @@ export async function POST(req: NextRequest) {
       if (amountDigits && !data.extra?.["Investissement"]) {
         patch["extra.Investissement"] = amountDigits;
       }
+      if (siret && !data.extra?.["SIRET"]) patch["extra.SIRET"] = siret;
+      if (activities && !data.extra?.["Activités"]) patch["extra.Activités"] = activities;
       await updateDoc(found.ref, patch);
     }
 
