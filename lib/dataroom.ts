@@ -291,6 +291,75 @@ export function useDataRoom() {
     [allFolderMetas],
   );
 
+  /**
+   * Import a folder tree.
+   * items: array of { file, relativePath } where relativePath uses "/" as separator
+   *   and starts with the selected folder name (same format as webkitRelativePath).
+   * basePath: current navigation path ("" = root, "Kit Marketing FR" = inside that Data Room).
+   *
+   * At root: the first path segment becomes (or reuses) a top-level Data Room.
+   * Inside a Data Room: basePath is prepended to the full relative path.
+   */
+  const importFolder = useCallback(
+    async (
+      items: Array<{ file: File; relativePath: string }>,
+      basePath: string,
+    ): Promise<number> => {
+      const newDataRooms = new Set<string>();
+      let count = 0;
+
+      for (const { file, relativePath } of items) {
+        const parts = relativePath.split("/").filter(Boolean);
+        if (parts.length === 0) continue;
+        const fileName = parts[parts.length - 1];
+        if (!fileName) continue;
+
+        const folderSegments = parts.slice(0, -1);
+
+        let folderPath: string;
+        if (basePath === "") {
+          // At root: full path; first segment = Data Room
+          folderPath = folderSegments.join("/");
+          if (folderSegments.length > 0) newDataRooms.add(folderSegments[0]);
+        } else {
+          // Inside a Data Room: prepend basePath to relative path
+          folderPath =
+            folderSegments.length > 0
+              ? `${basePath}/${folderSegments.join("/")}`
+              : basePath;
+        }
+
+        await dbPut({
+          id: makeId(),
+          name: fileName,
+          mime: file.type || "application/octet-stream",
+          size: file.size,
+          folder: folderPath,
+          createdAt: new Date().toISOString(),
+          blob: file,
+        });
+        count++;
+      }
+
+      // Create any missing top-level Data Rooms
+      for (const name of newDataRooms) {
+        if (!allFolderMetas.some((f) => f.name === name)) {
+          await folderStore.set({
+            id: makeFolderId(name),
+            name,
+            visibility: "public",
+            sharedWith: [],
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      await refresh();
+      return count;
+    },
+    [allFolderMetas, refresh],
+  );
+
   return {
     files,
     folders,
@@ -298,6 +367,7 @@ export function useDataRoom() {
     isAdmin,
     loading,
     uploadFiles,
+    importFolder,
     deleteFile,
     downloadFile,
     renameFile,
