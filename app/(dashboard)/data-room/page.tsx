@@ -34,12 +34,6 @@ const ACCENT_GRADIENTS = [
   "from-teal-400 to-cyan-500",
 ];
 
-const INITIAL_FOLDERS = [
-  "Kit Marketing FR",
-  "Promesse Bon de souscription",
-  "Marketing Kit EN",
-  "NDA 2026",
-];
 
 function fileIcon(mime: string) {
   if (mime === "application/pdf" || mime.startsWith("text/")) return FileText;
@@ -119,7 +113,6 @@ export default function DataRoomPage() {
 
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
-  const initDone = useRef(false);
 
   // currentPath: "" = root, "Kit Marketing FR" = inside Data Room, "Kit Marketing FR/Brochures" = subfolder
   const [currentPath, setCurrentPath] = useState("");
@@ -142,15 +135,6 @@ export default function DataRoomPage() {
     }
   }, []);
 
-  // Seed initial Data Rooms on first admin load
-  useEffect(() => {
-    if (!loading && isAdmin && !initDone.current) {
-      initDone.current = true;
-      void (async () => {
-        for (const name of INITIAL_FOLDERS) await createFolder(name);
-      })();
-    }
-  }, [loading, isAdmin, createFolder]);
 
   const isAtRoot = currentPath === "";
   const pathSegments = currentPath ? currentPath.split("/") : [];
@@ -366,7 +350,7 @@ export default function DataRoomPage() {
               <p className="text-foreground mt-3 text-sm font-semibold">Aucune Data Room</p>
               {isAdmin ? (
                 <button
-                  onClick={() => setShowNewFolderModal(true)}
+                  onClick={() => setNewFolderOpen(true)}
                   className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
