@@ -124,6 +124,28 @@ export default function DataRoomPage() {
   const [newFolderName, setNewFolderName] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<StoredFile | null>(null);
+  const [preview, setPreview] = useState<{ file: StoredFile; url: string } | null>(null);
+
+  const openPreview = async (f: StoredFile) => {
+    const db = await new Promise<IDBDatabase>((res, rej) => {
+      const r = window.indexedDB.open("netforce-dataroom", 1);
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    const record = await new Promise<{ blob: Blob } | undefined>((res) => {
+      const req = db.transaction("files", "readonly").objectStore("files").get(f.id);
+      req.onsuccess = () => res(req.result as { blob: Blob } | undefined);
+      req.onerror = () => res(undefined);
+    });
+    db.close();
+    if (!record) return;
+    const url = URL.createObjectURL(record.blob);
+    setPreview({ file: f, url });
+  };
+
+  const closePreview = () => {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  };
   const [editingFile, setEditingFile] = useState<StoredFile | null>(null);
   const [editName, setEditName] = useState("");
   const [editFolder, setEditFolder] = useState("");
@@ -531,8 +553,8 @@ export default function DataRoomPage() {
                   return (
                     <div key={f.id} className="group border-border bg-card relative overflow-hidden rounded-xl border shadow-(--shadow-card)">
                       <div
-                        className={"bg-muted flex h-28 items-center justify-center overflow-hidden " + (f.url ? "cursor-pointer" : "")}
-                        onClick={() => f.url && setLightbox(f)}
+                        className="bg-muted flex h-28 cursor-pointer items-center justify-center overflow-hidden"
+                        onClick={() => void openPreview(f)}
                       >
                         {f.url ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -542,7 +564,7 @@ export default function DataRoomPage() {
                         )}
                       </div>
                       <div className="p-3">
-                        <p className="text-foreground truncate text-sm font-semibold" title={f.name}>{f.name}</p>
+                        <p className="text-foreground cursor-pointer truncate text-sm font-semibold hover:underline" title={f.name} onClick={() => void openPreview(f)}>{f.name}</p>
                         <p className="text-muted-foreground mt-0.5 text-xs">{formatSize(f.size)} — {formatDate(f.createdAt)}</p>
                       </div>
                       <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -563,6 +585,62 @@ export default function DataRoomPage() {
           </div>
         )}
       </div>
+
+      {/* Modale aperçu fichier */}
+      {preview && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/80" onClick={closePreview}>
+          <div className="flex items-center justify-between px-4 py-3 bg-black/60" onClick={(e) => e.stopPropagation()}>
+            <span className="text-white text-sm font-semibold truncate max-w-[60vw]">{preview.file.name}</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void downloadFile(preview.file.id)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs font-medium text-white transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                Télécharger
+              </button>
+              <button
+                type="button"
+                onClick={closePreview}
+                className="rounded-lg bg-white/10 hover:bg-white/20 p-1.5 text-white transition-colors"
+                aria-label="Fermer"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {preview.file.mime.startsWith("image/") ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={preview.url}
+                alt={preview.file.name}
+                className="h-full w-full object-contain"
+              />
+            ) : preview.file.mime === "application/pdf" ? (
+              <iframe
+                src={preview.url}
+                className="h-full w-full border-0"
+                title={preview.file.name}
+              />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-4 text-white">
+                <FileIcon className="h-16 w-16 text-white/30" aria-hidden="true" />
+                <p className="text-sm text-white/60">Aperçu non disponible pour ce type de fichier</p>
+                <button
+                  type="button"
+                  onClick={() => void openFile(preview.file.id)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-white/10 hover:bg-white/20 px-4 py-2 text-sm font-medium text-white transition-colors"
+                >
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                  Ouvrir dans un nouvel onglet
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modale renommer Data Room */}
       {renameFolderTarget && (
