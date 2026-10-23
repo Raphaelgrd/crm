@@ -29,6 +29,7 @@ import {
   BarChart3,
   Mail,
   Monitor,
+  Bot,
 } from "lucide-react";
 
 const NAV_GROUPS: {
@@ -75,6 +76,7 @@ const NAV_GROUPS: {
       { href: "/reseaux", label: "Réseaux sociaux", icon: Share2 },
       { href: "/automatisation", label: "Automatisations", icon: Zap },
       { href: "/rapport", label: "Rapport d'activité", icon: Clock },
+      { href: "/assistant", label: "Assistant IA", icon: Bot },
     ],
   },
 ];
