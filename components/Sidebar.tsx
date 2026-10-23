@@ -81,8 +81,8 @@ const NAV_GROUPS: {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { user, name } = useCrmUser();
-  const isAdmin = CRM_ADMINS.map((e) => e.toLowerCase()).includes(
+  const { user, loading, name } = useCrmUser();
+  const isAdmin = !loading && CRM_ADMINS.map((e) => e.toLowerCase()).includes(
     (user?.email ?? "").toLowerCase(),
   );
   const userInitial = initials(name) || "?";
