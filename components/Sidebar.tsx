@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import type React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { initials, signOutRapport, useCrmUser } from "@/lib/rapport";
+import { CRM_ADMINS, initials, signOutRapport, useCrmUser } from "@/lib/rapport";
 import {
   LayoutDashboard,
   Users,
@@ -30,7 +31,10 @@ import {
   Monitor,
 } from "lucide-react";
 
-const NAV_GROUPS = [
+const NAV_GROUPS: {
+  label: string | null;
+  items: { href: string; label: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; adminOnly?: boolean }[];
+}[] = [
   {
     label: null,
     items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }],
@@ -58,7 +62,7 @@ const NAV_GROUPS = [
       { href: "/stock", label: "Stock", icon: Package },
       { href: "/prets", label: "Prêts & Envois", icon: Handshake },
       { href: "/conformite", label: "Conformité export", icon: ShieldCheck },
-      { href: "/data-room", label: "Data Room", icon: FolderLock },
+      { href: "/data-room", label: "Data Room", icon: FolderLock, adminOnly: true },
     ],
   },
   {
@@ -66,7 +70,7 @@ const NAV_GROUPS = [
     items: [
       { href: "/agenda", label: "Agenda", icon: Calendar },
       { href: "/emails", label: "Emails", icon: Mail },
-      { href: "/equipe", label: "Équipe", icon: Monitor },
+      { href: "/equipe", label: "Équipe", icon: Monitor, adminOnly: true },
       { href: "/analytics", label: "Analytics site", icon: BarChart3 },
       { href: "/reseaux", label: "Réseaux sociaux", icon: Share2 },
       { href: "/automatisation", label: "Automatisations", icon: Zap },
@@ -77,7 +81,10 @@ const NAV_GROUPS = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { name } = useCrmUser();
+  const { user, name } = useCrmUser();
+  const isAdmin = CRM_ADMINS.map((e) => e.toLowerCase()).includes(
+    (user?.email ?? "").toLowerCase(),
+  );
   const userInitial = initials(name) || "?";
   const [expanded, setExpanded] = useState(true);
 
@@ -116,7 +123,7 @@ export function Sidebar() {
               {group.label && !expanded && gi > 0 && (
                 <div className="my-2 mx-2 border-t border-sidebar-border/50" />
               )}
-              {group.items.map(({ href, label, icon: Icon }) => {
+              {group.items.filter((item) => !item.adminOnly || isAdmin).map(({ href, label, icon: Icon }) => {
                 const active = pathname === href || pathname.startsWith(href + "/");
                 return (
                   <Link

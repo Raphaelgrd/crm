@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createCollectionStore } from "@/lib/firebase";
-import { useCrmUser } from "@/lib/rapport";
+import { CRM_ADMINS, useCrmUser } from "@/lib/rapport";
 
 // ⚠️ Fichiers stockés localement dans IndexedDB (voir commentaire d'origine).
 // Les métadonnées des dossiers (visibilité, partage) vivent dans Firestore.
@@ -27,11 +27,7 @@ export interface FolderMeta {
 }
 
 /** Emails des administrateurs pouvant gérer la visibilité des dossiers. */
-export const DATAROOM_ADMINS = [
-  "gerardraphael01@gmail.com",
-  "raphael.gerard@nexstun.com",
-  "laurent.mollinari@nexstun.com",
-];
+export const DATAROOM_ADMINS = CRM_ADMINS;
 
 const DB_NAME = "netforce-dataroom";
 const STORE = "files";
