@@ -21,6 +21,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import JSZip from "jszip";
 import { FolderMeta, StoredFile, formatSize, useDataRoom } from "@/lib/dataroom";
 
 const ACCENT_GRADIENTS = [
@@ -106,6 +107,7 @@ export default function DataRoomPage() {
     openFile,
     createFolder,
     deleteFolder,
+    renameFolder,
     setFolderVisibility,
     shareFolderWith,
     unshareFolderWith,
@@ -127,6 +129,43 @@ export default function DataRoomPage() {
   const [editFolder, setEditFolder] = useState("");
   const [shareModalFolder, setShareModalFolder] = useState<string | null>(null);
   const [shareEmail, setShareEmail] = useState("");
+  const [renameFolderTarget, setRenameFolderTarget] = useState<string | null>(null);
+  const [renameFolderName, setRenameFolderName] = useState("");
+
+  const downloadFolder = async (folderName: string) => {
+    const zip = new JSZip();
+    const folderFiles = files.filter(
+      (f) => f.folder === folderName || f.folder.startsWith(folderName + "/"),
+    );
+    for (const f of folderFiles) {
+      const { dbGet } = await import("@/lib/dataroom").then(() => {
+        return { dbGet: null };
+      });
+      // fetch blob via openFile approach — reach IndexedDB directly
+      const db = await new Promise<IDBDatabase>((res, rej) => {
+        const r = window.indexedDB.open("netforce-dataroom", 1);
+        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+      });
+      const record = await new Promise<{ blob: Blob; name: string } | undefined>((res) => {
+        const tx = db.transaction("files", "readonly");
+        const req = tx.objectStore("files").get(f.id);
+        req.onsuccess = () => res(req.result as { blob: Blob; name: string } | undefined);
+        req.onerror = () => res(undefined);
+      });
+      db.close();
+      if (record) {
+        const subPath = f.folder.startsWith(folderName + "/")
+          ? f.folder.slice(folderName.length + 1) + "/" + f.name
+          : f.name;
+        zip.file(subPath, record.blob);
+      }
+    }
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${folderName}.zip`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
 
   // Attach webkitdirectory to folder input (not in TS typings)
   useEffect(() => {
@@ -389,25 +428,33 @@ export default function DataRoomPage() {
                         <div className="rounded-xl bg-orange-50 p-2.5 dark:bg-orange-950/30">
                           <FolderLock className="h-7 w-7 text-orange-500" aria-hidden="true" />
                         </div>
-                        {isAdmin && (
-                          <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
-                            <button type="button" onClick={() => void setFolderVisibility(meta.name, isPrivate ? "public" : "private")} className="rounded-lg p-1.5 hover:bg-muted transition-colors" title={isPrivate ? "Rendre public" : "Rendre privé"}>
-                              {isPrivate ? <Globe className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> : <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
-                            </button>
-                            {isPrivate && (
-                              <button type="button" onClick={() => { setShareEmail(""); setShareModalFolder(meta.name); }} className="rounded-lg p-1.5 hover:bg-muted transition-colors" title="Partager">
-                                <Share2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                        <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
+                          <button type="button" onClick={() => void downloadFolder(meta.name)} className="rounded-lg p-1.5 hover:bg-muted transition-colors" title="Télécharger tout (zip)">
+                            <Download className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                          </button>
+                          {isAdmin && (
+                            <>
+                              <button type="button" onClick={() => { setRenameFolderName(meta.name); setRenameFolderTarget(meta.name); }} className="rounded-lg p-1.5 hover:bg-muted transition-colors" title="Renommer">
+                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                               </button>
-                            )}
-                            {confirmDelete === `folder:${meta.name}` ? (
-                              <button type="button" onClick={() => { setConfirmDelete(null); void deleteFolder(meta.name); }} className="rounded-lg bg-red-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-red-600">Confirmer ?</button>
-                            ) : (
-                              <button type="button" onClick={() => setConfirmDelete(`folder:${meta.name}`)} className="rounded-lg p-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors" aria-label={`Supprimer ${meta.name}`}>
-                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" aria-hidden="true" />
+                              <button type="button" onClick={() => void setFolderVisibility(meta.name, isPrivate ? "public" : "private")} className="rounded-lg p-1.5 hover:bg-muted transition-colors" title={isPrivate ? "Rendre public" : "Rendre privé"}>
+                                {isPrivate ? <Globe className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> : <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
                               </button>
-                            )}
-                          </div>
-                        )}
+                              {isPrivate && (
+                                <button type="button" onClick={() => { setShareEmail(""); setShareModalFolder(meta.name); }} className="rounded-lg p-1.5 hover:bg-muted transition-colors" title="Partager">
+                                  <Share2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                                </button>
+                              )}
+                              {confirmDelete === `folder:${meta.name}` ? (
+                                <button type="button" onClick={() => { setConfirmDelete(null); void deleteFolder(meta.name); }} className="rounded-lg bg-red-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-red-600">Confirmer ?</button>
+                              ) : (
+                                <button type="button" onClick={() => setConfirmDelete(`folder:${meta.name}`)} className="rounded-lg p-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors" aria-label={`Supprimer ${meta.name}`}>
+                                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" aria-hidden="true" />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                       <h3 className="text-foreground mt-3 font-semibold leading-snug">{meta.name}</h3>
                       <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
@@ -516,6 +563,22 @@ export default function DataRoomPage() {
           </div>
         )}
       </div>
+
+      {/* Modale renommer Data Room */}
+      {renameFolderTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setRenameFolderTarget(null)}>
+          <div className="bg-card w-full max-w-sm rounded-xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-foreground mb-4 text-lg font-bold">Renommer la Data Room</h2>
+            <form onSubmit={(e) => { e.preventDefault(); void renameFolder(renameFolderTarget, renameFolderName).then(() => setRenameFolderTarget(null)); }}>
+              <input autoFocus value={renameFolderName} onChange={(e) => setRenameFolderName(e.target.value)} placeholder="Nouveau nom" className="border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none" />
+              <div className="mt-4 flex justify-end gap-3">
+                <button type="button" onClick={() => setRenameFolderTarget(null)} className="border-border bg-card text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-semibold transition-colors">Annuler</button>
+                <button type="submit" className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90">Renommer</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modale nouvelle Data Room */}
       {newFolderOpen && (

@@ -258,6 +258,26 @@ export function useDataRoom() {
     [allFolderMetas, refresh],
   );
 
+  const renameFolder = useCallback(
+    async (oldName: string, newName: string): Promise<void> => {
+      const clean = newName.trim();
+      if (!clean || clean === oldName) return;
+      if (allFolderMetas.some((f) => f.name === clean)) return;
+      // Update Firestore meta
+      const meta = allFolderMetas.find((f) => f.name === oldName);
+      if (meta) await folderStore.update(meta.id, { name: clean });
+      // Update all file records that live in this folder or subfolders
+      const records = await dbGetAll();
+      for (const r of records) {
+        if (r.folder === oldName || r.folder.startsWith(oldName + "/")) {
+          await dbPut({ ...r, folder: clean + r.folder.slice(oldName.length) });
+        }
+      }
+      await refresh();
+    },
+    [allFolderMetas, refresh],
+  );
+
   const setFolderVisibility = useCallback(
     async (name: string, visibility: "public" | "private"): Promise<void> => {
       const meta = allFolderMetas.find((f) => f.name === name);
@@ -375,6 +395,7 @@ export function useDataRoom() {
     openFile,
     createFolder,
     deleteFolder,
+    renameFolder,
     setFolderVisibility,
     shareFolderWith,
     unshareFolderWith,
