@@ -10,13 +10,16 @@ import {
   FileUp,
   Folder,
   FolderPlus,
+  Globe,
   Home,
+  Lock,
   Pencil,
   Search,
+  Share2,
   Trash2,
   X,
 } from "lucide-react";
-import { StoredFile, formatSize, useDataRoom } from "@/lib/dataroom";
+import { FolderMeta, StoredFile, formatSize, useDataRoom } from "@/lib/dataroom";
 
 function fileIcon(mime: string) {
   if (mime === "application/pdf" || mime.startsWith("text/")) return FileText;
@@ -35,6 +38,8 @@ export default function DataRoomPage() {
   const {
     files,
     folders,
+    folderMetas,
+    isAdmin,
     loading,
     uploadFiles,
     deleteFile,
@@ -44,6 +49,9 @@ export default function DataRoomPage() {
     openFile,
     createFolder,
     deleteFolder,
+    setFolderVisibility,
+    shareFolderWith,
+    unshareFolderWith,
   } = useDataRoom();
 
   const fileInput = useRef<HTMLInputElement>(null);
@@ -57,6 +65,8 @@ export default function DataRoomPage() {
   const [editingFile, setEditingFile] = useState<StoredFile | null>(null);
   const [editName, setEditName] = useState("");
   const [editFolder, setEditFolder] = useState("");
+  const [shareModalFolder, setShareModalFolder] = useState<string | null>(null);
+  const [shareEmail, setShareEmail] = useState("");
 
   const visibleFiles = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -78,6 +88,10 @@ export default function DataRoomPage() {
       await uploadFiles(e.dataTransfer.files, currentFolder);
     }
   };
+
+  const shareModalMeta: FolderMeta | undefined = shareModalFolder
+    ? folderMetas.find((f) => f.name === shareModalFolder)
+    : undefined;
 
   return (
     <div
@@ -186,56 +200,108 @@ export default function DataRoomPage() {
         )}
 
         {/* Dossiers (à la racine uniquement) */}
-        {currentFolder === "" && folders.length > 0 && (
+        {currentFolder === "" && folderMetas.length > 0 && (
           <div className="mb-6">
             <p className="text-muted-foreground mb-3 text-xs font-semibold uppercase">
               Dossiers
             </p>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              {folders.map((name) => (
-                <div
-                  key={name}
-                  className="group border-border bg-card hover:border-primary/40 relative cursor-pointer rounded-xl border p-4 shadow-(--shadow-card) transition-colors"
-                  onClick={() => setCurrentFolder(name)}
-                >
-                  <Folder className="h-8 w-8 fill-blue-100 text-blue-500" aria-hidden="true" />
-                  <p className="text-foreground mt-2 truncate text-sm font-semibold">{name}</p>
-                  <p className="text-muted-foreground text-xs">
-                    {folderCounts.get(name) ?? 0} fichier{(folderCounts.get(name) ?? 0) > 1 ? "s" : ""}
-                  </p>
-                  {confirmDelete === `folder:${name}` ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmDelete(null);
-                        void deleteFolder(name);
-                      }}
-                      className="absolute top-2 right-2 rounded bg-red-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-red-600"
+              {folderMetas.map((meta) => {
+                const count = folderCounts.get(meta.name) ?? 0;
+                const isPrivate = meta.visibility === "private";
+                return (
+                  <div
+                    key={meta.name}
+                    className="group border-border bg-card hover:border-primary/40 relative cursor-pointer rounded-xl border p-4 shadow-(--shadow-card) transition-colors"
+                    onClick={() => setCurrentFolder(meta.name)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <Folder
+                        className={`h-8 w-8 ${isPrivate ? "fill-gray-100 text-gray-400 dark:fill-gray-800" : "fill-blue-100 text-blue-500"}`}
+                        aria-hidden="true"
+                      />
+                      {isPrivate && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                          <Lock className="h-2.5 w-2.5" aria-hidden="true" />
+                          Privé
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-foreground mt-2 truncate text-sm font-semibold">{meta.name}</p>
+                    <p className="text-muted-foreground text-xs">
+                      {count} fichier{count > 1 ? "s" : ""}
+                    </p>
+
+                    {/* Boutons d'action */}
+                    <div
+                      className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      Confirmer ?
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmDelete(`folder:${name}`);
-                      }}
-                      className="absolute top-2 right-2 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-50"
-                      aria-label={`Supprimer le dossier ${name}`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-              ))}
+                      {isAdmin && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void setFolderVisibility(
+                                meta.name,
+                                isPrivate ? "public" : "private",
+                              )
+                            }
+                            className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-800"
+                            title={isPrivate ? "Rendre public" : "Rendre privé"}
+                          >
+                            {isPrivate ? (
+                              <Globe className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
+                            ) : (
+                              <Lock className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
+                            )}
+                          </button>
+                          {isPrivate && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShareEmail("");
+                                setShareModalFolder(meta.name);
+                              }}
+                              className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-800"
+                              title="Partager avec des utilisateurs"
+                            >
+                              <Share2 className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {confirmDelete === `folder:${meta.name}` ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmDelete(null);
+                            void deleteFolder(meta.name);
+                          }}
+                          className="rounded bg-red-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-red-600"
+                        >
+                          Confirmer ?
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDelete(`folder:${meta.name}`)}
+                          className="rounded p-1 hover:bg-red-50"
+                          aria-label={`Supprimer le dossier ${meta.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
         {/* Fichiers */}
-        {currentFolder === "" && folders.length > 0 && visibleFiles.length > 0 && (
+        {currentFolder === "" && folderMetas.length > 0 && visibleFiles.length > 0 && (
           <p className="text-muted-foreground mb-3 text-xs font-semibold uppercase">Fichiers</p>
         )}
         {!loading && visibleFiles.length === 0 ? (
@@ -446,6 +512,94 @@ export default function DataRoomPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modale de partage */}
+      {shareModalFolder && shareModalMeta && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShareModalFolder(null)}
+        >
+          <div
+            className="bg-card w-full max-w-sm rounded-xl p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-foreground text-lg font-bold">
+                Partager « {shareModalMeta.name} »
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShareModalFolder(null)}
+                className="hover:bg-muted rounded p-1 transition-colors"
+                aria-label="Fermer"
+              >
+                <X className="h-5 w-5 text-gray-400" aria-hidden="true" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!shareEmail.trim()) return;
+                void shareFolderWith(shareModalMeta.name, shareEmail).then(() =>
+                  setShareEmail(""),
+                );
+              }}
+            >
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Ajouter un accès
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={shareEmail}
+                  onChange={(e) => setShareEmail(e.target.value)}
+                  placeholder="email@exemple.com"
+                  className="border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="bg-primary text-primary-foreground shrink-0 rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+                >
+                  Ajouter
+                </button>
+              </div>
+            </form>
+
+            <div className="mt-4">
+              <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase">
+                Accès partagé
+              </p>
+              {shareModalMeta.sharedWith.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  Aucun partage pour l&apos;instant.
+                </p>
+              ) : (
+                <ul className="space-y-1">
+                  {shareModalMeta.sharedWith.map((email) => (
+                    <li
+                      key={email}
+                      className="bg-muted flex items-center justify-between rounded-lg px-3 py-2"
+                    >
+                      <span className="text-foreground truncate text-sm">{email}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void unshareFolderWith(shareModalMeta.name, email)
+                        }
+                        className="ml-2 shrink-0 rounded p-1 hover:bg-red-50"
+                        aria-label={`Révoquer l'accès de ${email}`}
+                      >
+                        <X className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       )}
