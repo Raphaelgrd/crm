@@ -364,8 +364,16 @@ export default function DataRoomPage() {
             <div className="border-border rounded-xl border border-dashed py-20 text-center">
               <FolderLock className="mx-auto h-12 w-12 text-gray-300" aria-hidden="true" />
               <p className="text-foreground mt-3 text-sm font-semibold">Aucune Data Room</p>
-              {isAdmin && (
-                <p className="text-muted-foreground mt-1 text-sm">Créez votre première Data Room avec le bouton ci-dessus.</p>
+              {isAdmin ? (
+                <button
+                  onClick={() => setShowNewFolderModal(true)}
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  Nouvelle Data Room
+                </button>
+              ) : (
+                <p className="text-muted-foreground mt-1 text-sm">Aucun espace documentaire partagé avec vous.</p>
               )}
             </div>
           ) : (
