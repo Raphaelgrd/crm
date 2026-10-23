@@ -1,25 +1,41 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ChevronRight,
   Download,
   ExternalLink,
   File as FileIcon,
   FileText,
   FileUp,
-  Folder,
-  FolderPlus,
+  FolderLock,
   Globe,
-  Home,
   Lock,
   Pencil,
+  Plus,
   Search,
   Share2,
   Trash2,
   X,
 } from "lucide-react";
 import { FolderMeta, StoredFile, formatSize, useDataRoom } from "@/lib/dataroom";
+
+const ACCENT_GRADIENTS = [
+  "from-red-400 to-rose-500",
+  "from-violet-500 to-purple-500",
+  "from-red-400 to-rose-500",
+  "from-blue-400 to-indigo-500",
+  "from-green-400 to-emerald-500",
+  "from-orange-400 to-amber-500",
+  "from-pink-400 to-fuchsia-500",
+  "from-teal-400 to-cyan-500",
+];
+
+const INITIAL_FOLDERS = [
+  "Kit Marketing FR",
+  "Promesse Bon de souscription",
+  "Marketing Kit EN",
+  "NDA 2026",
+];
 
 function fileIcon(mime: string) {
   if (mime === "application/pdf" || mime.startsWith("text/")) return FileText;
@@ -28,8 +44,8 @@ function fileIcon(mime: string) {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", {
-    day: "numeric",
-    month: "short",
+    day: "2-digit",
+    month: "2-digit",
     year: "numeric",
   });
 }
@@ -55,18 +71,31 @@ export default function DataRoomPage() {
   } = useDataRoom();
 
   const fileInput = useRef<HTMLInputElement>(null);
-  const [currentFolder, setCurrentFolder] = useState(""); // "" = racine
+  const initDone = useRef(false);
+  const [currentFolder, setCurrentFolder] = useState("");
   const [search, setSearch] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null); // id fichier ou "folder:nom"
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<StoredFile | null>(null);
   const [editingFile, setEditingFile] = useState<StoredFile | null>(null);
   const [editName, setEditName] = useState("");
   const [editFolder, setEditFolder] = useState("");
   const [shareModalFolder, setShareModalFolder] = useState<string | null>(null);
   const [shareEmail, setShareEmail] = useState("");
+
+  // Seed initial folders on first admin load
+  useEffect(() => {
+    if (!loading && isAdmin && !initDone.current) {
+      initDone.current = true;
+      void (async () => {
+        for (const name of INITIAL_FOLDERS) {
+          await createFolder(name);
+        }
+      })();
+    }
+  }, [loading, isAdmin, createFolder]);
 
   const visibleFiles = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -96,44 +125,55 @@ export default function DataRoomPage() {
   return (
     <div
       className="flex h-full flex-col"
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragOver(true);
-      }}
-      onDragLeave={(e) => {
-        if (e.currentTarget === e.target) setDragOver(false);
-      }}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
       onDrop={(e) => void handleDrop(e)}
     >
-      <div className="border-border bg-background/95 border-b px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8 lg:py-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-foreground text-xl font-bold sm:text-2xl">Data Room</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {files.length} fichier{files.length > 1 ? "s" : ""} —{" "}
-              {formatSize(files.reduce((s, f) => s + f.size, 0))} au total
+      {/* Header */}
+      <div className="border-border bg-background/95 border-b px-6 py-5 backdrop-blur-sm lg:px-8">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-foreground text-2xl font-bold">
+              {currentFolder || "Data Room"}
+            </h1>
+            <p className="text-muted-foreground mt-0.5 text-sm">
+              {currentFolder
+                ? `${visibleFiles.length} document${visibleFiles.length !== 1 ? "s" : ""}`
+                : "Gérez vos espaces documentaires sécurisés"}
             </p>
           </div>
-          <div className="flex shrink-0 gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setNewFolderName("");
-                setNewFolderOpen(true);
-              }}
-              className="border-border bg-card text-foreground hover:bg-muted inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold shadow-sm transition-colors"
-            >
-              <FolderPlus className="h-4 w-4" aria-hidden="true" />
-              Nouveau dossier
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInput.current?.click()}
-              className="bg-primary text-primary-foreground inline-flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition-opacity hover:opacity-90"
-            >
-              <FileUp className="h-4 w-4" aria-hidden="true" />
-              Importer des fichiers
-            </button>
+
+          <div className="flex shrink-0 items-center gap-3">
+            {currentFolder ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setSearch(""); setCurrentFolder(""); }}
+                  className="border-border bg-card text-foreground hover:bg-muted inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+                >
+                  ← Retour
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInput.current?.click()}
+                  className="bg-primary text-primary-foreground inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+                >
+                  <FileUp className="h-4 w-4" aria-hidden="true" />
+                  Importer
+                </button>
+              </>
+            ) : (
+              isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => { setNewFolderName(""); setNewFolderOpen(true); }}
+                  className="bg-primary text-primary-foreground inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold shadow-sm transition-opacity hover:opacity-90"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Nouvelle Data Room
+                </button>
+              )
+            )}
             <input
               ref={fileInput}
               type="file"
@@ -150,146 +190,202 @@ export default function DataRoomPage() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-          {/* Fil d'ariane */}
-          <div className="flex items-center gap-1 text-sm">
-            <button
-              type="button"
-              onClick={() => setCurrentFolder("")}
-              className={
-                "inline-flex items-center gap-1 rounded px-2 py-1 font-medium transition-colors " +
-                (currentFolder === ""
-                  ? "text-foreground"
-                  : "text-muted-foreground hover:bg-muted")
-              }
-            >
-              <Home className="h-3.5 w-3.5" aria-hidden="true" />
-              Racine
-            </button>
-            {currentFolder && (
-              <>
-                <ChevronRight className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
-                <span className="text-foreground rounded px-2 py-1 font-semibold">
-                  {currentFolder}
-                </span>
-              </>
-            )}
-          </div>
-          <div className="relative sm:ml-auto sm:w-64">
-            <Search
-              className="text-muted-foreground absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2"
-              aria-hidden="true"
-            />
+        {currentFolder && (
+          <div className="relative mt-4 sm:max-w-xs">
+            <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" aria-hidden="true" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Rechercher un fichier…"
-              className="border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 w-full rounded-lg border py-1.5 pr-3 pl-8 text-sm focus:ring-2 focus:outline-none"
+              className="border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 w-full rounded-lg border py-2 pr-3 pl-9 text-sm focus:ring-2 focus:outline-none"
             />
           </div>
-        </div>
+        )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+      <div className="min-h-0 flex-1 overflow-y-auto p-6 lg:p-8">
         {dragOver && (
           <div className="border-primary bg-primary/5 pointer-events-none fixed inset-x-8 top-40 bottom-8 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed">
-            <p className="text-primary text-lg font-semibold">
-              Dépose tes fichiers ici
-            </p>
+            <p className="text-primary text-lg font-semibold">Dépose tes fichiers ici</p>
           </div>
         )}
 
-        {/* Dossiers (à la racine uniquement) */}
-        {currentFolder === "" && folderMetas.length > 0 && (
-          <div className="mb-6">
-            <p className="text-muted-foreground mb-3 text-xs font-semibold uppercase">
-              Dossiers
-            </p>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              {folderMetas.map((meta) => {
+        {/* Root — Data Room grid */}
+        {currentFolder === "" && (
+          loading ? (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-muted/50 animate-pulse rounded-xl h-44" />
+              ))}
+            </div>
+          ) : folderMetas.length === 0 ? (
+            <div className="border-border rounded-xl border border-dashed py-20 text-center">
+              <FolderLock className="mx-auto h-12 w-12 text-gray-300" aria-hidden="true" />
+              <p className="text-foreground mt-3 text-sm font-semibold">Aucune Data Room</p>
+              {isAdmin && (
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Créez votre première Data Room avec le bouton ci-dessus.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {folderMetas.map((meta, index) => {
                 const count = folderCounts.get(meta.name) ?? 0;
                 const isPrivate = meta.visibility === "private";
+                const accent = ACCENT_GRADIENTS[index % ACCENT_GRADIENTS.length];
                 return (
                   <div
                     key={meta.name}
-                    className="group border-border bg-card hover:border-primary/40 relative cursor-pointer rounded-xl border p-4 shadow-(--shadow-card) transition-colors"
+                    className="group bg-card border-border relative overflow-hidden rounded-xl border shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                     onClick={() => setCurrentFolder(meta.name)}
                   >
-                    <div className="flex items-start justify-between">
-                      <Folder
-                        className={`h-8 w-8 ${isPrivate ? "fill-gray-100 text-gray-400 dark:fill-gray-800" : "fill-blue-100 text-blue-500"}`}
-                        aria-hidden="true"
-                      />
-                      {isPrivate && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-                          <Lock className="h-2.5 w-2.5" aria-hidden="true" />
-                          Privé
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-foreground mt-2 truncate text-sm font-semibold">{meta.name}</p>
-                    <p className="text-muted-foreground text-xs">
-                      {count} fichier{count > 1 ? "s" : ""}
-                    </p>
+                    {/* Colored accent bar */}
+                    <div className={`h-1.5 w-full bg-gradient-to-r ${accent}`} />
 
-                    {/* Boutons d'action */}
-                    <div
-                      className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {isAdmin && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void setFolderVisibility(
-                                meta.name,
-                                isPrivate ? "public" : "private",
-                              )
-                            }
-                            className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-800"
-                            title={isPrivate ? "Rendre public" : "Rendre privé"}
+                    <div className="p-5">
+                      <div className="flex items-start justify-between">
+                        {/* Folder icon */}
+                        <div className="rounded-xl bg-orange-50 p-2.5 dark:bg-orange-950/30">
+                          <FolderLock className="h-7 w-7 text-orange-500" aria-hidden="true" />
+                        </div>
+
+                        {/* Admin actions on hover */}
+                        {isAdmin && (
+                          <div
+                            className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            {isPrivate ? (
-                              <Globe className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
-                            ) : (
-                              <Lock className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
-                            )}
-                          </button>
-                          {isPrivate && (
                             <button
                               type="button"
-                              onClick={() => {
-                                setShareEmail("");
-                                setShareModalFolder(meta.name);
-                              }}
-                              className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-800"
-                              title="Partager avec des utilisateurs"
+                              onClick={() =>
+                                void setFolderVisibility(meta.name, isPrivate ? "public" : "private")
+                              }
+                              className="rounded-lg p-1.5 hover:bg-muted transition-colors"
+                              title={isPrivate ? "Rendre public" : "Rendre privé"}
                             >
-                              <Share2 className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
+                              {isPrivate ? (
+                                <Globe className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                              ) : (
+                                <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                              )}
                             </button>
+                            {isPrivate && (
+                              <button
+                                type="button"
+                                onClick={() => { setShareEmail(""); setShareModalFolder(meta.name); }}
+                                className="rounded-lg p-1.5 hover:bg-muted transition-colors"
+                                title="Partager"
+                              >
+                                <Share2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                              </button>
+                            )}
+                            {confirmDelete === `folder:${meta.name}` ? (
+                              <button
+                                type="button"
+                                onClick={() => { setConfirmDelete(null); void deleteFolder(meta.name); }}
+                                className="rounded-lg bg-red-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-red-600"
+                              >
+                                Confirmer ?
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDelete(`folder:${meta.name}`)}
+                                className="rounded-lg p-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                aria-label={`Supprimer ${meta.name}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" aria-hidden="true" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <h3 className="text-foreground mt-3 font-semibold leading-snug">{meta.name}</h3>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          {count} document{count !== 1 ? "s" : ""}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                            isPrivate
+                              ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                              : "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
+                          }`}
+                        >
+                          {isPrivate ? (
+                            <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          ) : (
+                            <Globe className="h-3 w-3 shrink-0" aria-hidden="true" />
                           )}
-                        </>
-                      )}
-                      {confirmDelete === `folder:${meta.name}` ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setConfirmDelete(null);
-                            void deleteFolder(meta.name);
-                          }}
-                          className="rounded bg-red-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-red-600"
-                        >
-                          Confirmer ?
-                        </button>
+                          {isPrivate ? "Privé" : "Public"}
+                        </span>
+                        <span>Créé le {formatDate(meta.createdAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+
+        {/* Folder view — files */}
+        {currentFolder !== "" && (
+          !loading && visibleFiles.length === 0 ? (
+            <div className="border-border rounded-xl border border-dashed py-16 text-center">
+              <FileUp className="mx-auto h-10 w-10 text-gray-300" aria-hidden="true" />
+              <p className="text-foreground mt-3 text-sm font-semibold">
+                {search ? "Aucun fichier ne correspond à la recherche" : "Aucun fichier ici"}
+              </p>
+              {!search && (
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Glisse-dépose des fichiers n&apos;importe où sur la page, ou utilise « Importer ».
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+              {visibleFiles.map((f) => {
+                const Icon = fileIcon(f.mime);
+                return (
+                  <div
+                    key={f.id}
+                    className="group border-border bg-card relative overflow-hidden rounded-xl border shadow-(--shadow-card)"
+                  >
+                    <div
+                      className={"bg-muted flex h-28 items-center justify-center overflow-hidden " + (f.url ? "cursor-pointer" : "")}
+                      onClick={() => f.url && setLightbox(f)}
+                    >
+                      {f.url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={f.url} alt={f.name} className="h-full w-full object-cover" />
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDelete(`folder:${meta.name}`)}
-                          className="rounded p-1 hover:bg-red-50"
-                          aria-label={`Supprimer le dossier ${meta.name}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" aria-hidden="true" />
+                        <Icon className="h-10 w-10 text-gray-300" aria-hidden="true" />
+                      )}
+                    </div>
+                    <div className="p-3">
+                      <p className="text-foreground truncate text-sm font-semibold" title={f.name}>{f.name}</p>
+                      <p className="text-muted-foreground mt-0.5 text-xs">{formatSize(f.size)} — {formatDate(f.createdAt)}</p>
+                    </div>
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button type="button" onClick={() => void openFile(f.id)} className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700" aria-label="Ouvrir">
+                        <ExternalLink className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
+                      </button>
+                      <button type="button" onClick={() => { setEditingFile(f); setEditName(f.name); setEditFolder(f.folder); }} className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700" aria-label="Renommer">
+                        <Pencil className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
+                      </button>
+                      <button type="button" onClick={() => void downloadFile(f.id)} className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700" aria-label="Télécharger">
+                        <Download className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
+                      </button>
+                      {confirmDelete === f.id ? (
+                        <button type="button" onClick={() => { setConfirmDelete(null); void deleteFile(f.id); }} className="rounded-lg bg-red-500 px-2 py-1 text-[10px] font-semibold text-white shadow-sm hover:bg-red-600">Confirmer ?</button>
+                      ) : (
+                        <button type="button" onClick={() => setConfirmDelete(f.id)} className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-red-50 dark:border-gray-700 dark:bg-gray-800" aria-label="Supprimer">
+                          <Trash2 className="h-3.5 w-3.5 text-gray-500 hover:text-red-500" aria-hidden="true" />
                         </button>
                       )}
                     </div>
@@ -297,152 +393,26 @@ export default function DataRoomPage() {
                 );
               })}
             </div>
-          </div>
-        )}
-
-        {/* Fichiers */}
-        {currentFolder === "" && folderMetas.length > 0 && visibleFiles.length > 0 && (
-          <p className="text-muted-foreground mb-3 text-xs font-semibold uppercase">Fichiers</p>
-        )}
-        {!loading && visibleFiles.length === 0 ? (
-          <div className="border-border rounded-xl border border-dashed py-16 text-center">
-            <FileUp className="mx-auto h-10 w-10 text-gray-300" aria-hidden="true" />
-            <p className="text-foreground mt-3 text-sm font-semibold">
-              {search ? "Aucun fichier ne correspond à la recherche" : "Aucun fichier ici"}
-            </p>
-            {!search && (
-              <p className="text-muted-foreground mt-1 text-sm">
-                Glisse-dépose des fichiers n&apos;importe où sur la page, ou utilise « Importer ».
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-            {visibleFiles.map((f) => {
-              const Icon = fileIcon(f.mime);
-              return (
-                <div
-                  key={f.id}
-                  className="group border-border bg-card relative overflow-hidden rounded-xl border shadow-(--shadow-card)"
-                >
-                  <div
-                    className={
-                      "bg-muted flex h-28 items-center justify-center overflow-hidden " +
-                      (f.url ? "cursor-pointer" : "")
-                    }
-                    onClick={() => f.url && setLightbox(f)}
-                  >
-                    {f.url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={f.url} alt={f.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <Icon className="h-10 w-10 text-gray-300" aria-hidden="true" />
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <p className="text-foreground truncate text-sm font-semibold" title={f.name}>
-                      {f.name}
-                    </p>
-                    <p className="text-muted-foreground mt-0.5 text-xs">
-                      {formatSize(f.size)} — {formatDate(f.createdAt)}
-                    </p>
-                  </div>
-                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={() => void openFile(f.id)}
-                      className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50"
-                      aria-label="Ouvrir"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingFile(f);
-                        setEditName(f.name);
-                        setEditFolder(f.folder);
-                      }}
-                      className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50"
-                      aria-label="Renommer ou déplacer"
-                    >
-                      <Pencil className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void downloadFile(f.id)}
-                      className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50"
-                      aria-label="Télécharger"
-                    >
-                      <Download className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
-                    </button>
-                    {confirmDelete === f.id ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setConfirmDelete(null);
-                          void deleteFile(f.id);
-                        }}
-                        className="rounded-lg bg-red-500 px-2 py-1 text-[10px] font-semibold text-white shadow-sm hover:bg-red-600"
-                      >
-                        Confirmer ?
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDelete(f.id)}
-                        className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-red-50"
-                        aria-label="Supprimer"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-gray-500 hover:text-red-500" aria-hidden="true" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          )
         )}
       </div>
 
-      {/* Modale nouveau dossier */}
+      {/* Modale nouvelle Data Room */}
       {newFolderOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setNewFolderOpen(false)}
-        >
-          <div
-            className="bg-card w-full max-w-sm rounded-xl p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-foreground mb-4 text-lg font-bold">Nouveau dossier</h2>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void createFolder(newFolderName).then(() => setNewFolderOpen(false));
-              }}
-            >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setNewFolderOpen(false)}>
+          <div className="bg-card w-full max-w-sm rounded-xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-foreground mb-4 text-lg font-bold">Nouvelle Data Room</h2>
+            <form onSubmit={(e) => { e.preventDefault(); void createFolder(newFolderName).then(() => setNewFolderOpen(false)); }}>
               <input
                 autoFocus
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
-                placeholder="Nom du dossier"
+                placeholder="Nom de la Data Room"
                 className="border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
               />
               <div className="mt-4 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setNewFolderOpen(false)}
-                  className="border-border bg-card text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-semibold transition-colors"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
-                >
-                  Créer
-                </button>
+                <button type="button" onClick={() => setNewFolderOpen(false)} className="border-border bg-card text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-semibold transition-colors">Annuler</button>
+                <button type="submit" className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90">Créer</button>
               </div>
             </form>
           </div>
@@ -451,14 +421,8 @@ export default function DataRoomPage() {
 
       {/* Modale renommer / déplacer */}
       {editingFile && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setEditingFile(null)}
-        >
-          <div
-            className="bg-card w-full max-w-sm rounded-xl p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditingFile(null)}>
+          <div className="bg-card w-full max-w-sm rounded-xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-foreground mb-4 text-lg font-bold">Modifier le fichier</h2>
             <form
               onSubmit={(e) => {
@@ -474,42 +438,18 @@ export default function DataRoomPage() {
             >
               <div>
                 <label className="text-foreground mb-1 block text-xs font-medium">Nom</label>
-                <input
-                  autoFocus
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="border-border bg-card text-foreground focus:border-primary/50 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none"
-                />
+                <input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)} className="border-border bg-card text-foreground focus:border-primary/50 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none" />
               </div>
               <div>
                 <label className="text-foreground mb-1 block text-xs font-medium">Dossier</label>
-                <select
-                  value={editFolder}
-                  onChange={(e) => setEditFolder(e.target.value)}
-                  className="border-border bg-card text-foreground focus:border-primary/50 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none"
-                >
+                <select value={editFolder} onChange={(e) => setEditFolder(e.target.value)} className="border-border bg-card text-foreground focus:border-primary/50 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none">
                   <option value="">Racine</option>
-                  {folders.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
+                  {folders.map((name) => <option key={name} value={name}>{name}</option>)}
                 </select>
               </div>
               <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingFile(null)}
-                  className="border-border bg-card text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-semibold transition-colors"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
-                >
-                  Enregistrer
-                </button>
+                <button type="button" onClick={() => setEditingFile(null)} className="border-border bg-card text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-semibold transition-colors">Annuler</button>
+                <button type="submit" className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90">Enregistrer</button>
               </div>
             </form>
           </div>
@@ -518,81 +458,31 @@ export default function DataRoomPage() {
 
       {/* Modale de partage */}
       {shareModalFolder && shareModalMeta && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setShareModalFolder(null)}
-        >
-          <div
-            className="bg-card w-full max-w-sm rounded-xl p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShareModalFolder(null)}>
+          <div className="bg-card w-full max-w-sm rounded-xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-foreground text-lg font-bold">
-                Partager « {shareModalMeta.name} »
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShareModalFolder(null)}
-                className="hover:bg-muted rounded p-1 transition-colors"
-                aria-label="Fermer"
-              >
+              <h2 className="text-foreground text-lg font-bold">Partager « {shareModalMeta.name} »</h2>
+              <button type="button" onClick={() => setShareModalFolder(null)} className="hover:bg-muted rounded p-1 transition-colors" aria-label="Fermer">
                 <X className="h-5 w-5 text-gray-400" aria-hidden="true" />
               </button>
             </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!shareEmail.trim()) return;
-                void shareFolderWith(shareModalMeta.name, shareEmail).then(() =>
-                  setShareEmail(""),
-                );
-              }}
-            >
-              <label className="text-foreground mb-1 block text-xs font-medium">
-                Ajouter un accès
-              </label>
+            <form onSubmit={(e) => { e.preventDefault(); if (!shareEmail.trim()) return; void shareFolderWith(shareModalMeta.name, shareEmail).then(() => setShareEmail("")); }}>
+              <label className="text-foreground mb-1 block text-xs font-medium">Ajouter un accès</label>
               <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={shareEmail}
-                  onChange={(e) => setShareEmail(e.target.value)}
-                  placeholder="email@exemple.com"
-                  className="border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  className="bg-primary text-primary-foreground shrink-0 rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
-                >
-                  Ajouter
-                </button>
+                <input type="email" value={shareEmail} onChange={(e) => setShareEmail(e.target.value)} placeholder="email@exemple.com" className="border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none" />
+                <button type="submit" className="bg-primary text-primary-foreground shrink-0 rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-90">Ajouter</button>
               </div>
             </form>
-
             <div className="mt-4">
-              <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase">
-                Accès partagé
-              </p>
+              <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase">Accès partagé</p>
               {shareModalMeta.sharedWith.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  Aucun partage pour l&apos;instant.
-                </p>
+                <p className="text-muted-foreground text-sm">Aucun partage pour l&apos;instant.</p>
               ) : (
                 <ul className="space-y-1">
                   {shareModalMeta.sharedWith.map((email) => (
-                    <li
-                      key={email}
-                      className="bg-muted flex items-center justify-between rounded-lg px-3 py-2"
-                    >
+                    <li key={email} className="bg-muted flex items-center justify-between rounded-lg px-3 py-2">
                       <span className="text-foreground truncate text-sm">{email}</span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void unshareFolderWith(shareModalMeta.name, email)
-                        }
-                        className="ml-2 shrink-0 rounded p-1 hover:bg-red-50"
-                        aria-label={`Révoquer l'accès de ${email}`}
-                      >
+                      <button type="button" onClick={() => void unshareFolderWith(shareModalMeta.name, email)} className="ml-2 shrink-0 rounded p-1 hover:bg-red-50" aria-label={`Révoquer l'accès de ${email}`}>
                         <X className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" aria-hidden="true" />
                       </button>
                     </li>
@@ -606,25 +496,12 @@ export default function DataRoomPage() {
 
       {/* Lightbox image */}
       {lightbox?.url && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
-          onClick={() => setLightbox(null)}
-        >
-          <button
-            type="button"
-            onClick={() => setLightbox(null)}
-            className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
-            aria-label="Fermer l'aperçu"
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8" onClick={() => setLightbox(null)}>
+          <button type="button" onClick={() => setLightbox(null)} className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20" aria-label="Fermer l'aperçu">
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={lightbox.url}
-            alt={lightbox.name}
-            className="max-h-full max-w-full rounded-lg object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
+          <img src={lightbox.url} alt={lightbox.name} className="max-h-full max-w-full rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>
