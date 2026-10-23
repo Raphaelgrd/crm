@@ -259,14 +259,25 @@ export default function DataRoomPage() {
           <div className="flex shrink-0 items-center gap-2">
             {isAtRoot ? (
               isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => { setNewFolderName(""); setNewFolderOpen(true); }}
-                  className="bg-primary text-primary-foreground inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold shadow-sm transition-opacity hover:opacity-90"
-                >
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  Nouvelle Data Room
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => folderInput.current?.click()}
+                    className="border-border bg-card text-foreground hover:bg-muted inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors"
+                    title="Importer un dossier entier comme nouvelle Data Room"
+                  >
+                    <FolderPlus className="h-4 w-4" aria-hidden="true" />
+                    Importer un dossier
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setNewFolderName(""); setNewFolderOpen(true); }}
+                    className="bg-primary text-primary-foreground inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold shadow-sm transition-opacity hover:opacity-90"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    Nouvelle Data Room
+                  </button>
+                </>
               )
             ) : (
               <>
