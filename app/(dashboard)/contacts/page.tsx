@@ -45,6 +45,7 @@ import DuplicatesModal from "@/components/contacts/DuplicatesModal";
 import ExportModal from "@/components/contacts/ExportModal";
 import { useOrganizations } from "@/lib/organizations";
 import { logActivity } from "@/lib/activities";
+import { PhoneFlag } from "@/components/PhoneFlag";
 
 const selectClass =
   "border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 rounded-lg border px-2 py-1.5 text-sm focus:ring-2 focus:outline-none";
@@ -798,7 +799,7 @@ export default function ContactsPage() {
                     {orderedCols.map((id) => (
                       <td key={id} className="text-foreground px-4 py-3 whitespace-nowrap">
                         {id === "email" && (c.email || "—")}
-                        {id === "phone" && (c.phone ? formatPhone(c.phone) : "—")}
+                        {id === "phone" && (c.phone ? <><PhoneFlag phone={c.phone} />{formatPhone(c.phone)}</> : "—")}
                         {id === "company" && (c.company || "—")}
                         {id === "category" && (
                           <div className="relative" onClick={(e) => e.stopPropagation()}>

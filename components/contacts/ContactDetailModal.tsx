@@ -42,6 +42,7 @@ import { contactCountry, exportStatusMeta, useCompliance } from "@/lib/complianc
 import { useDocumentTemplates } from "@/lib/documentTemplates";
 import GenerateDocumentModal from "@/components/documents/GenerateDocumentModal";
 import { authFetch } from "@/lib/rapport";
+import { PhoneFlag } from "@/components/PhoneFlag";
 
 const ACT_ICON: Record<ActivityType, typeof Mail> = {
   note: StickyNote,
@@ -248,7 +249,7 @@ export default function ContactDetailModal({
             </div>
             <div className="flex items-center gap-2 text-sm">
               <Phone className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
-              <span className="text-foreground truncate">{contact.phone ? formatPhone(contact.phone) : "—"}</span>
+              <span className="text-foreground truncate">{contact.phone ? <><PhoneFlag phone={contact.phone} />{formatPhone(contact.phone)}</> : "—"}</span>
             </div>
             <div className="flex items-center gap-2 text-sm sm:col-span-2">
               <Building2 className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
