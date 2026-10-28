@@ -60,9 +60,116 @@ interface ActivityDoc {
     meetings: OlMeeting[];
   };
   canva?: {
-    designs: { name: string; editedAt: string }[];
+    designs: CanvaDesign[];
     exportsCreated?: number;
   };
+}
+
+interface CanvaDesign {
+  id?: string;
+  name: string;
+  editedAt: string;
+  createdAt?: string;
+  isNew?: boolean;
+  thumbnail?: string;
+  editUrl?: string;
+  viewUrl?: string;
+  pageCount?: number;
+}
+
+function hhmm(iso: string): string {
+  return new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+
+// Le tracker ne voit que le titre de fenêtre : on rattache à un design les fenêtres dont le titre contient son nom.
+function secondsOnDesign(name: string, docs: DocEntry[]): number {
+  const n = name.trim().toLowerCase();
+  if (n.length < 3) return 0;
+  return docs.filter((d) => d.name.toLowerCase().includes(n)).reduce((s, d) => s + d.duration, 0);
+}
+
+function CanvaDetails({ doc }: { doc: ActivityDoc }) {
+  const designs = [...(doc.canva?.designs ?? [])].sort((a, b) => b.editedAt.localeCompare(a.editedAt));
+  const docs = doc.documents ?? [];
+  const appSecs = Object.entries(doc.sessions)
+    .filter(([app]) => app.toLowerCase().includes("canva"))
+    .reduce((s, [, v]) => s + v, 0);
+  const webSecs = Object.entries(doc.urls ?? {})
+    .filter(([dom]) => dom.includes("canva.com"))
+    .reduce((s, [, v]) => s + v, 0);
+  const created = designs.filter((d) => d.isNew).length;
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div className="bg-muted rounded-lg p-2">
+          <p className="text-muted-foreground">Temps sur Canva</p>
+          <p className="text-foreground text-base font-bold">{appSecs + webSecs > 0 ? fmt(appSecs + webSecs) : "—"}</p>
+        </div>
+        <div className="bg-muted rounded-lg p-2">
+          <p className="text-muted-foreground">Créés</p>
+          <p className="text-foreground text-base font-bold">{created}</p>
+        </div>
+        <div className="bg-muted rounded-lg p-2">
+          <p className="text-muted-foreground">Modifiés</p>
+          <p className="text-foreground text-base font-bold">{designs.length - created}</p>
+        </div>
+      </div>
+      {designs.length === 0 ? (
+        <p className="text-muted-foreground text-xs italic">Aucun design modifié aujourd&apos;hui</p>
+      ) : (
+        <ul className="space-y-2">
+          {designs.map((d, i) => {
+            const spent = secondsOnDesign(d.name, docs);
+            const link = d.editUrl ?? d.viewUrl;
+            return (
+              <li key={d.id || i} className="border-border flex items-center gap-3 rounded-lg border p-2">
+                <div className="bg-muted flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md">
+                  {d.thumbnail ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={d.thumbnail}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      onError={(e) => { e.currentTarget.style.display = "none"; }}
+                    />
+                  ) : (
+                    <Palette className="text-muted-foreground h-4 w-4" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-foreground truncate text-xs font-semibold">{d.name}</p>
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${d.isNew ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400" : "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400"}`}
+                    >
+                      {d.isNew ? "Créé" : "Modifié"}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground mt-0.5 text-[11px]">
+                    {d.isNew && d.createdAt ? `Créé à ${hhmm(d.createdAt)} · ` : ""}
+                    Dernière modif. {hhmm(d.editedAt)}
+                    {d.pageCount ? ` · ${d.pageCount} page${d.pageCount > 1 ? "s" : ""}` : ""}
+                    {spent > 0 ? ` · ${fmt(spent)} passé` : ""}
+                  </p>
+                </div>
+                {link && (
+                  <a
+                    href={link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary hover:bg-muted shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold"
+                  >
+                    Ouvrir
+                  </a>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function fmt(secs: number): string {
@@ -367,22 +474,7 @@ function UserCard({ doc }: { doc: ActivityDoc }) {
             empty={!doc.canva}
             emptyMsg="Non connecté — configurez Canva dans le tracker"
           >
-            {doc.canva && (
-              <div className="space-y-1">
-                {doc.canva.exportsCreated ? (
-                  <p className="text-xs text-muted-foreground mb-1">{doc.canva.exportsCreated} export(s) créé(s)</p>
-                ) : null}
-                {doc.canva.designs.map((d, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
-                    <span className="text-base">🎨</span>
-                    <span className="text-foreground flex-1 truncate">{d.name}</span>
-                    <span className="text-muted-foreground shrink-0">
-                      {new Date(d.editedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+            {doc.canva && <CanvaDetails doc={doc} />}
           </Section>
         </div>
       )}

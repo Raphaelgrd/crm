@@ -491,7 +491,26 @@ def fetch_canva_activity(cfg: dict, today_iso: str) -> Optional[dict]:
         for d in r.json().get("items", []):
             dt = _canva_local_dt(d.get("updated_at"))
             if dt and dt.date().isoformat() == today_iso:
-                designs.append({"name": d.get("title") or "Sans titre", "editedAt": dt.isoformat()})
+                created = _canva_local_dt(d.get("created_at"))
+                entry = {
+                    "id": d.get("id") or "",
+                    "name": d.get("title") or "Sans titre",
+                    "editedAt": dt.isoformat(),
+                    "isNew": bool(created and created.date().isoformat() == today_iso),
+                }
+                if created:
+                    entry["createdAt"] = created.isoformat()
+                thumb = (d.get("thumbnail") or {}).get("url")
+                if thumb:
+                    entry["thumbnail"] = thumb
+                links = d.get("urls") or {}
+                if links.get("edit_url"):
+                    entry["editUrl"] = links["edit_url"]
+                if links.get("view_url"):
+                    entry["viewUrl"] = links["view_url"]
+                if isinstance(d.get("page_count"), int):
+                    entry["pageCount"] = d["page_count"]
+                designs.append(entry)
         return {"designs": designs}
     except Exception as e:
         print(f"[Canva] Erreur API: {e}")
