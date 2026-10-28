@@ -741,6 +741,8 @@ def run():
                         canva_cache = fetch_canva_activity(cfg, today)
                         if canva_cache is not None:
                             canva_last_fetch = now
+                            names = ", ".join(d["name"] for d in canva_cache["designs"][:5])
+                            print(f"[Canva] {len(canva_cache['designs'])} design(s) modifié(s) aujourd'hui{' : ' + names if names else ''}")
                     except Exception as e:
                         print(f"[Canva] {e}")
 
