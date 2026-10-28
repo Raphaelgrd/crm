@@ -7,6 +7,7 @@ import { createCollectionStore } from "@/lib/firebase";
 import { useDataRoom } from "@/lib/dataroom";
 import type { Contact } from "@/lib/contacts";
 import type { FolderMeta } from "@/lib/dataroom";
+import { authFetch } from "@/lib/rapport";
 
 const contactStore = createCollectionStore<Contact>("contacts");
 
@@ -81,7 +82,7 @@ export default function AssistantPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/ai/assistant", {
+      const res = await authFetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

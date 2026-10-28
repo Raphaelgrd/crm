@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Lock, ArrowLeft } from "lucide-react";
-import { frAuthError, signInRapport, useCrmUser } from "@/lib/rapport";
+import { frAuthError, signInRapport, signOutRapport, useCrmUser } from "@/lib/rapport";
+import { ensureCrmSession } from "@/lib/firebase";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { getRapportAuth } from "@/lib/rapport";
 
@@ -17,8 +18,28 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
+  const [session, setSession] = useState<{ uid: string; status: "ok" | "denied" | "error" } | null>(null);
 
-  if (loading) {
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    user
+      .getIdToken()
+      .then((t) => ensureCrmSession(t, user.uid))
+      .then((r) => {
+        if (!cancelled) setSession({ uid: user.uid, status: r === "denied" ? "denied" : "ok" });
+      })
+      .catch(() => {
+        if (!cancelled) setSession({ uid: user.uid, status: "error" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const sessionReady = !!user && session?.uid === user.uid;
+
+  if (loading || (user && !sessionReady)) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <p className="text-muted-foreground text-sm">Connexion en cours…</p>
@@ -26,7 +47,34 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (user) return <>{children}</>;
+  if (user && session?.status === "ok") return <>{children}</>;
+
+  if (user) {
+    return (
+      <div className="bg-muted flex h-screen w-full items-center justify-center p-4">
+        <div className="border-border bg-card w-full max-w-sm space-y-4 rounded-2xl border p-8 text-center shadow-(--shadow-card)">
+          <Lock className="text-muted-foreground mx-auto h-6 w-6" aria-hidden="true" />
+          <p className="text-foreground text-sm font-semibold">
+            {session?.status === "denied"
+              ? "Ton compte n'a pas encore accès au CRM."
+              : "Impossible d'ouvrir la session du CRM."}
+          </p>
+          <p className="text-muted-foreground text-xs">
+            {session?.status === "denied"
+              ? "Demande à un admin de t'ajouter dans Paramètres → Équipe et accès."
+              : "Vérifie ta connexion internet puis recharge la page."}
+          </p>
+          <button
+            type="button"
+            onClick={() => void signOutRapport()}
+            className="border-border bg-card text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-semibold"
+          >
+            Se déconnecter
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -6,6 +6,7 @@ import { Check, Copy, Mail, Pencil, X } from "lucide-react";
 import { Contact, contactFullName } from "@/lib/contacts";
 import {
   contactVariables,
+  fillHtmlVariables,
   fillVariables,
   renderEmailHtml,
   renderEmailText,
@@ -34,7 +35,7 @@ export default function SendEmailModal({ open, contact, onClose, onSent }: Props
     const vars = contactVariables(contact);
     return {
       subject: fillVariables(template.subject, vars).trim(),
-      html: fillVariables(renderEmailHtml(template), vars),
+      html: fillHtmlVariables(renderEmailHtml(template), vars),
       text: fillVariables(renderEmailText(template), vars),
     };
   }, [template, contact]);
@@ -117,6 +118,7 @@ export default function SendEmailModal({ open, contact, onClose, onSent }: Props
               <iframe
                 title="Aperçu du mail"
                 className="min-h-64 w-full flex-1 border-0"
+                sandbox=""
                 srcDoc={filled.html}
               />
             </div>

@@ -45,10 +45,13 @@
 </head>
 <body>
   <h1>Netforce Recorder</h1>
-  <p>Configure l'URL de ton CRM Netforce. L'extension enverra les transcriptions à cette adresse.</p>
+  <p>Configure l'URL de ton CRM Netforce et sa clé d'API (variable CRM_API_KEY dans Vercel). L'extension enverra les transcriptions à cette adresse.</p>
 
   <label for="crmUrl">URL du CRM</label>
   <input id="crmUrl" type="url" placeholder="https://ton-crm.vercel.app" />
+
+  <label for="apiKey">Clé d'API du CRM</label>
+  <input id="apiKey" type="password" placeholder="CRM_API_KEY (Vercel)" autocomplete="off" />
 
   <div style="display:flex;align-items:center">
     <button id="save">Sauvegarder</button>

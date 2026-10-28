@@ -1,0 +1,59 @@
+rules_version = '2';
+
+// Projet netforce-38edf : comptes de l'équipe, rapport d'heures, tracker d'activité.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isOwner() {
+      return signedIn() && request.auth.token.email != null && request.auth.token.email.lower() in [
+        'gerardraphael01@gmail.com',
+        'raphael.gerard@nexstun.com',
+        'laurent.mollinari@nexstun.com'
+      ];
+    }
+    function isAdmin() {
+      return isOwner() || (signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true);
+    }
+
+    // Champs de droits : seuls les admins peuvent les modifier.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if isAdmin() || (signedIn() && request.auth.uid == uid
+        && !request.resource.data.keys().hasAny(['member', 'disabled'])
+        && request.resource.data.get('isAdmin', false) == false);
+      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'member', 'isBot', 'disabled']));
+      allow delete: if isAdmin();
+    }
+
+    match /tasks/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && (request.resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update, delete: if signedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /logs/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && (request.resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update, delete: if signedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // Chaque tracker n'écrit que son propre document du jour ; seuls les admins lisent l'activité.
+    match /activity_tracker/{id} {
+      allow read: if isAdmin();
+      allow create, update: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && id == request.auth.uid + '_' + request.resource.data.date;
+      allow delete: if isAdmin();
+    }
+
+    // Toute autre collection : admins uniquement.
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

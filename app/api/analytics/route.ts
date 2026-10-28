@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { ga4Configured, runReport, type Row } from "@/lib/ga4";
+import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 
 // Rapports Google Analytics du site netforce-defense.com pour la page
 // « Analytics site » du CRM. Réservé aux utilisateurs connectés au CRM :
@@ -7,21 +8,6 @@ import { ga4Configured, runReport, type Row } from "@/lib/ga4";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// Projet Firebase des comptes du CRM (même clé publique que lib/rapport.ts).
-const FIREBASE_API_KEY = "AIzaSyABOcipg9S2LNSx-MBYa66xYBJA2E2MYdM";
-
-async function isCrmUser(req: NextRequest) {
-  const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (!token) return false;
-  const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken: token }) },
-  );
-  if (!res.ok) return false;
-  const data = (await res.json()) as { users?: unknown[] };
-  return Boolean(data.users?.length);
-}
 
 const ev = (names: string[]) => ({
   filter: { fieldName: "eventName", inListFilter: { values: names } },
@@ -37,9 +23,7 @@ async function optional(body: Record<string, unknown>): Promise<Row[] | null> {
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await isCrmUser(req))) {
-    return Response.json({ error: "Non autorisé" }, { status: 401 });
-  }
+  if (!(await verifyCrmUser(req))) return unauthorized();
   if (!ga4Configured()) {
     return Response.json({ configured: false });
   }

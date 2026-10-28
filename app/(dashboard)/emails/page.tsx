@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Send, Users, ChevronDown, ChevronUp, CheckCircle, XCircle, Loader2, Mail } from "lucide-react";
 import { useContacts, DEFAULT_CATEGORIES, type Contact } from "@/lib/contacts";
 import type { SendEmailPayload } from "@/app/api/emails/send/route";
+import { authFetch } from "@/lib/rapport";
 
 type Segment = "tous" | "investisseurs" | `cat:${string}` | `tag:${string}`;
 
@@ -91,7 +92,7 @@ export default function EmailsPage() {
     };
 
     try {
-      const res = await fetch("/api/emails/send", {
+      const res = await authFetch("/api/emails/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

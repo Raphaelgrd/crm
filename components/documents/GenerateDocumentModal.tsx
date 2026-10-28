@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { X, Copy, Download, Check, Loader2, AlertCircle } from "lucide-react";
 import type { Contact } from "@/lib/contacts";
 import type { DocumentTemplate } from "@/lib/documentTemplates";
+import { authFetch } from "@/lib/rapport";
 
 interface Props {
   contact: Contact;
@@ -27,7 +28,7 @@ export default function GenerateDocumentModal({ contact, template, onClose }: Pr
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/ai/generate-document", {
+      const res = await authFetch("/api/ai/generate-document", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

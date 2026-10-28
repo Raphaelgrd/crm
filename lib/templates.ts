@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createCollectionStore } from "@/lib/firebase";
+import { escapeHtml } from "@/lib/escapeHtml";
 
 // ⚠️ Couche de données locale (localStorage), même pattern que lib/contacts.ts :
 // API async calquée sur Firestore pour brancher Firebase sans toucher aux pages.
@@ -230,6 +231,11 @@ ${rows}
 /** Remplace les variables {{x}} par les valeurs fournies (ou l'exemple). */
 export function fillVariables(html: string, data: Record<string, string> = SAMPLE_DATA): string {
   return html.replace(/\{\{(\w+)\}\}/g, (m, key: string) => data[key] ?? m);
+}
+
+/** Comme fillVariables, mais échappe les valeurs : à utiliser dès qu'elles viennent d'un contact (saisie externe). */
+export function fillHtmlVariables(html: string, data: Record<string, string>): string {
+  return html.replace(/\{\{(\w+)\}\}/g, (m, key: string) => (key in data ? escapeHtml(data[key] ?? "") : m));
 }
 
 /** Variables d'un contact pour fillVariables. */

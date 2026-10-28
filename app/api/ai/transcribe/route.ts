@@ -1,22 +1,22 @@
 import { NextRequest } from "next/server";
+import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
+import { apiKeyOk } from "@/lib/server/apiKey";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
+export const runtime = "nodejs";
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: CORS });
-}
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
+  // Le CRM envoie le jeton de l'utilisateur ; l'extension Chrome envoie la clé d'API (x-api-key).
+  if (!apiKeyOk(req, { allowBearer: false }) && !(await verifyCrmUser(req))) return unauthorized();
+
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return Response.json({ error: "Clé GROQ_API_KEY manquante." }, { status: 500 });
 
   const formData = await req.formData();
   const audio = formData.get("audio") as Blob | null;
   if (!audio) return Response.json({ error: "Fichier audio manquant." }, { status: 400 });
+  if (audio.size > MAX_AUDIO_BYTES) return Response.json({ error: "Fichier audio trop lourd (25 Mo max)." }, { status: 413 });
 
   const fd = new FormData();
   fd.append("file", audio, "audio.webm");
@@ -37,5 +37,5 @@ export async function POST(req: NextRequest) {
   }
 
   const data = (await res.json()) as { text?: string };
-  return Response.json({ text: data.text ?? "" }, { headers: CORS });
+  return Response.json({ text: data.text ?? "" });
 }

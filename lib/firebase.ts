@@ -1,6 +1,7 @@
 "use client";
 
 import { getApps, initializeApp } from "firebase/app";
+import { getAuth, signInWithCustomToken } from "firebase/auth";
 import {
   Firestore,
   collection,
@@ -26,7 +27,29 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-export const firebaseApp = getApps()[0] ?? initializeApp(firebaseConfig);
+export const firebaseApp = getApps().find((a) => a.name === "[DEFAULT]") ?? initializeApp(firebaseConfig);
+
+/** Session sur le projet du CRM, ouverte avec un jeton signé par le serveur (voir /api/auth/crm-token). */
+export const getCrmAuth = () => getAuth(firebaseApp);
+
+/**
+ * Ouvre la session CRM pour l'utilisateur connecté (compte du projet rapport).
+ * Tant que le serveur n'est pas configuré (503), on continue sans session : les règles actuelles le permettent encore.
+ */
+export async function ensureCrmSession(idToken: string, uid: string): Promise<"ok" | "unconfigured" | "denied"> {
+  const crmAuth = getCrmAuth();
+  await crmAuth.authStateReady();
+  if (crmAuth.currentUser?.uid === uid) return "ok";
+  const res = await fetch("/api/auth/crm-token", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (res.status === 503) return "unconfigured";
+  if (!res.ok) return "denied";
+  const { token } = (await res.json()) as { token: string };
+  await signInWithCustomToken(crmAuth, token);
+  return "ok";
+}
 
 let firestore: Firestore;
 try {

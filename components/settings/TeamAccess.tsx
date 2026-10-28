@@ -38,7 +38,9 @@ function AddMemberForm({ onDone, onCancel }: { onDone: (msg: string) => void; on
       setError(
         code === "auth/email-already-in-use"
           ? "Ce compte existe déjà : il apparaîtra ici dès que la personne se connectera au CRM."
-          : frAuthError(code),
+          : code
+            ? frAuthError(code)
+            : (err as Error).message || "Création impossible.",
       );
     } finally {
       setBusy(false);
@@ -98,6 +100,13 @@ function RoleBadge({ m }: { m: TeamMember }) {
       </span>
     );
   }
+  if (m.member === false) {
+    return (
+      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 uppercase dark:bg-amber-950/40 dark:text-amber-300">
+        Sans accès
+      </span>
+    );
+  }
   if (m.isOwner) {
     return (
       <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-bold uppercase">
@@ -119,19 +128,21 @@ function RoleBadge({ m }: { m: TeamMember }) {
 
 export function TeamAccess() {
   const { user, isAdmin, loading: meLoading } = useCrmUser();
-  const { members, loading, error, setAdmin, reload } = useTeamMembers();
+  const { members, loading, error, complete, setAdmin, setMember, reload } = useTeamMembers();
   const [busy, setBusy] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState("");
 
-  const toggle = async (m: TeamMember) => {
+  const run = async (m: TeamMember, action: () => Promise<void>) => {
     setBusy(m.uid);
     try {
-      await setAdmin(m.uid, !m.isAdmin);
+      await action();
     } finally {
       setBusy(null);
     }
   };
+  const toggle = (m: TeamMember) =>
+    run(m, () => (m.member === false ? setMember(m.uid, true) : setAdmin(m.uid, !m.isAdmin)));
 
   return (
     <div className="border-border bg-card rounded-2xl border p-5 shadow-(--shadow-card)">
@@ -177,6 +188,12 @@ export function TeamAccess() {
         />
       )}
 
+      {isAdmin && !loading && !complete && (
+        <p className="text-muted-foreground mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          Liste partielle : seuls les comptes déjà connectés au CRM apparaissent. Ajoute le compte de service Firebase
+          (FIREBASE_SERVICE_ACCOUNT_RAPPORT) dans Vercel pour voir tout le monde.
+        </p>
+      )}
       {meLoading || loading ? (
         <p className="text-muted-foreground py-4 text-center text-sm">Chargement…</p>
       ) : !isAdmin ? (
@@ -219,14 +236,16 @@ export function TeamAccess() {
                     onClick={() => void toggle(m)}
                     className={
                       "shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 " +
-                      (m.isAdmin
+                      (m.isAdmin && m.member !== false
                         ? "border-border bg-card text-foreground hover:bg-muted border"
                         : "bg-primary text-primary-foreground hover:opacity-90")
                     }
                   >
                     {busy === m.uid
                       ? "…"
-                      : m.isBot
+                      : m.member === false
+                        ? "Autoriser l'accès"
+                        : m.isBot
                         ? m.isAdmin
                           ? "Retirer l'accès"
                           : "Donner l'accès"

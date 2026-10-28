@@ -8,6 +8,7 @@ import { useMeetings, makeMeetingTask, buildEmailBody, formatMeetingDate } from 
 import type { MeetingTask, MeetingMinutesInput } from "@/lib/meetings";
 import { useContacts } from "@/lib/contacts";
 import type { ContactInput, Contact } from "@/lib/contacts";
+import { authFetch } from "@/lib/rapport";
 
 // ── Web Speech API types ─────────────────────────────────────────────────────
 
@@ -387,7 +388,7 @@ export default function NewMeetingPage() {
     try {
       const fd = new FormData();
       fd.append("audio", blob, "audio.webm");
-      const res = await fetch("/api/ai/transcribe", { method: "POST", body: fd });
+      const res = await authFetch("/api/ai/transcribe", { method: "POST", body: fd });
       const data = (await res.json()) as { text?: string; error?: string };
       if (data.text?.trim()) {
         setTranscript((p) => {
@@ -508,7 +509,7 @@ export default function NewMeetingPage() {
     setAiLoading(true);
     setAiError(null);
     try {
-      const res = await fetch("/api/ai/meeting-summary", {
+      const res = await authFetch("/api/ai/meeting-summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, date, participants: allNames, transcript, summary: "", decisions: [] }),

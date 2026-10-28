@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Mail, Trash2, Check, Square, Sparkles, Loader2 } from "lucide-react";
 import { useMeetings, formatMeetingDate, buildEmailBody, makeMeetingTask } from "@/lib/meetings";
+import { authFetch } from "@/lib/rapport";
 
 export default function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -23,7 +24,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
     setAiError(null);
     setAiApplied(false);
     try {
-      const res = await fetch("/api/ai/meeting-summary", {
+      const res = await authFetch("/api/ai/meeting-summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

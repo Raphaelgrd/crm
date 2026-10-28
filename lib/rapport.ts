@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { deleteApp, getApp, getApps, initializeApp } from "firebase/app";
+import { getCrmAuth } from "@/lib/firebase";
+import { CRM_ADMINS, isOwnerEmail } from "@/lib/owners";
 import {
   User,
   createUserWithEmailAndPassword,
@@ -155,12 +157,7 @@ export function frAuthError(code: string) {
   return frAuthErrors[code] ?? "Erreur de connexion. Réessayez.";
 }
 
-/** Emails ayant accès aux sections restreintes (Data Room, Équipe). */
-export const CRM_ADMINS = [
-  "gerardraphael01@gmail.com",
-  "raphael.gerard@nexstun.com",
-  "laurent.mollinari@nexstun.com",
-];
+export { CRM_ADMINS, isOwnerEmail };
 
 // --- Auth partagée : le compte du Rapport d'activité EST le compte du CRM ---
 
@@ -172,24 +169,16 @@ export async function signInRapport(email: string, password: string) {
   await signInWithEmailAndPassword(auth(), email, password);
 }
 
-export async function signUpRapport(name: string, email: string, password: string) {
-  const cred = await createUserWithEmailAndPassword(auth(), email, password);
-  await setDoc(doc(db(), "users", cred.user.uid), {
-    name,
-    email: cred.user.email,
-    validators: ["Laurent", "Sébastien"],
-    isAdmin: false,
-    createdAt: new Date().toISOString(),
-  });
-}
-
 export async function signOutRapport() {
-  await fbSignOut(auth());
+  await Promise.all([fbSignOut(auth()), fbSignOut(getCrmAuth())]);
 }
 
-/** Propriétaires : toujours admins, impossibles à rétrograder depuis l'appli. */
-export function isOwnerEmail(email: string | null | undefined): boolean {
-  return CRM_ADMINS.map((e) => e.toLowerCase()).includes((email ?? "").toLowerCase());
+/** fetch vers les routes /api du CRM avec le jeton de l'utilisateur connecté. */
+export async function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const token = await auth().currentUser?.getIdToken();
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(input, { ...init, headers });
 }
 
 /** Session, prénom et droits admin de l'utilisateur connecté. */
@@ -242,8 +231,18 @@ export function useCrmUser() {
   return { user, loading, name, isAdmin };
 }
 
-/** Crée le compte d'un membre sans déconnecter l'admin (instance Firebase temporaire). */
+/** Crée le compte d'un membre : via le serveur (Admin SDK) si configuré, sinon avec une instance Firebase temporaire. */
 export async function createTeamAccount(name: string, email: string, password: string, makeAdmin: boolean) {
+  const res = await authFetch("/api/team", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, email, password, isAdmin: makeAdmin }),
+  });
+  if (res.ok) return;
+  if (res.status !== 503) {
+    const { error } = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(error || "Création impossible.");
+  }
   const tmp = initializeApp(rapportConfig, `rapport-create-${Date.now()}`);
   try {
     const tmpAuth = getAuth(tmp);
@@ -256,7 +255,7 @@ export async function createTeamAccount(name: string, email: string, password: s
       createdAt: new Date().toISOString(),
     });
     await fbSignOut(tmpAuth);
-    if (makeAdmin) await setDoc(doc(db(), "users", cred.user.uid), { isAdmin: true }, { merge: true });
+    await setDoc(doc(db(), "users", cred.user.uid), { member: true, isAdmin: makeAdmin }, { merge: true });
   } finally {
     await deleteApp(tmp);
   }
@@ -269,16 +268,38 @@ export interface TeamMember {
   isAdmin: boolean;
   isOwner: boolean;
   isBot: boolean;
+  /** null : inconnu (serveur non configuré). */
+  member: boolean | null;
+  lastSignIn?: string | null;
 }
 
-/** Comptes de l'équipe (collection users du projet rapport) + gestion des droits admin. */
+function sortMembers(list: TeamMember[]) {
+  return [...list].sort(
+    (a, b) =>
+      Number(b.isOwner) - Number(a.isOwner) ||
+      Number(b.isAdmin) - Number(a.isAdmin) ||
+      Number(a.isBot) - Number(b.isBot) ||
+      a.name.localeCompare(b.name),
+  );
+}
+
+/** Comptes de l'équipe + gestion des droits. Liste complète via le serveur, sinon la collection users. */
 export function useTeamMembers() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [complete, setComplete] = useState(false);
 
   const load = useCallback(async () => {
     try {
+      const res = await authFetch("/api/team");
+      if (res.ok) {
+        const { members: list } = (await res.json()) as { members: TeamMember[] };
+        setMembers(sortMembers(list));
+        setComplete(true);
+        setError("");
+        return;
+      }
       const snap = await getDocs(collection(db(), "users"));
       const list = snap.docs.map((d) => {
         const u = d.data() as RapportUser & { isBot?: boolean };
@@ -290,15 +311,11 @@ export function useTeamMembers() {
           isAdmin: owner || u.isAdmin === true,
           isOwner: owner,
           isBot: u.isBot === true,
+          member: null,
         };
       });
-      list.sort(
-        (a, b) =>
-          Number(b.isOwner) - Number(a.isOwner) ||
-          Number(b.isAdmin) - Number(a.isAdmin) ||
-          a.name.localeCompare(b.name),
-      );
-      setMembers(list);
+      setMembers(sortMembers(list));
+      setComplete(false);
       setError("");
     } catch {
       setError("Impossible de charger les comptes de l'équipe.");
@@ -311,15 +328,18 @@ export function useTeamMembers() {
     void load();
   }, [load]);
 
-  const setAdmin = useCallback(
-    async (uid: string, makeAdmin: boolean) => {
-      await setDoc(doc(db(), "users", uid), { isAdmin: makeAdmin }, { merge: true });
+  const update = useCallback(
+    async (uid: string, patch: { isAdmin?: boolean; member?: boolean }) => {
+      await setDoc(doc(db(), "users", uid), patch, { merge: true });
       await load();
     },
     [load],
   );
 
-  return { members, loading, error, setAdmin, reload: load };
+  const setAdmin = useCallback((uid: string, v: boolean) => update(uid, { isAdmin: v }), [update]);
+  const setMember = useCallback((uid: string, v: boolean) => update(uid, { member: v }), [update]);
+
+  return { members, loading, error, complete, setAdmin, setMember, reload: load };
 }
 
 const EMPTY_DATA: RapportData = {
@@ -372,7 +392,6 @@ export function useRapport() {
   }, [loadData]);
 
   const signIn = useCallback(signInRapport, []);
-  const signUp = useCallback(signUpRapport, []);
   const signOutUser = useCallback(signOutRapport, []);
 
   const isAdmin = user?.email === ADMIN_EMAIL || data.settings.isAdmin === true;
@@ -532,7 +551,6 @@ export function useRapport() {
     isAdmin,
     ownerName,
     signIn,
-    signUp,
     signOutUser,
     saveTask,
     setArchived,

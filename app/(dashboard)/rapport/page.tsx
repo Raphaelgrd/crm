@@ -191,8 +191,6 @@ export default function RapportPage() {
 // ── Connexion / inscription ─────────────────────────────────
 
 function AuthCard({ rapport }: { rapport: ReturnType<typeof useRapport> }) {
-  const [mode, setMode] = useState<"login" | "signup">("login");
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -201,14 +199,13 @@ function AuthCard({ rapport }: { rapport: ReturnType<typeof useRapport> }) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!email || !password || (mode === "signup" && !name.trim())) {
+    if (!email || !password) {
       setError("Remplissez tous les champs.");
       return;
     }
     setBusy(true);
     try {
-      if (mode === "signup") await rapport.signUp(name.trim(), email.trim(), password);
-      else await rapport.signIn(email.trim(), password);
+      await rapport.signIn(email.trim(), password);
     } catch (err) {
       setError(frAuthError((err as { code?: string }).code ?? ""));
     } finally {
@@ -222,25 +219,11 @@ function AuthCard({ rapport }: { rapport: ReturnType<typeof useRapport> }) {
         <div className="bg-primary mb-4 flex h-11 w-11 items-center justify-center rounded-xl">
           <Clock className="h-5 w-5 text-white" aria-hidden="true" />
         </div>
-        <h2 className="text-foreground text-lg font-bold">
-          {mode === "login" ? "Connexion" : "Créer un compte"}
-        </h2>
+        <h2 className="text-foreground text-lg font-bold">Connexion</h2>
         <p className="text-muted-foreground mt-1 mb-5 text-sm">
-          Accédez à votre rapport d&apos;activité Netforce.
+          Accédez à votre rapport d&apos;activité Netforce. Pas de compte ? Demandez-le à un admin.
         </p>
         <form onSubmit={submit} className="space-y-3">
-          {mode === "signup" && (
-            <div>
-              <label className={labelClass}>Prénom</label>
-              <input
-                className={inputClass}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="ex : Raphael"
-                autoComplete="given-name"
-              />
-            </div>
-          )}
           <div>
             <label className={labelClass}>Email</label>
             <input
@@ -260,7 +243,7 @@ function AuthCard({ rapport }: { rapport: ReturnType<typeof useRapport> }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              autoComplete="current-password"
             />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -269,19 +252,9 @@ function AuthCard({ rapport }: { rapport: ReturnType<typeof useRapport> }) {
             disabled={busy}
             className="bg-primary text-primary-foreground w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? "…" : mode === "login" ? "Se connecter" : "S'inscrire"}
+            {busy ? "…" : "Se connecter"}
           </button>
         </form>
-        <button
-          type="button"
-          onClick={() => {
-            setMode((m) => (m === "login" ? "signup" : "login"));
-            setError("");
-          }}
-          className="text-muted-foreground hover:text-foreground mt-3 w-full text-center text-xs font-medium transition-colors"
-        >
-          {mode === "login" ? "Pas encore de compte ? Créer un compte" : "Déjà un compte ? Se connecter"}
-        </button>
       </div>
     </div>
   );

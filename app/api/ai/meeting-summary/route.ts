@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
+import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 
 export async function POST(req: NextRequest) {
+  if (!(await verifyCrmUser(req))) return unauthorized();
   const { title, date, participants, transcript, summary, decisions } = await req.json() as {
     title: string;
     date: string;

@@ -41,6 +41,7 @@ import {
 import { contactCountry, exportStatusMeta, useCompliance } from "@/lib/compliance";
 import { useDocumentTemplates } from "@/lib/documentTemplates";
 import GenerateDocumentModal from "@/components/documents/GenerateDocumentModal";
+import { authFetch } from "@/lib/rapport";
 
 const ACT_ICON: Record<ActivityType, typeof Mail> = {
   note: StickyNote,
@@ -138,7 +139,7 @@ export default function ContactDetailModal({
     setAiError(null);
     setAiSummary(null);
     try {
-      const res = await fetch("/api/ai/summarize", {
+      const res = await authFetch("/api/ai/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contact, activities }),

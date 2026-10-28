@@ -1,8 +1,10 @@
 export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
+import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 
 export async function POST(req: NextRequest) {
+  if (!(await verifyCrmUser(req))) return unauthorized();
   const { file, mimeType } = (await req.json()) as {
     file: string; // base64
     mimeType: string;
@@ -10,6 +12,9 @@ export async function POST(req: NextRequest) {
 
   if (!file) {
     return Response.json({ error: "Fichier manquant." }, { status: 400 });
+  }
+  if (file.length > 28_000_000) {
+    return Response.json({ error: "Fichier trop lourd (20 Mo max)." }, { status: 413 });
   }
 
   const buffer = Buffer.from(file, "base64");

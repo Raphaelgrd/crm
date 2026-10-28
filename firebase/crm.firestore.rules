@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Projet crm-netforce. Seules les sessions ouvertes par le serveur du CRM
+// (/api/auth/crm-token, jeton portant crm: true) peuvent lire ou écrire.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null && request.auth.token.crm == true;
+    }
+  }
+}

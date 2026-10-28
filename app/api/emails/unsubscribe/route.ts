@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { escapeHtml } from "@/lib/escapeHtml";
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
@@ -16,9 +17,9 @@ export async function GET(req: NextRequest) {
       .box{text-align:center;padding:40px;max-width:400px}h1{font-size:1.5rem;color:#111}p{color:#555}</style>
       </head><body><div class="box">
       <h1>Désabonnement confirmé</h1>
-      <p>${email} ne recevra plus d'emails de Netforce Défense.</p>
+      <p>${escapeHtml(email)} ne recevra plus d'emails de Netforce Défense.</p>
       </div></body></html>`,
-      { headers: { "Content-Type": "text/html; charset=utf-8" } }
+      { headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" } }
     );
   } catch {
     return new NextResponse("Lien invalide.", { status: 400 });

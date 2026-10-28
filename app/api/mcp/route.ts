@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { timingSafeEqual } from "node:crypto";
+import { apiKeyOk } from "@/lib/server/apiKey";
 import { TOOLS, callTool } from "@/lib/server/mcpTools";
 
 // Serveur MCP (transport « Streamable HTTP », réponses JSON sans SSE) :
@@ -22,23 +22,6 @@ Données : contacts (pipeline commercial et levée de fonds), organisations, age
 Avant de créer un contact, cherche-le avec search_contacts pour éviter les doublons. Les dates sont au format YYYY-MM-DD.`;
 
 type JsonRpc = { jsonrpc?: string; id?: string | number | null; method?: string; params?: Record<string, unknown> };
-
-function keyOk(req: NextRequest): boolean {
-  const expected = (process.env.CRM_API_KEY ?? "").split(",").map((k) => k.trim()).filter(Boolean);
-  if (!expected.length) return false;
-  const auth = req.headers.get("authorization") ?? "";
-  const given =
-    (auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "") ||
-    req.headers.get("x-api-key")?.trim() ||
-    req.nextUrl.searchParams.get("key")?.trim() ||
-    "";
-  if (!given) return false;
-  const g = Buffer.from(given);
-  return expected.some((k) => {
-    const e = Buffer.from(k);
-    return e.length === g.length && timingSafeEqual(e, g);
-  });
-}
 
 const ok = (id: JsonRpc["id"], result: unknown) => ({ jsonrpc: "2.0", id, result });
 const err = (id: JsonRpc["id"], code: number, message: string) => ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
@@ -77,7 +60,7 @@ async function handle(msg: JsonRpc) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!keyOk(req)) {
+  if (!apiKeyOk(req, { allowQuery: true })) {
     return Response.json(err(null, -32001, "Clé API invalide ou manquante"), { status: 401, headers: CORS });
   }
   let body: JsonRpc | JsonRpc[];

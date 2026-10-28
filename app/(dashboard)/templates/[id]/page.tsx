@@ -392,6 +392,7 @@ export default function TemplateBuilderPage() {
           <iframe
             title="Aperçu de l'email"
             className="min-h-0 flex-1 border-0"
+            sandbox=""
             srcDoc={fillVariables(renderEmailHtml(tpl))}
           />
         ) : (

@@ -11,6 +11,7 @@ import {
   DEFAULT_MOU_TEMPLATE,
   DEFAULT_CERFA_TEMPLATE,
 } from "@/lib/documentTemplates";
+import { authFetch } from "@/lib/rapport";
 
 const TYPE_BADGE: Record<DocumentType, string> = {
   NDA: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 border-violet-200 dark:border-violet-800",
@@ -44,7 +45,7 @@ export default function ModelesPage() {
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
-      const res = await fetch("/api/documents/extract", {
+      const res = await authFetch("/api/documents/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ file: base64, mimeType: file.type }),

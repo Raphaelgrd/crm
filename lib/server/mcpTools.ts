@@ -51,20 +51,20 @@ const makeId = (prefix: string) =>
 const isDateKey = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 async function all(name: string): Promise<Doc[]> {
-  const snap = await getDocs(collection(crmDb(), name));
+  const snap = await getDocs(collection((await crmDb()), name));
   return snap.docs.map((d) => ({ ...(d.data() as Record<string, unknown>), id: d.id }));
 }
 
 async function one(name: string, id: string): Promise<Doc | null> {
   if (!id) return null;
-  const snap = await getDoc(doc(crmDb(), name, id));
+  const snap = await getDoc(doc((await crmDb()), name, id));
   return snap.exists() ? { ...(snap.data() as Record<string, unknown>), id: snap.id } : null;
 }
 
 async function logActivity(contactId: string, type: string, text: string, auto: boolean) {
   const t = now();
   const id = makeId("act");
-  await setDoc(doc(crmDb(), "activities", id), {
+  await setDoc(doc((await crmDb()), "activities", id), {
     id,
     contactId,
     type,
@@ -195,7 +195,7 @@ export const TOOLS: ToolDef[] = [
       const id = str(a.contactId);
       const c = await one("contacts", id);
       if (!c) throw new ToolError(`Contact introuvable : ${id}`);
-      const db = crmDb();
+      const db = (await crmDb());
       const [acts, events, loans] = await Promise.all([
         getDocs(query(collection(db, "activities"), where("contactId", "==", id))),
         getDocs(query(collection(db, "agenda"), where("contactId", "==", id))),
@@ -436,7 +436,7 @@ export const TOOLS: ToolDef[] = [
       checkFollowUp(a.nextFollowUpAt);
       const email = str(a.email).toLowerCase();
       if (email) {
-        const dup = await getDocs(query(collection(crmDb(), "contacts"), where("email", "==", email)));
+        const dup = await getDocs(query(collection((await crmDb()), "contacts"), where("email", "==", email)));
         if (!dup.empty) {
           throw new ToolError(`Un contact existe déjà avec l'email ${email} (id : ${dup.docs[0].id}). Utilise update_contact.`);
         }
@@ -459,7 +459,7 @@ export const TOOLS: ToolDef[] = [
         createdAt: t,
         updatedAt: t,
       };
-      await setDoc(doc(crmDb(), "contacts", id), contact);
+      await setDoc(doc((await crmDb()), "contacts", id), contact);
       await logActivity(id, "note", "Contact créé par l'assistant IA", true);
       return { created: contactSummary(contact) };
     },
@@ -484,7 +484,7 @@ export const TOOLS: ToolDef[] = [
       if (typeof patch.email === "string") patch.email = patch.email.toLowerCase();
       if (patch.tags !== undefined) patch.tags = Array.isArray(patch.tags) ? patch.tags.map(String) : [];
       if (!Object.keys(patch).length) throw new ToolError("Aucun champ à modifier.");
-      await updateDoc(doc(crmDb(), "contacts", id), { ...patch, updatedAt: now() });
+      await updateDoc(doc((await crmDb()), "contacts", id), { ...patch, updatedAt: now() });
       if (patch.stage && patch.stage !== c.stage) {
         await logActivity(id, "stage", `Étape : ${c.stage} → ${patch.stage}`, true);
       }
@@ -564,7 +564,7 @@ export const TOOLS: ToolDef[] = [
         createdAt: t,
         updatedAt: t,
       };
-      await setDoc(doc(crmDb(), "agenda", id), event);
+      await setDoc(doc((await crmDb()), "agenda", id), event);
       return { created: event };
     },
   },
@@ -591,7 +591,7 @@ export const TOOLS: ToolDef[] = [
       const patch = pick(a, ["title", "date", "startTime", "endTime", "notes", "done"]);
       if (patch.date !== undefined && !isDateKey(String(patch.date))) throw new ToolError("date doit être au format YYYY-MM-DD.");
       if (!Object.keys(patch).length) throw new ToolError("Aucun champ à modifier.");
-      await updateDoc(doc(crmDb(), "agenda", id), { ...patch, updatedAt: now() });
+      await updateDoc(doc((await crmDb()), "agenda", id), { ...patch, updatedAt: now() });
       return { updated: id, changes: patch };
     },
   },
@@ -630,7 +630,7 @@ export const TOOLS: ToolDef[] = [
         createdAt: t,
         updatedAt: t,
       };
-      await setDoc(doc(crmDb(), "organizations", id), org);
+      await setDoc(doc((await crmDb()), "organizations", id), org);
       return { created: org };
     },
   },

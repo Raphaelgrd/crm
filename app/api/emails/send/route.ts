@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
+import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
+import { escapeHtml } from "@/lib/escapeHtml";
 
 export interface EmailRecipient {
   id: string;
@@ -17,6 +19,7 @@ export interface SendEmailPayload {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await verifyCrmUser(req))) return unauthorized();
   if (!process.env.RESEND_API_KEY) {
     return NextResponse.json({ error: "RESEND_API_KEY non configurée" }, { status: 500 });
   }
@@ -44,9 +47,9 @@ export async function POST(req: NextRequest) {
     const unsubLink = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.netforce-defense.com"}/api/emails/unsubscribe?token=${unsubToken}`;
 
     const personalizedHtml = html
-      .replace(/\{\{prénom\}\}/g, recipient.firstName || "")
-      .replace(/\{\{nom\}\}/g, recipient.lastName || "")
-      .replace(/\{\{email\}\}/g, recipient.email);
+      .replace(/\{\{prénom\}\}/g, escapeHtml(recipient.firstName || ""))
+      .replace(/\{\{nom\}\}/g, escapeHtml(recipient.lastName || ""))
+      .replace(/\{\{email\}\}/g, escapeHtml(recipient.email));
 
     const fullHtml = `${personalizedHtml}
 <br/><br/>

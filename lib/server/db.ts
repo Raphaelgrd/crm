@@ -1,11 +1,21 @@
 import { createHmac } from "node:crypto";
 import { getApps, initializeApp } from "firebase/app";
-import { Auth, createUserWithEmailAndPassword, getAuth, signInWithEmailAndPassword } from "firebase/auth";
+import {
+  Auth,
+  createUserWithEmailAndPassword,
+  getAuth,
+  signInWithCustomToken,
+  signInWithEmailAndPassword,
+} from "firebase/auth";
+import { getAuth as getAdminAuth } from "firebase-admin/auth";
+import { crmAdminApp } from "./admin";
 import { Firestore, doc, getFirestore, setDoc } from "firebase/firestore/lite";
 
 const CRM_APP = "server-crm";
+let crmSignIn: Promise<void> | null = null;
 
-export function crmDb(): Firestore {
+/** Base du CRM pour les routes serveur, avec une session « serveur » quand le compte de service est configuré. */
+export async function crmDb(): Promise<Firestore> {
   const app =
     getApps().find((a) => a.name === CRM_APP) ??
     initializeApp(
@@ -19,6 +29,18 @@ export function crmDb(): Firestore {
       },
       CRM_APP,
     );
+  const admin = crmAdminApp();
+  const auth = getAuth(app);
+  if (admin && !auth.currentUser) {
+    crmSignIn ??= getAdminAuth(admin)
+      .createCustomToken("crm-server", { crm: true, admin: true, server: true })
+      .then((t) => signInWithCustomToken(auth, t))
+      .then(() => undefined)
+      .finally(() => {
+        crmSignIn = null;
+      });
+    await crmSignIn;
+  }
   return getFirestore(app);
 }
 

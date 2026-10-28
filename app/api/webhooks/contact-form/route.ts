@@ -1,16 +1,16 @@
 import { NextRequest } from "next/server";
-import { getApps, initializeApp } from "firebase/app";
 import {
   collection,
   doc,
   getDocs,
-  getFirestore,
   limit,
   query,
   setDoc,
   updateDoc,
   where,
 } from "firebase/firestore/lite";
+import { crmDb } from "@/lib/server/db";
+import { safeEqual } from "@/lib/server/apiKey";
 
 // Reçoit les formulaires du site netforce-defense.com (contact + investisseurs).
 // Le serveur du site POST ici avec l'en-tête `x-webhook-secret`, qui doit
@@ -19,25 +19,6 @@ import {
 // simplement une note dans sa timeline (pas de doublon).
 
 export const runtime = "nodejs";
-
-const APP_NAME = "webhook";
-
-function db() {
-  const app =
-    getApps().find((a) => a.name === APP_NAME) ??
-    initializeApp(
-      {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-      },
-      APP_NAME,
-    );
-  return getFirestore(app);
-}
 
 function makeId(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -60,7 +41,7 @@ export async function POST(req: NextRequest) {
   if (!secret) {
     return Response.json({ error: "CONTACT_FORM_WEBHOOK_SECRET manquant" }, { status: 500 });
   }
-  if (req.headers.get("x-webhook-secret") !== secret) {
+  if (!safeEqual(req.headers.get("x-webhook-secret") ?? "", secret)) {
     return Response.json({ error: "Non autorisé" }, { status: 401 });
   }
 
@@ -109,7 +90,7 @@ export async function POST(req: NextRequest) {
     .join("\n");
 
   const now = new Date().toISOString();
-  const firestore = db();
+  const firestore = await crmDb();
 
   try {
     const existing = await getDocs(

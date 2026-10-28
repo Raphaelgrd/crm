@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
+import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 interface Message {
   role: "user" | "assistant" | "system" | "tool";
@@ -90,6 +91,7 @@ const TOOLS = [
 ];
 
 export async function POST(req: NextRequest) {
+  if (!(await verifyCrmUser(req))) return unauthorized();
   const { messages, crmContext } = (await req.json()) as {
     messages: Message[];
     crmContext: {

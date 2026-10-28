@@ -2,11 +2,13 @@ let mediaRecorder = null;
 let stream = null;
 let transcript = "";
 let crmUrl = "http://localhost:3000";
+let apiKey = "";
 let pendingChunks = 0;
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "START_CAPTURE") {
     crmUrl = msg.crmUrl || crmUrl;
+    apiKey = msg.apiKey || apiKey;
     startCapture(msg.streamId);
   }
   if (msg.type === "STOP_CAPTURE") {
@@ -56,6 +58,7 @@ async function transcribeChunk(blob) {
 
     const res = await fetch(`${crmUrl}/api/ai/transcribe`, {
       method: "POST",
+      headers: { "x-api-key": apiKey },
       body: fd,
     });
 

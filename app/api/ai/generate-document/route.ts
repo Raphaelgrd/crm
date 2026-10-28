@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 
 const STRUCTURAL_VARS: Record<string, (c: Record<string, string>) => string> = {
   date: () =>
@@ -22,6 +23,7 @@ function fillStructural(template: string, contact: Record<string, string>): stri
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await verifyCrmUser(req))) return unauthorized();
   const { templateContent, contact } = (await req.json()) as {
     templateContent: string;
     contact: Record<string, string>;

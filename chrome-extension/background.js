@@ -60,7 +60,8 @@ async function startRecording(tabId) {
     // Give offscreen doc a moment to initialize
     await new Promise((r) => setTimeout(r, 200));
 
-    chrome.runtime.sendMessage({ type: "START_CAPTURE", streamId, crmUrl }).catch(() => {});
+    const { apiKey = "" } = await chrome.storage.local.get({ apiKey: "" });
+    chrome.runtime.sendMessage({ type: "START_CAPTURE", streamId, crmUrl, apiKey }).catch(() => {});
 
     chrome.action.setBadgeText({ text: "●" });
     chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
