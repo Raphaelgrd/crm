@@ -155,6 +155,13 @@ export function frAuthError(code: string) {
   return frAuthErrors[code] ?? "Erreur de connexion. Réessayez.";
 }
 
+/** Emails ayant accès aux sections restreintes (Data Room, Équipe). */
+export const CRM_ADMINS = [
+  "gerardraphael01@gmail.com",
+  "raphael.gerard@nexstun.com",
+  "laurent.mollinari@nexstun.com",
+];
+
 // --- Auth partagée : le compte du Rapport d'activité EST le compte du CRM ---
 
 export function getRapportAuth() {

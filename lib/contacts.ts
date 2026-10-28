@@ -27,6 +27,7 @@ export const DEFAULT_CATEGORIES = [
   "Distributeur",
   "Ambassadeur",
   "Institutionnel",
+  "Banque",
 ];
 
 export interface Contact {
