@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export interface EmailRecipient {
   id: string;
   email: string;
@@ -22,6 +20,7 @@ export async function POST(req: NextRequest) {
   if (!process.env.RESEND_API_KEY) {
     return NextResponse.json({ error: "RESEND_API_KEY non configurée" }, { status: 500 });
   }
+  const resend = new Resend(process.env.RESEND_API_KEY);
 
   const body: SendEmailPayload = await req.json();
   const { recipients, subject, html, fromName, replyTo } = body;
