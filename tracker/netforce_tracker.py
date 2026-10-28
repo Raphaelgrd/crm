@@ -55,7 +55,6 @@ BROWSER_APPS = {"Google Chrome", "Chrome", "Arc", "Safari", "Firefox"}
 # Microsoft Graph (Outlook)
 GRAPH_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 GRAPH_DEVICE_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/devicecode"
-GRAPH_CLIENT_ID = "d3590ed6-52b3-4102-aeff-aad2292ab01c"  # Microsoft Office public client
 GRAPH_SCOPES = "Calendars.Read Mail.Read offline_access"
 
 # ─── Config locale ─────────────────────────────────────────────────────────────
@@ -248,7 +247,7 @@ def graph_device_auth(cfg: dict) -> dict:
     """Lance le flux d'autorisation par device code pour Microsoft Graph."""
     r = requests.post(
         GRAPH_DEVICE_URL,
-        data={"client_id": GRAPH_CLIENT_ID, "scope": GRAPH_SCOPES},
+        data={"client_id": cfg["graph_client_id"], "scope": GRAPH_SCOPES},
     )
     r.raise_for_status()
     data = r.json()
@@ -263,7 +262,7 @@ def graph_device_auth(cfg: dict) -> dict:
         r2 = requests.post(
             GRAPH_TOKEN_URL,
             data={
-                "client_id": GRAPH_CLIENT_ID,
+                "client_id": cfg["graph_client_id"],
                 "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
                 "device_code": data["device_code"],
             },
@@ -291,7 +290,7 @@ def get_graph_token(cfg: dict) -> Optional[str]:
             r = requests.post(
                 GRAPH_TOKEN_URL,
                 data={
-                    "client_id": GRAPH_CLIENT_ID,
+                    "client_id": cfg["graph_client_id"],
                     "grant_type": "refresh_token",
                     "refresh_token": cfg["graph_refresh_token"],
                     "scope": GRAPH_SCOPES,
@@ -441,12 +440,17 @@ def setup():
     # Outlook
     rep = input("\nConnecter Outlook pour le suivi des réunions et emails ? (o/n) : ").strip().lower()
     if rep == "o":
-        try:
-            cfg = graph_device_auth(cfg)
-        except ImportError:
-            print("⚠ Installe requests (déjà fait normalement). Skipping.")
-        except Exception as e:
-            print(f"⚠ Outlook auth error: {e}")
+        client_id = input(
+            f"  ID d'application Azure (client ID){' [Entrée = garder l actuel]' if cfg.get('graph_client_id') else ''} : "
+        ).strip() or cfg.get("graph_client_id", "")
+        if not client_id:
+            print("⚠ Pas d'ID d'application, Outlook ignoré.")
+        else:
+            cfg["graph_client_id"] = client_id
+            try:
+                cfg = graph_device_auth(cfg)
+            except Exception as e:
+                print(f"⚠ Outlook auth error: {e}")
 
     # Canva
     rep2 = input("\nConnecter Canva pour le suivi des designs ? (o/n) : ").strip().lower()

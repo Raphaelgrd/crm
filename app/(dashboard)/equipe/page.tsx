@@ -665,11 +665,11 @@ function SetupGuide() {
           </div>
           <div>
             <p className="text-foreground font-semibold mb-1">Intégration Outlook</p>
-            <div className="bg-muted rounded-lg p-3 font-mono text-xs">
-              <p>pip3 install msal</p>
-              <p># Dans --setup, active l&apos;option Outlook</p>
-            </div>
-            <p className="text-muted-foreground text-xs mt-1">Affiche les réunions du calendrier et le comptage d&apos;emails envoyés.</p>
+            <p className="text-muted-foreground text-xs">
+              Nécessite l&apos;ID d&apos;une application enregistrée sur portal.azure.com (flux client public activé, permissions
+              Calendars.Read et Mail.Read). Relance <code className="bg-muted rounded px-1">--setup</code>, réponds « o » à Outlook et colle l&apos;ID.
+              Affiche les réunions du calendrier et le nombre d&apos;emails envoyés/reçus.
+            </p>
           </div>
           <div>
             <p className="text-foreground font-semibold mb-1">Intégration Canva</p>
