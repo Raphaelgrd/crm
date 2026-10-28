@@ -660,10 +660,7 @@ def run():
     idle_total: int = 0
     active_total: int = 0
 
-    current_app: Optional[str] = None
-    current_url: Optional[str] = None
-    app_start: float = time.time()
-    url_start: float = time.time()
+    last_tick: float = time.time()
     last_sync: float = 0
     outlook_cache: Optional[dict] = None
     outlook_last_fetch: float = 0
@@ -684,65 +681,42 @@ def run():
                 canva_cache = None
 
             now = time.time()
+            # Temps réel écoulé depuis le dernier passage, plafonné pour ignorer une mise en veille.
+            tick = int(min(max(now - last_tick, 0), 60))
+            last_tick = now
             app = get_active_app()
-            idle = get_idle_time()
-            is_idle = idle > IDLE_THRESHOLD
+            is_idle = get_idle_time() > IDLE_THRESHOLD
 
-            # Accumulation temps actif/inactif
             if is_idle:
-                idle_total += POLL_INTERVAL
+                idle_total += tick
             else:
-                active_total += POLL_INTERVAL
+                active_total += tick
 
-            # Changement d'app
-            if app != current_app:
-                elapsed = int(now - app_start)
-                if current_app and not is_idle:
-                    sessions[current_app] = sessions.get(current_app, 0) + elapsed
-                current_app = app
-                app_start = now
-
-            # Accumulation temps app en cours
-            if current_app and not is_idle:
-                # Titre de fenêtre → document
+            # Chaque passage crédite l'app, le document et le site au premier plan, et rien d'autre.
+            if app and not is_idle:
+                sessions[app] = sessions.get(app, 0) + tick
                 try:
-                    title = get_window_title(current_app)
-                    if title:
-                        key = f"{current_app}::{title}"
+                    title = get_window_title(app)
+                    if title and title != "missing value":
+                        key = f"{app}::{title}"
                         if key not in doc_acc:
-                            doc_acc[key] = {"name": title, "app": current_app, "duration": 0}
-                        doc_acc[key]["duration"] += POLL_INTERVAL
+                            doc_acc[key] = {"name": title, "app": app, "duration": 0}
+                        doc_acc[key]["duration"] += tick
                 except Exception:
                     pass
-
-                # URL (navigateurs)
-                if current_app in BROWSER_APPS:
+                if app in BROWSER_APPS:
                     try:
-                        new_url = get_browser_url(current_app)
-                        if new_url != current_url:
-                            if current_url:
-                                dom = url_to_domain(current_url)
-                                elapsed_url = int(now - url_start)
-                                urls[dom] = urls.get(dom, 0) + elapsed_url
-                            current_url = new_url
-                            url_start = now
+                        url = get_browser_url(app)
+                        if url:
+                            dom = url_to_domain(url)
+                            urls[dom] = urls.get(dom, 0) + tick
                     except Exception:
                         pass
 
             # Sync Firestore
             if now - last_sync > SYNC_INTERVAL:
-                # Snapshot sans modifier current_app/url
                 snap_sessions = dict(sessions)
-                if current_app and not is_idle:
-                    snap_sessions[current_app] = (
-                        snap_sessions.get(current_app, 0) + int(now - app_start)
-                    )
-
                 snap_urls = dict(urls)
-                if current_url:
-                    dom = url_to_domain(current_url)
-                    snap_urls[dom] = snap_urls.get(dom, 0) + int(now - url_start)
-
                 snap_docs = [v for v in doc_acc.values() if v["duration"] > 10]
 
                 # Outlook (toutes les 10min)
