@@ -23,6 +23,7 @@ import json
 import os
 import sys
 import argparse
+import getpass
 import platform
 from datetime import datetime, date
 from pathlib import Path
@@ -428,7 +429,7 @@ def sync_to_firestore(
 def setup():
     print("=== Configuration Netforce Tracker v2 ===\n")
     email = input("Ton email CRM : ").strip()
-    password = input("Mot de passe CRM : ").strip()
+    password = getpass.getpass("Mot de passe CRM (masqué) : ").strip()
     print("Connexion…")
     try:
         cfg = sign_in(email, password)
@@ -450,7 +451,7 @@ def setup():
     # Canva
     rep2 = input("\nConnecter Canva pour le suivi des designs ? (o/n) : ").strip().lower()
     if rep2 == "o":
-        key = input("  Clé API Canva (Bearer token) : ").strip()
+        key = getpass.getpass("  Clé API Canva (masquée) : ").strip()
         if key:
             cfg["canva_api_key"] = key
             print("✓ Clé Canva enregistrée.")
