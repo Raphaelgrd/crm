@@ -4,7 +4,7 @@ import { useState } from "react";
 import type React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CRM_ADMINS, initials, signOutRapport, useCrmUser } from "@/lib/rapport";
+import { initials, signOutRapport, useCrmUser } from "@/lib/rapport";
 import {
   LayoutDashboard,
   Users,
@@ -83,10 +83,8 @@ const NAV_GROUPS: {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { user, loading, name } = useCrmUser();
-  const isAdmin = !loading && CRM_ADMINS.map((e) => e.toLowerCase()).includes(
-    (user?.email ?? "").toLowerCase(),
-  );
+  const { loading, name, isAdmin: admin } = useCrmUser();
+  const isAdmin = !loading && admin;
   const userInitial = initials(name) || "?";
   const [expanded, setExpanded] = useState(true);
 

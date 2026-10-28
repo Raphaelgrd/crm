@@ -12,10 +12,10 @@ import {
 } from "lucide-react";
 import { collection, deleteDoc, doc, getCountFromServer, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { TeamAccess } from "@/components/settings/TeamAccess";
 
-// Page Paramètres / Admin du CRM : état des données, sauvegarde JSON,
-// intégrations, zone de danger. (La gestion des utilisateurs viendra avec
-// Firebase Auth ; celle du Rapport d'activité est dans /rapport → Paramètres.)
+// Page Paramètres / Admin du CRM : équipe et accès, état des données,
+// sauvegarde JSON, intégrations, zone de danger.
 
 const COLLECTIONS: { id: string; label: string }[] = [
   { id: "contacts", label: "Contacts" },
@@ -113,6 +113,8 @@ export default function SettingsPage() {
             {message}
           </p>
         )}
+
+        <TeamAccess />
 
         {/* Données */}
         <div className="border-border bg-card rounded-2xl border p-5 shadow-(--shadow-card)">

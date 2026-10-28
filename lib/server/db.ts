@@ -1,6 +1,7 @@
+import { createHmac } from "node:crypto";
 import { getApps, initializeApp } from "firebase/app";
-import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
-import { Firestore, getFirestore } from "firebase/firestore/lite";
+import { Auth, createUserWithEmailAndPassword, getAuth, signInWithEmailAndPassword } from "firebase/auth";
+import { Firestore, doc, getFirestore, setDoc } from "firebase/firestore/lite";
 
 const CRM_APP = "server-crm";
 
@@ -31,22 +32,49 @@ const rapportConfig = {
   appId: "1:562828872246:web:09b24b68e4c879f182a697",
 };
 
+// Le compte de l'Assistant IA est dérivé de CRM_API_KEY : une nouvelle clé crée un nouveau compte,
+// qu'un admin doit autoriser dans Paramètres → Équipe et accès.
+function botCredentials(): { email: string; password: string } | null {
+  if (process.env.RAPPORT_BOT_EMAIL && process.env.RAPPORT_BOT_PASSWORD) {
+    return { email: process.env.RAPPORT_BOT_EMAIL, password: process.env.RAPPORT_BOT_PASSWORD };
+  }
+  const key = (process.env.CRM_API_KEY ?? "").split(",")[0].trim();
+  if (!key) return null;
+  const h = createHmac("sha256", key).update("netforce-rapport-bot").digest("hex");
+  return { email: `assistant-ia-${h.slice(0, 8)}@netforce-defense.com`, password: h };
+}
+
 let rapportSignIn: Promise<void> | null = null;
 
-/** Projet du rapport d'activité : lisible seulement par un compte connecté (RAPPORT_BOT_EMAIL / PASSWORD). */
-export async function rapportDb(): Promise<Firestore | null> {
-  const email = process.env.RAPPORT_BOT_EMAIL;
-  const password = process.env.RAPPORT_BOT_PASSWORD;
-  if (!email || !password) return null;
+async function signInBot(auth: Auth, db: Firestore, creds: { email: string; password: string }) {
+  try {
+    await signInWithEmailAndPassword(auth, creds.email, creds.password);
+  } catch (e) {
+    const code = (e as { code?: string }).code ?? "";
+    if (code !== "auth/user-not-found" && code !== "auth/invalid-credential") throw e;
+    const cred = await createUserWithEmailAndPassword(auth, creds.email, creds.password);
+    await setDoc(doc(db, "users", cred.user.uid), {
+      name: "Assistant IA",
+      email: creds.email,
+      isAdmin: false,
+      isBot: true,
+      createdAt: new Date().toISOString(),
+    });
+  }
+}
+
+/** Projet du rapport d'activité, lu avec le compte de l'Assistant IA. */
+export async function rapportDb(): Promise<{ db: Firestore; uid: string } | null> {
+  const creds = botCredentials();
+  if (!creds) return null;
   const app = getApps().find((a) => a.name === RAPPORT_APP) ?? initializeApp(rapportConfig, RAPPORT_APP);
   const auth = getAuth(app);
+  const db = getFirestore(app);
   if (!auth.currentUser) {
-    rapportSignIn ??= signInWithEmailAndPassword(auth, email, password)
-      .then(() => undefined)
-      .finally(() => {
-        rapportSignIn = null;
-      });
+    rapportSignIn ??= signInBot(auth, db, creds).finally(() => {
+      rapportSignIn = null;
+    });
     await rapportSignIn;
   }
-  return getFirestore(app);
+  return { db, uid: auth.currentUser!.uid };
 }

@@ -187,28 +187,103 @@ export async function signOutRapport() {
   await fbSignOut(auth());
 }
 
-/** Session + prénom de l'utilisateur connecté (pour l'en-tête du CRM). */
+/** Propriétaires : toujours admins, impossibles à rétrograder depuis l'appli. */
+export function isOwnerEmail(email: string | null | undefined): boolean {
+  return CRM_ADMINS.map((e) => e.toLowerCase()).includes((email ?? "").toLowerCase());
+}
+
+/** Session, prénom et droits admin de l'utilisateur connecté. */
 export function useCrmUser() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     return onAuthStateChanged(auth(), (u) => {
       setUser(u);
-      setLoading(false);
-      if (u) {
-        void getDoc(doc(db(), "users", u.uid)).then((snap) => {
-          const n = (snap.data() as RapportUser | undefined)?.name;
-          setName(n || u.email?.split("@")[0] || "");
-        });
-      } else {
+      if (!u) {
         setName("");
+        setIsAdmin(false);
+        setLoading(false);
+        return;
       }
+      setLoading(true);
+      getDoc(doc(db(), "users", u.uid))
+        .then((snap) => {
+          const data = snap.data() as RapportUser | undefined;
+          setName(data?.name || u.email?.split("@")[0] || "");
+          setIsAdmin(isOwnerEmail(u.email) || data?.isAdmin === true);
+        })
+        .catch(() => {
+          setName(u.email?.split("@")[0] || "");
+          setIsAdmin(isOwnerEmail(u.email));
+        })
+        .finally(() => setLoading(false));
     });
   }, []);
 
-  return { user, loading, name };
+  return { user, loading, name, isAdmin };
+}
+
+export interface TeamMember {
+  uid: string;
+  name: string;
+  email: string;
+  isAdmin: boolean;
+  isOwner: boolean;
+  isBot: boolean;
+}
+
+/** Comptes de l'équipe (collection users du projet rapport) + gestion des droits admin. */
+export function useTeamMembers() {
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const snap = await getDocs(collection(db(), "users"));
+      const list = snap.docs.map((d) => {
+        const u = d.data() as RapportUser & { isBot?: boolean };
+        const owner = isOwnerEmail(u.email);
+        return {
+          uid: d.id,
+          name: u.name || u.email?.split("@")[0] || "?",
+          email: u.email ?? "",
+          isAdmin: owner || u.isAdmin === true,
+          isOwner: owner,
+          isBot: u.isBot === true,
+        };
+      });
+      list.sort(
+        (a, b) =>
+          Number(b.isOwner) - Number(a.isOwner) ||
+          Number(b.isAdmin) - Number(a.isAdmin) ||
+          a.name.localeCompare(b.name),
+      );
+      setMembers(list);
+      setError("");
+    } catch {
+      setError("Impossible de charger les comptes de l'équipe.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const setAdmin = useCallback(
+    async (uid: string, makeAdmin: boolean) => {
+      await setDoc(doc(db(), "users", uid), { isAdmin: makeAdmin }, { merge: true });
+      await load();
+    },
+    [load],
+  );
+
+  return { members, loading, error, setAdmin };
 }
 
 const EMPTY_DATA: RapportData = {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createCollectionStore } from "@/lib/firebase";
-import { CRM_ADMINS, useCrmUser } from "@/lib/rapport";
+import { useCrmUser } from "@/lib/rapport";
 
 // ⚠️ Fichiers stockés localement dans IndexedDB (voir commentaire d'origine).
 // Les métadonnées des dossiers (visibilité, partage) vivent dans Firestore.
@@ -26,8 +26,6 @@ export interface FolderMeta {
   createdAt: string;
 }
 
-/** Emails des administrateurs pouvant gérer la visibilité des dossiers. */
-export const DATAROOM_ADMINS = CRM_ADMINS;
 
 const DB_NAME = "netforce-dataroom";
 const STORE = "files";
@@ -115,9 +113,8 @@ export function useDataRoom() {
   const [allFolderMetas, setAllFolderMetas] = useState<FolderMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const urlsRef = useRef<string[]>([]);
-  const { user } = useCrmUser();
+  const { user, isAdmin } = useCrmUser();
   const userEmail = (user?.email ?? "").toLowerCase();
-  const isAdmin = DATAROOM_ADMINS.map((e) => e.toLowerCase()).includes(userEmail);
 
   const refresh = useCallback(async () => {
     const records = await dbGetAll();

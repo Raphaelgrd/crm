@@ -111,6 +111,18 @@ function checkFollowUp(v: unknown) {
   }
 }
 
+async function teamDb() {
+  const r = await rapportDb();
+  if (!r) throw new ToolError("CRM_API_KEY n'est pas configurée sur le serveur.");
+  const me = await getDoc(doc(r.db, "users", r.uid));
+  if (me.data()?.isAdmin !== true) {
+    throw new ToolError(
+      "L'Assistant IA n'a pas encore accès à l'activité de l'équipe. Un admin doit cliquer sur « Donner l'accès » à côté d'« Assistant IA » dans Paramètres → Équipe et accès du CRM, puis réessayer.",
+    );
+  }
+  return r.db;
+}
+
 const contactFields = {
   firstName: { type: "string" },
   lastName: { type: "string" },
@@ -355,8 +367,7 @@ export const TOOLS: ToolDef[] = [
     annotations: { readOnlyHint: true },
     inputSchema: { type: "object", properties: { date: { type: "string", description: "YYYY-MM-DD (défaut : aujourd'hui)" } } },
     async run(a) {
-      const db = await rapportDb();
-      if (!db) throw new ToolError("Accès au rapport non configuré (RAPPORT_BOT_EMAIL / RAPPORT_BOT_PASSWORD).");
+      const db = await teamDb();
       const date = str(a.date) || today();
       const [activity, users] = await Promise.all([
         getDocs(query(collection(db, "activity_tracker"), where("date", "==", date))),
@@ -386,8 +397,7 @@ export const TOOLS: ToolDef[] = [
       },
     },
     async run(a) {
-      const db = await rapportDb();
-      if (!db) throw new ToolError("Accès au rapport non configuré (RAPPORT_BOT_EMAIL / RAPPORT_BOT_PASSWORD).");
+      const db = await teamDb();
       const from = str(a.from) || new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
       const to = str(a.to) || today();
       const logs = await getDocs(
