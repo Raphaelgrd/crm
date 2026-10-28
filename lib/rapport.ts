@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getApp, getApps, initializeApp } from "firebase/app";
+import { deleteApp, getApp, getApps, initializeApp } from "firebase/app";
 import {
   User,
   createUserWithEmailAndPassword,
@@ -214,6 +214,22 @@ export function useCrmUser() {
           const data = snap.data() as RapportUser | undefined;
           setName(data?.name || u.email?.split("@")[0] || "");
           setIsAdmin(isOwnerEmail(u.email) || data?.isAdmin === true);
+          // Comptes créés hors de l'appli (console Firebase) : on crée leur fiche pour qu'ils apparaissent dans l'équipe.
+          if (!snap.exists() || !data?.email) {
+            void setDoc(
+              doc(db(), "users", u.uid),
+              snap.exists()
+                ? { email: u.email }
+                : {
+                    name: u.email?.split("@")[0] || "",
+                    email: u.email,
+                    validators: ["Laurent", "Sébastien"],
+                    isAdmin: false,
+                    createdAt: new Date().toISOString(),
+                  },
+              { merge: true },
+            ).catch(() => {});
+          }
         })
         .catch(() => {
           setName(u.email?.split("@")[0] || "");
@@ -224,6 +240,26 @@ export function useCrmUser() {
   }, []);
 
   return { user, loading, name, isAdmin };
+}
+
+/** Crée le compte d'un membre sans déconnecter l'admin (instance Firebase temporaire). */
+export async function createTeamAccount(name: string, email: string, password: string, makeAdmin: boolean) {
+  const tmp = initializeApp(rapportConfig, `rapport-create-${Date.now()}`);
+  try {
+    const tmpAuth = getAuth(tmp);
+    const cred = await createUserWithEmailAndPassword(tmpAuth, email, password);
+    await setDoc(doc(getFirestore(tmp), "users", cred.user.uid), {
+      name,
+      email: cred.user.email,
+      validators: ["Laurent", "Sébastien"],
+      isAdmin: false,
+      createdAt: new Date().toISOString(),
+    });
+    await fbSignOut(tmpAuth);
+    if (makeAdmin) await setDoc(doc(db(), "users", cred.user.uid), { isAdmin: true }, { merge: true });
+  } finally {
+    await deleteApp(tmp);
+  }
 }
 
 export interface TeamMember {
@@ -283,7 +319,7 @@ export function useTeamMembers() {
     [load],
   );
 
-  return { members, loading, error, setAdmin };
+  return { members, loading, error, setAdmin, reload: load };
 }
 
 const EMPTY_DATA: RapportData = {
