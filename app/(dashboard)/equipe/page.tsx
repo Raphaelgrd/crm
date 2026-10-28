@@ -673,7 +673,11 @@ function SetupGuide() {
           </div>
           <div>
             <p className="text-foreground font-semibold mb-1">Intégration Canva</p>
-            <p className="text-muted-foreground text-xs">Nécessite une clé API Canva Connect. Dans --setup, entre ta clé API Canva pour suivre les designs édités.</p>
+            <p className="text-muted-foreground text-xs">
+              Crée une intégration sur canva.com/developers (scope design:meta:read, URL de redirection
+              http://127.0.0.1:8765/callback). Relance <code className="bg-muted rounded px-1">--setup</code>, réponds « o » à Canva,
+              colle le Client ID et le secret, puis autorise l&apos;accès dans le navigateur.
+            </p>
           </div>
         </div>
       )}

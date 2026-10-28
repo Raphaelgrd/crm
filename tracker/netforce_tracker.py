@@ -354,25 +354,145 @@ def fetch_outlook_activity(cfg: dict, today_iso: str) -> Optional[dict]:
 
 # ─── Intégration Canva ─────────────────────────────────────────────────────────
 
+CANVA_AUTH_URL = "https://www.canva.com/api/oauth/authorize"
+CANVA_TOKEN_URL = "https://api.canva.com/rest/v1/oauth/token"
+CANVA_REDIRECT_PORT = 8765
+CANVA_REDIRECT_URI = f"http://127.0.0.1:{CANVA_REDIRECT_PORT}/callback"
+CANVA_SCOPES = "design:meta:read"
+
+def _canva_token_request(cfg: dict, data: dict) -> dict:
+    r = requests.post(
+        CANVA_TOKEN_URL,
+        data=data,
+        auth=(cfg["canva_client_id"], cfg["canva_client_secret"]),
+        timeout=15,
+    )
+    d = r.json()
+    if "access_token" not in d:
+        raise RuntimeError(d.get("error_description") or d.get("error") or r.text)
+    cfg["canva_access_token"] = d["access_token"]
+    # Canva fait tourner le refresh token : on garde toujours le dernier reçu.
+    cfg["canva_refresh_token"] = d.get("refresh_token", cfg.get("canva_refresh_token", ""))
+    cfg["canva_expires_at"] = time.time() + int(d.get("expires_in", 14400)) - 60
+    save_config(cfg)
+    return cfg
+
+def canva_oauth(cfg: dict) -> dict:
+    import base64, hashlib, secrets, webbrowser
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from urllib.parse import urlencode, urlparse, parse_qs
+
+    verifier = secrets.token_urlsafe(64)
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+    state = secrets.token_urlsafe(16)
+    url = CANVA_AUTH_URL + "?" + urlencode({
+        "code_challenge": challenge,
+        "code_challenge_method": "s256",
+        "scope": CANVA_SCOPES,
+        "response_type": "code",
+        "client_id": cfg["canva_client_id"],
+        "redirect_uri": CANVA_REDIRECT_URI,
+        "state": state,
+    })
+
+    result: dict = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            q = parse_qs(urlparse(self.path).query)
+            if "code" in q or "error" in q:
+                result["code"] = q.get("code", [None])[0]
+                result["state"] = q.get("state", [None])[0]
+                result["error"] = q.get("error_description", q.get("error", [None]))[0]
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write("<h2>Canva : c'est bon, tu peux fermer cet onglet.</h2>".encode())
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", CANVA_REDIRECT_PORT), Handler)
+    server.timeout = 5
+    print("\n[Canva] Ouverture du navigateur pour autoriser l'accès…")
+    print(f"[Canva] Si rien ne s'ouvre, colle ce lien dans ton navigateur :\n{url}\n")
+    webbrowser.open(url)
+    deadline = time.time() + 300
+    while time.time() < deadline and "code" not in result:
+        server.handle_request()
+    server.server_close()
+
+    if result.get("error") or not result.get("code"):
+        print(f"[Canva] ✗ Autorisation échouée : {result.get('error') or 'délai expiré'}")
+        return cfg
+    if result.get("state") != state:
+        print("[Canva] ✗ Réponse invalide (state différent).")
+        return cfg
+
+    cfg = _canva_token_request(cfg, {
+        "grant_type": "authorization_code",
+        "code": result["code"],
+        "code_verifier": verifier,
+        "redirect_uri": CANVA_REDIRECT_URI,
+    })
+    print("[Canva] ✓ Connecté !")
+    return cfg
+
+def get_canva_token(cfg: dict, force_refresh: bool = False) -> Optional[str]:
+    if not cfg.get("canva_refresh_token"):
+        return None
+    if force_refresh or time.time() > cfg.get("canva_expires_at", 0):
+        try:
+            _canva_token_request(cfg, {
+                "grant_type": "refresh_token",
+                "refresh_token": cfg["canva_refresh_token"],
+            })
+        except Exception as e:
+            print(f"[Canva] Refresh token error: {e} — relance --setup")
+            return None
+    return cfg.get("canva_access_token")
+
+def _canva_local_dt(value) -> Optional[datetime]:
+    # L'API renvoie un timestamp Unix ; on accepte aussi l'ISO par sécurité.
+    try:
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value)
+        if isinstance(value, str) and value:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone().replace(tzinfo=None)
+    except Exception:
+        pass
+    return None
+
 def fetch_canva_activity(cfg: dict, today_iso: str) -> Optional[dict]:
-    api_key = cfg.get("canva_api_key")
-    if not api_key:
+    token = get_canva_token(cfg)
+    if not token:
         return None
     try:
         r = requests.get(
             "https://api.canva.com/rest/v1/designs",
-            headers={"Authorization": f"Bearer {api_key}"},
-            params={"page_size": 50},
+            headers={"Authorization": f"Bearer {token}"},
+            params={"sort_by": "modified_descending"},
             timeout=10,
         )
+        if r.status_code == 401:
+            token = get_canva_token(cfg, force_refresh=True)
+            if not token:
+                return None
+            r = requests.get(
+                "https://api.canva.com/rest/v1/designs",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"sort_by": "modified_descending"},
+                timeout=10,
+            )
         if not r.ok:
+            print(f"[Canva] API {r.status_code}: {r.text[:200]}")
             return None
         designs = []
         for d in r.json().get("items", []):
-            updated = d.get("updated_at", "")
-            if updated.startswith(today_iso):
-                designs.append({"name": d.get("title", "Sans titre"), "editedAt": updated})
-        return {"designs": designs, "exportsCreated": 0}
+            dt = _canva_local_dt(d.get("updated_at"))
+            if dt and dt.date().isoformat() == today_iso:
+                designs.append({"name": d.get("title") or "Sans titre", "editedAt": dt.isoformat()})
+        return {"designs": designs}
     except Exception as e:
         print(f"[Canva] Erreur API: {e}")
         return None
@@ -455,10 +575,17 @@ def setup():
     # Canva
     rep2 = input("\nConnecter Canva pour le suivi des designs ? (o/n) : ").strip().lower()
     if rep2 == "o":
-        key = getpass.getpass("  Clé API Canva (masquée) : ").strip()
-        if key:
-            cfg["canva_api_key"] = key
-            print("✓ Clé Canva enregistrée.")
+        cid = input("  Client ID Canva : ").strip()
+        secret = getpass.getpass("  Client secret Canva (masqué) : ").strip()
+        if cid and secret:
+            cfg["canva_client_id"] = cid
+            cfg["canva_client_secret"] = secret
+            try:
+                cfg = canva_oauth(cfg)
+            except Exception as e:
+                print(f"⚠ Canva auth error: {e}")
+        else:
+            print("⚠ Client ID ou secret manquant, Canva ignoré.")
 
     save_config(cfg)
 
@@ -503,7 +630,7 @@ def run():
     user_id = cfg["userId"]
     print(f"Netforce Tracker v2 démarré — {cfg.get('email', user_id)}")
     print(f"  Outlook: {'✓' if cfg.get('graph_access_token') else '✗ (--setup pour activer)'}")
-    print(f"  Canva:   {'✓' if cfg.get('canva_api_key') else '✗ (--setup pour activer)'}")
+    print(f"  Canva:   {'✓' if cfg.get('canva_refresh_token') else '✗ (--setup pour activer)'}")
 
     today = str(date.today())
 
