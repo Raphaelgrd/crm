@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
 import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
+import { TOOLS, ToolError, type ToolDef } from "@/lib/server/mcpTools";
+import { assistantTools, type AssistantAction, type AssistantCtx, type Person } from "@/lib/server/assistantTools";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 interface Message {
   role: "user" | "assistant" | "system" | "tool";
@@ -16,175 +19,99 @@ interface ToolCall {
   function: { name: string; arguments: string };
 }
 
-const SYSTEM = `Tu es l'assistant intelligent du CRM Netforce. Tu aides l'équipe à naviguer, trouver des informations et agir sur le CRM.
-
-Tu as accès aux outils suivants pour lire les données du CRM. Utilise-les TOUJOURS avant de répondre à une question sur les données (contacts, dossiers, fichiers, pipeline).
+function systemPrompt(me: Person, isAdmin: boolean) {
+  const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" });
+  const iso = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(new Date());
+  return `Tu es l'assistant du CRM de Netforce (gants tactiques pour forces de l'ordre et défense). Tu parles à ${me.name}, ${isAdmin ? "admin du CRM : tu peux lire ET modifier toutes les données" : "membre de l'équipe : tu peux lire les données et gérer ses propres tâches"}.
+Nous sommes le ${today} (${iso}).
 
 Règles :
-- Réponds toujours en français
-- Sois concis et direct
-- Quand tu listes des résultats, utilise des tirets
-- Pour naviguer vers une page, retourne un bloc JSON à la fin : {"action":"navigate","path":"/contacts"}
-- Pour ouvrir un fichier, retourne : {"action":"open_file","fileId":"xxx"}
-- Pour télécharger un fichier, retourne : {"action":"download_file","fileId":"xxx"}`;
-
-const TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "search_contacts",
-      description: "Recherche des contacts dans le CRM par nom, société, email, catégorie ou étape pipeline.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "Texte de recherche (nom, société, email, tag…)" },
-          category: { type: "string", description: "Filtrer par catégorie (Prospect, Client, Investisseur…)" },
-          stage: { type: "string", description: "Filtrer par étape pipeline" },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_contact_detail",
-      description: "Récupère toutes les informations d'un contact spécifique.",
-      parameters: {
-        type: "object",
-        properties: {
-          contactId: { type: "string", description: "ID du contact" },
-        },
-        required: ["contactId"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_dataroom_folders",
-      description: "Liste toutes les Data Rooms disponibles avec leur statut (public/privé) et nombre de fichiers.",
-      parameters: { type: "object", properties: {} },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_files_in_folder",
-      description: "Liste les fichiers d'une Data Room ou d'un sous-dossier.",
-      parameters: {
-        type: "object",
-        properties: {
-          folderPath: { type: "string", description: "Chemin du dossier (ex: 'Kit Marketing FR' ou 'Kit Marketing FR/Brochures')" },
-        },
-        required: ["folderPath"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_pipeline_summary",
-      description: "Retourne un résumé du pipeline commercial (nombre de contacts par étape).",
-      parameters: { type: "object", properties: {} },
-    },
-  },
-];
+- Réponds en français, de façon concise et concrète. Utilise des tirets pour les listes.
+- Utilise TOUJOURS les outils pour lire les données avant de répondre ; n'invente jamais un contact, un chiffre ou un id.
+- Avant de créer un contact, vérifie qu'il n'existe pas (search_contacts).
+- Pour écrire un email à des contacts, utilise draft_email : l'utilisateur relira et enverra lui-même. Ne prétends jamais avoir envoyé un email.
+- Pour un modèle réutilisable, utilise create_email_template.
+- « Rappelle-moi de… », « ajoute une tâche… » → create_todo (dates au format YYYY-MM-DD, calculées à partir d'aujourd'hui).
+- Après une modification, résume en une ligne ce que tu as fait.
+- Pour envoyer l'utilisateur vers une page, utilise navigate.`;
+}
 
 export async function POST(req: NextRequest) {
-  if (!(await verifyCrmUser(req))) return unauthorized();
-  const { messages, crmContext } = (await req.json()) as {
-    messages: Message[];
-    crmContext: {
-      contacts: Array<{ id: string; firstName: string; lastName: string; email: string; company: string; category: string; stage: string; tags?: string[]; notes?: string; nextFollowUpAt?: string }>;
-      folders: Array<{ name: string; visibility: string; fileCount: number }>;
-      files: Array<{ id: string; name: string; folder: string; size: number; mime: string; createdAt: string }>;
-    };
+  const user = await verifyCrmUser(req);
+  if (!user) return unauthorized();
+
+  const body = (await req.json()) as {
+    messages: { role: "user" | "assistant"; content: string }[];
+    me?: Person;
+    team?: Person[];
+    files?: AssistantCtx["files"];
   };
 
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return Response.json({ error: "GROQ_API_KEY manquante" }, { status: 500 });
   const model = process.env.GROQ_MODEL ?? "qwen/qwen3.8-27b";
 
+  const me: Person = { uid: user.uid, name: body.me?.uid === user.uid ? body.me.name : user.email.split("@")[0] };
+  const actions: AssistantAction[] = [];
+  const ctx: AssistantCtx = {
+    isAdmin: user.isAdmin,
+    me,
+    team: [me, ...(body.team ?? []).filter((p) => p.uid !== me.uid)],
+    files: body.files ?? [],
+    actions,
+  };
+
+  const tools: ToolDef[] = [
+    ...TOOLS.filter((t) => user.isAdmin || t.annotations?.readOnlyHint),
+    ...assistantTools(ctx),
+  ];
+  const groqTools = tools.map((t) => ({
+    type: "function",
+    function: { name: t.name, description: t.description, parameters: t.inputSchema },
+  }));
+
   const callGroq = async (msgs: Message[]) => {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages: msgs, tools: TOOLS, tool_choice: "auto", max_tokens: 2048, temperature: 0.3 }),
-      signal: AbortSignal.timeout(30_000),
+      body: JSON.stringify({ model, messages: msgs, tools: groqTools, tool_choice: "auto", max_tokens: 3000, temperature: 0.3 }),
+      signal: AbortSignal.timeout(60_000),
     });
-    if (!res.ok) throw new Error(await res.text());
-    return res.json() as Promise<{ choices: [{ message: { role: string; content: string | null; tool_calls?: ToolCall[] }; finish_reason: string }] }>;
+    if (!res.ok) throw new Error((await res.text()).slice(0, 300));
+    return res.json() as Promise<{ choices: [{ message: { content: string | null; tool_calls?: ToolCall[] } }] }>;
   };
 
-  // Tool execution (uses the crmContext passed from client)
-  const executeTool = (name: string, args: Record<string, string>): string => {
-    if (name === "search_contacts") {
-      const q = (args.query ?? "").toLowerCase();
-      const cat = (args.category ?? "").toLowerCase();
-      const stage = (args.stage ?? "").toLowerCase();
-      const results = crmContext.contacts.filter((c) => {
-        const text = `${c.firstName} ${c.lastName} ${c.email} ${c.company} ${(c.tags ?? []).join(" ")}`.toLowerCase();
-        return (!q || text.includes(q)) && (!cat || c.category.toLowerCase().includes(cat)) && (!stage || c.stage.toLowerCase().includes(stage));
-      });
-      if (!results.length) return "Aucun contact trouvé.";
-      return results.slice(0, 15).map((c) => `- ${c.firstName} ${c.lastName} | ${c.company || "—"} | ${c.category} | ${c.stage} | id:${c.id}`).join("\n");
+  const runTool = async (name: string, rawArgs: string) => {
+    const tool = tools.find((t) => t.name === name);
+    if (!tool) return `Outil indisponible : ${name}${user.isAdmin ? "" : " (réservé aux admins)"}.`;
+    try {
+      const args = rawArgs ? (JSON.parse(rawArgs) as Record<string, unknown>) : {};
+      const out = JSON.stringify(await tool.run(args));
+      return out.length > 14_000 ? `${out.slice(0, 14_000)}… (tronqué)` : out;
+    } catch (e) {
+      return e instanceof ToolError ? `Erreur : ${e.message}` : `Erreur interne : ${e instanceof Error ? e.message : String(e)}`;
     }
-
-    if (name === "get_contact_detail") {
-      const c = crmContext.contacts.find((x) => x.id === args.contactId);
-      if (!c) return "Contact introuvable.";
-      return JSON.stringify({ ...c, relance: c.nextFollowUpAt ?? "non planifiée" }, null, 2);
-    }
-
-    if (name === "list_dataroom_folders") {
-      if (!crmContext.folders.length) return "Aucune Data Room.";
-      return crmContext.folders.map((f) => `- ${f.name} (${f.visibility}) — ${f.fileCount} fichier(s)`).join("\n");
-    }
-
-    if (name === "list_files_in_folder") {
-      const fp = args.folderPath ?? "";
-      const direct = crmContext.files.filter((f) => f.folder === fp);
-      const sub = crmContext.files.filter((f) => f.folder.startsWith(fp + "/"));
-      if (!direct.length && !sub.length) return `Aucun fichier dans "${fp}".`;
-      const lines = [
-        ...direct.map((f) => `- [fichier] ${f.name} (${(f.size / 1024).toFixed(0)} Ko) id:${f.id}`),
-        ...Array.from(new Set(sub.map((f) => f.folder.slice(fp.length + 1).split("/")[0]))).map((d) => `- [dossier] ${d}`),
-      ];
-      return lines.join("\n");
-    }
-
-    if (name === "get_pipeline_summary") {
-      const byStage: Record<string, number> = {};
-      for (const c of crmContext.contacts) byStage[c.stage] = (byStage[c.stage] ?? 0) + 1;
-      return Object.entries(byStage).map(([s, n]) => `- ${s} : ${n} contact(s)`).join("\n");
-    }
-
-    return "Outil inconnu.";
   };
 
   try {
-    const conversationMsgs: Message[] = [{ role: "system", content: SYSTEM }, ...messages];
-
-    // Agentic loop (max 5 tool calls)
-    for (let i = 0; i < 5; i++) {
-      const data = await callGroq(conversationMsgs);
-      const msg = data.choices[0].message;
-
+    const conversation: Message[] = [
+      { role: "system", content: systemPrompt(me, user.isAdmin) },
+      ...body.messages.slice(-20).map((m) => ({ role: m.role, content: m.content })),
+    ];
+    for (let i = 0; i < 8; i++) {
+      const msg = (await callGroq(conversation)).choices[0].message;
       if (msg.tool_calls?.length) {
-        conversationMsgs.push({ role: "assistant", content: msg.content ?? "", tool_calls: msg.tool_calls });
+        conversation.push({ role: "assistant", content: msg.content ?? "", tool_calls: msg.tool_calls });
         for (const tc of msg.tool_calls) {
-          const args = JSON.parse(tc.function.arguments) as Record<string, string>;
-          const result = executeTool(tc.function.name, args);
-          conversationMsgs.push({ role: "tool", content: result, tool_call_id: tc.id });
+          conversation.push({ role: "tool", tool_call_id: tc.id, content: await runTool(tc.function.name, tc.function.arguments) });
         }
         continue;
       }
-
-      return Response.json({ reply: (msg.content ?? "").replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trim() });
+      const reply = (msg.content ?? "").replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trim();
+      return Response.json({ reply, actions });
     }
-
-    return Response.json({ reply: "Je n'ai pas pu terminer la recherche." });
+    return Response.json({ reply: "Je n'ai pas pu terminer : la demande demande trop d'étapes. Reformule-la en plus petit.", actions });
   } catch (e) {
-    return Response.json({ error: String(e) }, { status: 502 });
+    return Response.json({ error: `Assistant indisponible : ${e instanceof Error ? e.message : String(e)}` }, { status: 502 });
   }
 }

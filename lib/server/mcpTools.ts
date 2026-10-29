@@ -34,7 +34,7 @@ const STAGES = [
 
 const ACTIVITY_TYPES = ["note", "call", "email", "meeting"];
 
-class ToolError extends Error {}
+export class ToolError extends Error {}
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 const optStr = (v: unknown) => (typeof v === "string" ? v.trim() : undefined);
