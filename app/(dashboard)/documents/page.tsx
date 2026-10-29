@@ -13,6 +13,8 @@ import {
 } from "@/lib/documentTemplates";
 import type { DocumentType, DocumentTemplate } from "@/lib/documentTemplates";
 import GenerateDocumentModal from "@/components/documents/GenerateDocumentModal";
+import { SignatureList } from "@/components/documents/SignatureList";
+import { YousignSend } from "@/components/documents/YousignSend";
 
 const DOC_CARDS: {
   type: DocumentType;
@@ -96,7 +98,7 @@ export default function DocumentsPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Documents légaux</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Générés et pré-remplis par l'IA à partir de la fiche contact</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Envoi des NDA et MOU pour signature via Yousign, et documents générés par l'IA</p>
         </div>
         <Link
           href="/documents/modeles"
@@ -106,6 +108,11 @@ export default function DocumentsPage() {
           Gérer les modèles
         </Link>
       </div>
+
+      <YousignSend />
+      <SignatureList />
+
+      <h2 className="mt-12 mb-4 border-t border-border pt-6 text-sm font-semibold">Générer un document avec l'IA</h2>
 
       {/* Step 1 — Type */}
       <div className="mb-6">
