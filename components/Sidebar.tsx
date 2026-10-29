@@ -30,7 +30,9 @@ import {
   Mail,
   Monitor,
   Bot,
+  ListTodo,
 } from "lucide-react";
+import { TodoBadge } from "@/components/todos/TodoBadge";
 
 const NAV_GROUPS: {
   label: string | null;
@@ -38,7 +40,10 @@ const NAV_GROUPS: {
 }[] = [
   {
     label: null,
-    items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }],
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/taches", label: "Mes tâches", icon: ListTodo },
+    ],
   },
   {
     label: "Commercial",
@@ -131,7 +136,7 @@ export function Sidebar() {
                     href={href}
                     title={label}
                     className={
-                      `flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-colors duration-150 active:scale-[0.97] ` +
+                      `relative flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-colors duration-150 active:scale-[0.97] ` +
                       (expanded ? "px-3" : "justify-center px-2") +
                       " " +
                       (active
@@ -143,6 +148,7 @@ export function Sidebar() {
                     {expanded && (
                       <span className="whitespace-nowrap overflow-hidden">{label}</span>
                     )}
+                    {href === "/taches" && <TodoBadge compact={!expanded} />}
                   </Link>
                 );
               })}
