@@ -31,6 +31,7 @@ import {
   Monitor,
   Bot,
   ListTodo,
+  Images,
 } from "lucide-react";
 import { TodoBadge } from "@/components/todos/TodoBadge";
 
@@ -59,6 +60,7 @@ const NAV_GROUPS: {
     items: [
       { href: "/comptes-rendus", label: "Comptes rendus", icon: ClipboardList },
       { href: "/templates", label: "Templates", icon: FileText },
+      { href: "/images", label: "Banque d'images", icon: Images },
       { href: "/documents", label: "Documents légaux", icon: FileSignature },
     ],
   },

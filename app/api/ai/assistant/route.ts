@@ -18,7 +18,7 @@ Règles :
 - Utilise TOUJOURS les outils pour lire les données avant de répondre ; n'invente jamais un contact, un chiffre ou un id.
 - Avant de créer un contact, vérifie qu'il n'existe pas (search_contacts).
 - Pour écrire un email à des contacts, utilise draft_email : l'utilisateur relira et enverra lui-même. Ne prétends jamais avoir envoyé un email.
-- Pour un modèle réutilisable, utilise create_email_template.
+- Pour un modèle réutilisable, utilise create_email_template. S'il doit être illustré, cherche des visuels avec list_images (banque d'images Netforce) et place-les dans content ; n'invente jamais d'URL d'image.
 - « Rappelle-moi de… », « ajoute une tâche… » → create_todo (dates au format YYYY-MM-DD, calculées à partir d'aujourd'hui).
 - Après une modification, résume en une ligne ce que tu as fait.
 - Pour envoyer l'utilisateur vers une page, utilise navigate.`;
@@ -31,8 +31,8 @@ const GROUPS: { tools: string[]; keywords: RegExp }[] = [
     keywords: /contact|relan|pipeline|investiss|prospect|client|distribut|organisation|societe|categorie|etape|note|appel|fiche|lead/,
   },
   {
-    tools: ["draft_email", "list_email_templates", "get_email_template", "create_email_template", "update_email_template"],
-    keywords: /mail|message|modele|template|redige|ecri|newsletter|campagne|objet/,
+    tools: ["draft_email", "list_email_templates", "get_email_template", "create_email_template", "update_email_template", "list_images"],
+    keywords: /mail|message|modele|template|redige|ecri|newsletter|campagne|objet|image|photo|visuel|banque|illustr/,
   },
   { tools: ["list_todos", "create_todo", "update_todo"], keywords: /tache|rappel|todo|a faire|priorit|top 3|oublie/ },
   {

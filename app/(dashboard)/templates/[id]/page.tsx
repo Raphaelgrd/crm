@@ -45,6 +45,8 @@ import {
   renderPlainText,
   useTemplates,
 } from "@/lib/templates";
+import { ImageBankPicker } from "@/components/images/ImageBank";
+import { imageUrl, type ImageMeta } from "@/lib/imageBank";
 
 const PALETTE: { type: BlockType; label: string; icon: typeof Type }[] = [
   { type: "heading", label: "Titre", icon: Heading1 },
@@ -66,6 +68,31 @@ const inputClass =
 const labelClass = "text-muted-foreground mb-1 block text-xs font-medium";
 
 type DragItem = { kind: "new"; type: BlockType } | { kind: "move"; index: number };
+
+function BankImageButton({ onPick }: { onPick: (img: ImageMeta) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="border-border bg-card text-foreground hover:bg-muted mb-2 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors"
+      >
+        <ImageIcon className="h-4 w-4" aria-hidden="true" />
+        Choisir dans la banque d&apos;images
+      </button>
+      {open && (
+        <ImageBankPicker
+          onClose={() => setOpen(false)}
+          onPick={(img) => {
+            onPick(img);
+            setOpen(false);
+          }}
+        />
+      )}
+    </>
+  );
+}
 
 function newDraft(): EmailTemplate {
   const now = new Date().toISOString();
@@ -791,23 +818,11 @@ function BlockSettings({ block, onChange }: {
         <>
           <div>
             <label className={labelClass}>Image</label>
-            <label className="border-border bg-card text-foreground hover:bg-muted mb-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors">
-              <ImageIcon className="h-4 w-4" aria-hidden="true" />
-              Choisir depuis le PC
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = () => onChange({ src: reader.result as string });
-                  reader.readAsDataURL(file);
-                  e.target.value = "";
-                }}
-              />
-            </label>
+            <BankImageButton
+              onPick={(img) =>
+                onChange({ src: imageUrl(img.id), alt: (block.props as ImageProps).alt || img.description || img.name })
+              }
+            />
             <input className={inputClass} placeholder="…ou coller une URL"
               value={(block.props as ImageProps).src.startsWith("data:") ? "" : (block.props as ImageProps).src}
               onChange={(e) => onChange({ src: e.target.value })} />
