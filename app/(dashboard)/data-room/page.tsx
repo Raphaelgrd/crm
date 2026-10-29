@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Loader2,
   ChevronRight,
   Download,
   ExternalLink,
@@ -111,7 +112,13 @@ export default function DataRoomPage() {
     setFolderVisibility,
     shareFolderWith,
     unshareFolderWith,
+    totalSize,
+    busy,
+    localCount,
+    migrateLocal,
+    fileBlob,
   } = useDataRoom();
+  const [migrating, setMigrating] = useState(false);
 
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
@@ -127,19 +134,12 @@ export default function DataRoomPage() {
   const [preview, setPreview] = useState<{ file: StoredFile; url: string } | null>(null);
 
   const openPreview = async (f: StoredFile) => {
-    const db = await new Promise<IDBDatabase>((res, rej) => {
-      const r = window.indexedDB.open("netforce-dataroom", 1);
-      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
-    });
-    const record = await new Promise<{ blob: Blob } | undefined>((res) => {
-      const req = db.transaction("files", "readonly").objectStore("files").get(f.id);
-      req.onsuccess = () => res(req.result as { blob: Blob } | undefined);
-      req.onerror = () => res(undefined);
-    });
-    db.close();
-    if (!record) return;
-    const url = URL.createObjectURL(record.blob);
-    setPreview({ file: f, url });
+    try {
+      const blob = await fileBlob(f.id);
+      if (blob) setPreview({ file: f, url: URL.createObjectURL(blob) });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Aperçu impossible.");
+    }
   };
 
   const closePreview = () => {
@@ -160,26 +160,12 @@ export default function DataRoomPage() {
       (f) => f.folder === folderName || f.folder.startsWith(folderName + "/"),
     );
     for (const f of folderFiles) {
-      const { dbGet } = await import("@/lib/dataroom").then(() => {
-        return { dbGet: null };
-      });
-      // fetch blob via openFile approach — reach IndexedDB directly
-      const db = await new Promise<IDBDatabase>((res, rej) => {
-        const r = window.indexedDB.open("netforce-dataroom", 1);
-        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
-      });
-      const record = await new Promise<{ blob: Blob; name: string } | undefined>((res) => {
-        const tx = db.transaction("files", "readonly");
-        const req = tx.objectStore("files").get(f.id);
-        req.onsuccess = () => res(req.result as { blob: Blob; name: string } | undefined);
-        req.onerror = () => res(undefined);
-      });
-      db.close();
-      if (record) {
+      const blob = await fileBlob(f.id);
+      if (blob) {
         const subPath = f.folder.startsWith(folderName + "/")
           ? f.folder.slice(folderName.length + 1) + "/" + f.name
           : f.name;
-        zip.file(subPath, record.blob);
+        zip.file(subPath, blob);
       }
     }
     const blob = await zip.generateAsync({ type: "blob" });
@@ -406,6 +392,43 @@ export default function DataRoomPage() {
           <div className="border-primary bg-primary/5 pointer-events-none fixed inset-x-8 top-40 bottom-8 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed">
             <p className="text-primary text-lg font-semibold">Dépose ici — dossiers et fichiers acceptés</p>
           </div>
+        )}
+
+        {localCount > 0 && (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+            <span>
+              {localCount} fichier{localCount > 1 ? "s" : ""} {localCount > 1 ? "sont" : "est"} encore seulement sur cet ordinateur : l&apos;équipe ne {localCount > 1 ? "les" : "le"} voit pas.
+            </span>
+            <button
+              type="button"
+              disabled={migrating || !!busy}
+              onClick={async () => {
+                setMigrating(true);
+                try {
+                  const n = await migrateLocal();
+                  alert(`${n} fichier${n > 1 ? "s" : ""} mis en ligne.`);
+                } catch (e) {
+                  alert(e instanceof Error ? e.message : "Mise en ligne interrompue, réessaie.");
+                } finally {
+                  setMigrating(false);
+                }
+              }}
+              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {migrating ? "Mise en ligne…" : "Mettre en ligne pour l'équipe"}
+            </button>
+          </div>
+        )}
+        {busy && (
+          <div className="mb-5 flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+            Envoi en ligne : {busy.done} / {busy.total} fichier{busy.total > 1 ? "s" : ""}… ne ferme pas la page.
+          </div>
+        )}
+        {isAtRoot && totalSize > 0 && (
+          <p className="text-muted-foreground mb-4 text-xs">
+            Espace utilisé : {formatSize(totalSize)} sur 1 Go gratuits
+          </p>
         )}
 
         {/* Root — Data Room cards */}

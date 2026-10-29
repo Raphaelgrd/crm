@@ -6,8 +6,14 @@ function load(envName: string, appName: string): App | null {
   if (!raw) return null;
   const existing = getApps().find((a) => a.name === appName);
   if (existing) return existing;
-  const json = JSON.parse(raw.startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8"));
-  return initializeApp({ credential: cert(json) }, appName);
+  try {
+    const json = JSON.parse(raw.startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8"));
+    return initializeApp({ credential: cert(json) }, appName);
+  } catch (e) {
+    // Une clé mal collée dans Vercel ne doit pas bloquer tout le CRM : on retombe sur le mode sans compte de service.
+    console.error(`[admin] ${envName} invalide :`, e instanceof Error ? e.message : e);
+    return null;
+  }
 }
 
 /** Projet du CRM (crm-netforce) : données du CRM. */
