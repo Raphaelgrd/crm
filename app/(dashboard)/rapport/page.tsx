@@ -34,6 +34,7 @@ import {
   todayLog,
   useRapport,
 } from "@/lib/rapport";
+import { TrackerPrefillButton } from "@/components/rapport/TrackerPrefill";
 
 const inputClass =
   "border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none";
@@ -696,6 +697,8 @@ function TodayView({
             {active.length} tâche{active.length !== 1 ? "s" : ""} active{active.length !== 1 ? "s" : ""}
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <TrackerPrefillButton rapport={rapport} />
         <button
           type="button"
           onClick={onNewTask}
@@ -704,6 +707,7 @@ function TodayView({
           <Plus className="h-4 w-4" aria-hidden="true" />
           Nouvelle tâche
         </button>
+        </div>
       </div>
 
       {active.length === 0 ? (

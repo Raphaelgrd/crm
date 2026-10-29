@@ -118,6 +118,17 @@ export interface RapportData {
 
 export const todayKey = () => new Date().toISOString().split("T")[0];
 
+/** Date locale YYYY-MM-DD (celle qu'utilise le tracker). */
+export function localDateKey(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Données du tracker de l'utilisateur pour un jour (null si le tracker n'a rien envoyé). */
+export async function getMyTrackerDay(uid: string, date = localDateKey()): Promise<Record<string, unknown> | null> {
+  const snap = await getDoc(doc(db(), "activity_tracker", `${uid}_${date}`));
+  return snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+}
+
 export function fmtDateFr(iso: string) {
   if (!iso) return "";
   const [y, m, d] = iso.split("-");

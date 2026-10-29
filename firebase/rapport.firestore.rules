@@ -42,16 +42,17 @@ service cloud.firestore {
       allow update, delete: if signedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
     }
 
-    // Chaque tracker n'écrit que son propre document du jour ; seuls les admins lisent l'activité.
+    // Chaque tracker n'écrit que son propre document du jour ; chacun relit le sien, les admins lisent tout.
     match /activity_tracker/{id} {
-      allow read: if isAdmin();
+      allow get: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isAdmin();
       allow create, update: if signedIn()
         && request.resource.data.userId == request.auth.uid
         && id == request.auth.uid + '_' + request.resource.data.date;
       allow delete: if isAdmin();
     }
 
-    // Toute autre collection : admins uniquement.
+    // Toute autre collection (dont activity_summaries) : admins uniquement.
     match /{document=**} {
       allow read, write: if isAdmin();
     }

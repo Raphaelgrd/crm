@@ -16,9 +16,12 @@ import {
   TrendingUp,
   Palette,
   RefreshCw,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { getApps, initializeApp } from "firebase/app";
-import { collection, getFirestore, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc as fsDoc, getDocs, getFirestore, onSnapshot, query, setDoc, where } from "firebase/firestore";
+import { authFetch, localDateKey } from "@/lib/rapport";
 
 const rapportConfig = {
   apiKey: "AIzaSyABOcipg9S2LNSx-MBYa66xYBJA2E2MYdM",
@@ -298,7 +301,26 @@ function Section({
 
 // ── Carte utilisateur ─────────────────────────────────────────
 
-function UserCard({ doc }: { doc: ActivityDoc }) {
+interface SummaryDoc {
+  userId: string;
+  date: string;
+  summary: string;
+  generatedAt: string;
+}
+
+function UserCard({
+  doc,
+  name,
+  summary,
+  summarizing,
+  onSummarize,
+}: {
+  doc: ActivityDoc;
+  name: string;
+  summary?: SummaryDoc;
+  summarizing: boolean;
+  onSummarize: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const online = isOnline(doc.updatedAt);
   const totalSecs = Object.values(doc.sessions).reduce((a, b) => a + b, 0);
@@ -328,14 +350,14 @@ function UserCard({ doc }: { doc: ActivityDoc }) {
         <div className="flex items-center gap-3 min-w-0">
           <div className="relative shrink-0">
             <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold">
-              {doc.userId.slice(0, 2).toUpperCase()}
+              {name.slice(0, 2).toUpperCase()}
             </div>
             <span
               className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-card ${online ? "bg-green-500" : "bg-gray-300"}`}
             />
           </div>
           <div className="min-w-0">
-            <p className="text-foreground text-sm font-bold truncate">{doc.userId}</p>
+            <p className="text-foreground text-sm font-bold truncate">{name}</p>
             <p className="text-muted-foreground text-[11px] mt-0.5">
               {online
                 ? topApp
@@ -365,6 +387,37 @@ function UserCard({ doc }: { doc: ActivityDoc }) {
             )}
           </button>
         </div>
+      </div>
+
+      {/* Résumé IA */}
+      <div className="border-border border-t bg-violet-50/40 px-4 py-3 dark:bg-violet-950/10">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-violet-700 uppercase dark:text-violet-300">
+            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            Résumé IA
+          </span>
+          <button
+            type="button"
+            disabled={summarizing}
+            onClick={onSummarize}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-violet-700 hover:bg-violet-100 disabled:opacity-50 dark:text-violet-300 dark:hover:bg-violet-950/40"
+          >
+            {summarizing && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
+            {summary ? "Régénérer" : "Générer"}
+          </button>
+        </div>
+        {summary ? (
+          <>
+            <p className="text-foreground text-sm leading-relaxed">{summary.summary}</p>
+            <p className="text-muted-foreground mt-1 text-[10px]">
+              Généré à {new Date(summary.generatedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          </>
+        ) : (
+          <p className="text-muted-foreground text-xs italic">
+            {summarizing ? "Rédaction en cours…" : "Pas encore de résumé pour aujourd'hui."}
+          </p>
+        )}
       </div>
 
       {/* Apps (always visible) */}
@@ -484,7 +537,7 @@ function UserCard({ doc }: { doc: ActivityDoc }) {
 
 // ── Vue semaine ───────────────────────────────────────────────
 
-function WeekView({ allDocs }: { allDocs: ActivityDoc[] }) {
+function WeekView({ allDocs, nameOf }: { allDocs: ActivityDoc[]; nameOf: (uid: string) => string }) {
   const days = useMemo(() => {
     const today = new Date();
     return Array.from({ length: 7 }, (_, i) => {
@@ -543,7 +596,7 @@ function WeekView({ allDocs }: { allDocs: ActivityDoc[] }) {
                   const t = Object.values(d.sessions).reduce((a, b) => a + b, 0);
                   return (
                     <div key={d.userId} className="bg-muted flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs">
-                      <span className="text-foreground font-medium">{d.userId.split(/[\s_@]/)[0]}</span>
+                      <span className="text-foreground font-medium">{nameOf(d.userId)}</span>
                       <span className="text-muted-foreground">{fmt(t)}</span>
                     </div>
                   );
@@ -567,14 +620,77 @@ export default function EquipePage() {
   const [loadingToday, setLoadingToday] = useState(true);
   const [loadingWeek, setLoadingWeek] = useState(true);
   const [tab, setTab] = useState<Tab>("today");
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [summaries, setSummaries] = useState<Record<string, SummaryDoc>>({});
+  const [summarizing, setSummarizing] = useState<Set<string>>(new Set());
+  const [summaryError, setSummaryError] = useState("");
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
 
   const weekStart = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 6);
-    return d.toISOString().slice(0, 10);
+    return localDateKey(d);
   }, []);
+
+  useEffect(() => {
+    const db = getFirestore(getRapportApp());
+    getDocs(collection(db, "users"))
+      .then((snap) =>
+        setNames(
+          Object.fromEntries(
+            snap.docs.map((d) => {
+              const u = d.data() as { name?: string; email?: string };
+              return [d.id, u.name || u.email?.split("@")[0] || d.id];
+            }),
+          ),
+        ),
+      )
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const db = getFirestore(getRapportApp());
+    return onSnapshot(
+      query(collection(db, "activity_summaries"), where("date", "==", today)),
+      (snap) => setSummaries(Object.fromEntries(snap.docs.map((d) => [(d.data() as SummaryDoc).userId, d.data() as SummaryDoc]))),
+      () => {},
+    );
+  }, [today]);
+
+  const nameOf = (uid: string) => names[uid] ?? uid.slice(0, 6);
+
+  const summarize = async (d: ActivityDoc) => {
+    setSummarizing((s) => new Set(s).add(d.userId));
+    setSummaryError("");
+    try {
+      const res = await authFetch("/api/ai/activity-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ doc: d, name: nameOf(d.userId) }),
+      });
+      const out = (await res.json()) as { summary?: string; error?: string };
+      if (!res.ok || !out.summary) throw new Error(out.error ?? "Résumé impossible.");
+      await setDoc(fsDoc(getFirestore(getRapportApp()), "activity_summaries", `${d.userId}_${d.date}`), {
+        userId: d.userId,
+        date: d.date,
+        summary: out.summary,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      setSummaryError(e instanceof Error ? e.message : "Résumé impossible.");
+    } finally {
+      setSummarizing((s) => {
+        const n = new Set(s);
+        n.delete(d.userId);
+        return n;
+      });
+    }
+  };
+
+  const summarizeAll = async () => {
+    for (const d of todayDocs) await summarize(d);
+  };
 
   useEffect(() => {
     const db = getFirestore(getRapportApp());
@@ -633,12 +749,25 @@ export default function EquipePage() {
               })}
             </p>
           </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+          {todayDocs.length > 0 && (
+            <button
+              type="button"
+              disabled={summarizing.size > 0}
+              onClick={() => void summarizeAll()}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+            >
+              {summarizing.size > 0 ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />}
+              Résumer l&apos;équipe
+            </button>
+          )}
           {online > 0 && (
             <div className="flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 dark:bg-green-950/40 dark:text-green-400">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
               {online} en ligne
             </div>
           )}
+          </div>
         </div>
 
         {/* KPIs */}
@@ -677,6 +806,8 @@ export default function EquipePage() {
         </div>
       </div>
 
+      {summaryError && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{summaryError}</p>}
+
       {/* Content */}
       {loading ? (
         <div className="text-muted-foreground py-16 text-center text-sm">Chargement…</div>
@@ -696,13 +827,20 @@ export default function EquipePage() {
                   return bT - aT;
                 })
                 .map((doc) => (
-                  <UserCard key={doc.userId} doc={doc} />
+                  <UserCard
+                    key={doc.userId}
+                    doc={doc}
+                    name={nameOf(doc.userId)}
+                    summary={summaries[doc.userId]}
+                    summarizing={summarizing.has(doc.userId)}
+                    onSummarize={() => void summarize(doc)}
+                  />
                 ))}
             </div>
           )}
         </>
       ) : (
-        <WeekView allDocs={weekDocs} />
+        <WeekView allDocs={weekDocs} nameOf={nameOf} />
       )}
 
       {/* Setup guide */}
