@@ -32,6 +32,7 @@ import {
   Bot,
   ListTodo,
   Images,
+  ScanLine,
 } from "lucide-react";
 import { TodoBadge } from "@/components/todos/TodoBadge";
 
@@ -50,6 +51,7 @@ const NAV_GROUPS: {
     label: "Commercial",
     items: [
       { href: "/contacts", label: "Contacts", icon: Users },
+      { href: "/scan", label: "Scanner une carte", icon: ScanLine },
       { href: "/investisseurs", label: "Pipeline levée", icon: TrendingUp },
       { href: "/closing", label: "Closing", icon: Columns3 },
       { href: "/organisations", label: "Organisations", icon: Building2 },

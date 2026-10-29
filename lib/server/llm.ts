@@ -17,10 +17,13 @@ export interface ChatMessage {
 export class LlmError extends Error {}
 
 interface Provider {
+  id: string;
   name: string;
   url: string;
   key: string;
   model: () => Promise<string>;
+  /** Modèle capable de lire des images (null = fournisseur ignoré pour les requêtes avec images). */
+  visionModel: () => Promise<string | null>;
 }
 
 let geminiModel: { id: string; at: number } | null = null;
@@ -54,26 +57,32 @@ function providers(): Provider[] {
   const all: Record<string, Provider | null> = {
     groq: process.env.GROQ_API_KEY
       ? {
+          id: "groq",
           name: "Groq",
           url: "https://api.groq.com/openai/v1/chat/completions",
           key: process.env.GROQ_API_KEY,
           model: async () => process.env.GROQ_MODEL ?? "qwen/qwen3.8-27b",
+          visionModel: async () => process.env.GROQ_VISION_MODEL ?? null,
         }
       : null,
     gemini: process.env.GEMINI_API_KEY
       ? {
+          id: "gemini",
           name: "Gemini",
           url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
           key: process.env.GEMINI_API_KEY,
           model: () => pickGeminiModel(process.env.GEMINI_API_KEY!),
+          visionModel: () => pickGeminiModel(process.env.GEMINI_API_KEY!),
         }
       : null,
     mistral: process.env.MISTRAL_API_KEY
       ? {
+          id: "mistral",
           name: "Mistral",
           url: "https://api.mistral.ai/v1/chat/completions",
           key: process.env.MISTRAL_API_KEY,
           model: async () => process.env.MISTRAL_MODEL ?? "mistral-small-latest",
+          visionModel: async () => process.env.MISTRAL_VISION_MODEL ?? "mistral-small-latest",
         }
       : null,
   };
@@ -90,6 +99,17 @@ export function normalizeToolCalls(calls: ToolCall[] | undefined): ToolCall[] | 
     type: "function",
     id: /^[a-zA-Z0-9]{9}$/.test(c.id ?? "") ? c.id : Math.random().toString(36).slice(2, 11).padEnd(9, "0"),
   }));
+}
+
+/** Ajoute les images (data URL) au dernier message utilisateur, au format attendu par chaque fournisseur. */
+function withImages(wire: Record<string, unknown>[], images: string[], providerId: string) {
+  const idx = wire.map((m) => m.role).lastIndexOf("user");
+  if (idx < 0) return wire;
+  const parts: unknown[] = [{ type: "text", text: String(wire[idx].content ?? "") }];
+  for (const url of images) {
+    parts.push(providerId === "mistral" ? { type: "image_url", image_url: url } : { type: "image_url", image_url: { url } });
+  }
+  return wire.map((m, i) => (i === idx ? { ...m, content: parts } : m));
 }
 
 function toWire(m: ChatMessage) {
@@ -118,9 +138,17 @@ export async function chatCompletion(opts: {
   temperature?: number;
   startAt?: number;
   retried?: boolean;
+  /** Images (data URL) jointes au dernier message utilisateur : seuls les fournisseurs « vision » sont utilisés. */
+  images?: string[];
 }): Promise<ChatResult> {
-  const list = providers();
-  if (!list.length) throw new LlmError("Aucune clé d'IA configurée (GROQ_API_KEY, GEMINI_API_KEY ou MISTRAL_API_KEY).");
+  const list = opts.images?.length ? (await Promise.all(providers().map(async (p) => ((await p.visionModel()) ? p : null)))).filter((p): p is Provider => !!p) : providers();
+  if (!list.length) {
+    throw new LlmError(
+      opts.images?.length
+        ? "Aucune IA capable de lire des images n'est configurée (GEMINI_API_KEY ou MISTRAL_API_KEY)."
+        : "Aucune clé d'IA configurée (GROQ_API_KEY, GEMINI_API_KEY ou MISTRAL_API_KEY).",
+    );
+  }
   const errors: string[] = [];
   let shortestWait = Infinity;
 
@@ -131,8 +159,8 @@ export async function chatCompletion(opts: {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}` },
         body: JSON.stringify({
-          model: await p.model(),
-          messages: opts.messages.map(toWire),
+          model: opts.images?.length ? await p.visionModel() : await p.model(),
+          messages: opts.images?.length ? withImages(opts.messages.map(toWire), opts.images, p.id) : opts.messages.map(toWire),
           ...(opts.tools?.length ? { tools: opts.tools, tool_choice: "auto" } : {}),
           max_tokens: opts.maxTokens ?? 2000,
           temperature: opts.temperature ?? 0.3,
