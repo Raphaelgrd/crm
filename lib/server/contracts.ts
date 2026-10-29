@@ -173,3 +173,29 @@ export async function fillContract(contract: Contract, template: Uint8Array, dat
   pdf.setTitle(`${contract.name} – ${data.company || `${data.firstName} ${data.lastName}`}`);
   return pdf.save();
 }
+
+/** Première colonne « extra » renseignée parmi plusieurs noms possibles (imports CSV, scan de cartes). */
+function extraField(extra: Record<string, string> | undefined, keys: string[]) {
+  const e = extra ?? {};
+  const k = Object.keys(e).find((x) => keys.some((y) => x.toLowerCase() === y.toLowerCase()) && e[x]?.trim());
+  return k ? e[k].trim() : "";
+}
+
+/** Champs du contrat déduits d'une fiche contact (même logique que l'écran Documents légaux). */
+export function contractDataFromContact(c: Record<string, unknown>): ContractData & { email: string } {
+  const s = (k: string) => (typeof c[k] === "string" ? (c[k] as string).trim() : "");
+  const extra = c.extra as Record<string, string> | undefined;
+  const d = {
+    lastName: s("lastName"),
+    firstName: s("firstName"),
+    email: s("email"),
+    company: s("company"),
+    address: [extraField(extra, ["Adresse", "Address", "Siège social"]), s("country")].filter(Boolean).join(", "),
+    registration: extraField(extra, ["SIRET", "SIREN", "RCS", "Immatriculation", "Numéro d'immatriculation"]),
+    jobTitle: extraField(extra, ["Poste", "Fonction", "Titre", "Job Title"]),
+    representedBy: "",
+    shortName: s("company"),
+  };
+  d.representedBy = [[d.firstName, d.lastName].filter(Boolean).join(" "), d.jobTitle].filter(Boolean).join(", ");
+  return d;
+}

@@ -1,5 +1,6 @@
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from "firebase/firestore/lite";
 import { crmDb } from "./db";
+import { CONTRACTS, contractDataFromContact, findContract, type ContractData } from "./contracts";
 import { ToolError, type ToolDef } from "./mcpTools";
 
 // Outils propres à l'Assistant IA du CRM (en plus de ceux du serveur MCP) :
@@ -9,7 +10,15 @@ export type Person = { uid: string; name: string };
 export type AssistantAction =
   | { type: "email_draft"; recipients: { id: string; email: string; firstName: string; lastName: string }[]; subject: string; body: string }
   | { type: "navigate"; path: string; label: string }
-  | { type: "open_file" | "download_file"; fileId: string; name: string };
+  | { type: "open_file" | "download_file"; fileId: string; name: string }
+  | {
+      type: "contract_draft";
+      contractId: string;
+      contractName: string;
+      contactId: string;
+      data: ContractData & { email: string };
+      netforceSigner: { firstName: string; lastName: string; email: string } | null;
+    };
 
 export interface AssistantCtx {
   isAdmin: boolean;
@@ -396,6 +405,101 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
         if (!recipients.length) throw new ToolError("Aucun destinataire valide (contact introuvable ou sans email).");
         ctx.actions.push({ type: "email_draft", recipients, subject: str(a.subject), body: str(a.body) });
         return { drafted: true, recipients: recipients.length, note: "Brouillon affiché à l'utilisateur, en attente de son envoi." };
+      },
+    },
+    {
+      name: "prepare_contract",
+      description: `Prépare un contrat Netforce rempli avec la fiche d'un contact, à envoyer pour signature électronique (Yousign). RIEN n'est envoyé : l'utilisateur vérifie, voit l'aperçu PDF et clique sur « Envoyer ». Contrats disponibles : ${CONTRACTS.map((c) => `${c.id} (${c.name})`).join(", ")}. Les champs fournis remplacent ceux de la fiche.`,
+      annotations: { readOnlyHint: true },
+      inputSchema: {
+        type: "object",
+        properties: {
+          contractId: { type: "string", description: "NDA ou MOU" },
+          contactId: { type: "string", description: "Id du contact signataire (via search_contacts)" },
+          email: { type: "string" },
+          company: { type: "string" },
+          jobTitle: { type: "string", description: "Fonction du signataire" },
+          address: { type: "string", description: "Siège social de sa société" },
+          registration: { type: "string", description: "Numéro d'immatriculation (RCS, SIREN…)" },
+          representedBy: { type: "string" },
+          shortName: { type: "string", description: "Nom court de la société dans le contrat (« ci-après dénommée »)" },
+        },
+        required: ["contractId", "contactId"],
+      },
+      async run(a) {
+        adminOnly("prepare_contract");
+        const id = str(a.contractId).toUpperCase();
+        const contract = findContract(id);
+        if (!contract) {
+          throw new ToolError(
+            `Le ${id || "contrat demandé"} n'est pas encore disponible dans le CRM. Contrats disponibles : ${CONTRACTS.map((c) => c.id).join(", ")}. Pour ajouter un modèle, il faut transmettre son PDF à l'équipe technique.`,
+          );
+        }
+        const db = await crmDb();
+        const file = await getDoc(doc(db, "contract_files", contract.id));
+        if (!file.exists() || !file.data().data) {
+          throw new ToolError(`Le modèle PDF du ${contract.id} n'est pas encore importé : un admin doit l'importer dans Documents légaux.`);
+        }
+        const c = await getDoc(doc(db, "contacts", str(a.contactId)));
+        if (!c.exists()) throw new ToolError(`Contact introuvable : ${str(a.contactId)}. Utilise search_contacts.`);
+        const data = contractDataFromContact(c.data());
+        for (const k of ["email", "company", "jobTitle", "address", "registration", "representedBy", "shortName"] as const) {
+          if (str(a[k])) data[k] = str(a[k]);
+        }
+        if (str(a.jobTitle) && !str(a.representedBy)) {
+          data.representedBy = [[data.firstName, data.lastName].filter(Boolean).join(" "), data.jobTitle].filter(Boolean).join(", ");
+        }
+        if (str(a.company) && !str(a.shortName)) data.shortName = data.company;
+        const netforceSigner = (file.data().netforceSigner as { firstName: string; lastName: string; email: string } | undefined) ?? null;
+        ctx.actions.push({ type: "contract_draft", contractId: contract.id, contractName: contract.name, contactId: c.id, data, netforceSigner });
+        const labels: Record<string, string> = {
+          email: "email",
+          company: "société",
+          jobTitle: "fonction",
+          address: "siège social",
+          registration: "numéro d'immatriculation",
+        };
+        const missing = Object.entries(labels).filter(([k]) => !data[k as keyof typeof data]).map(([, l]) => l);
+        return {
+          prepared: contract.id,
+          signer: `${data.firstName} ${data.lastName}`,
+          company: data.company,
+          missing,
+          netforceSignerKnown: !!netforceSigner?.email,
+          note: "Formulaire affiché à l'utilisateur : il complète si besoin, puis clique sur Envoyer. Rien n'est encore envoyé.",
+        };
+      },
+    },
+    {
+      name: "list_signatures",
+      description: "Liste les contrats (NDA, MOU) envoyés pour signature via Yousign et leur statut, éventuellement pour un contact.",
+      annotations: { readOnlyHint: true },
+      inputSchema: {
+        type: "object",
+        properties: {
+          contactId: { type: "string" },
+          status: { type: "string", enum: ["ongoing", "done", "declined", "expired", "canceled"] },
+        },
+      },
+      async run(a) {
+        const snap = await getDocs(collection(await crmDb(), "signatures"));
+        const all = snap.docs
+          .map((d) => d.data())
+          .filter((s) => (!str(a.contactId) || s.contactId === str(a.contactId)) && (!str(a.status) || s.status === str(a.status)))
+          .sort((x, y) => String(y.createdAt).localeCompare(String(x.createdAt)))
+          .slice(0, 30);
+        return {
+          signatures: all.map((s) => ({
+            contract: s.docType,
+            title: s.title,
+            contactId: s.contactId,
+            status: s.status,
+            sentAt: String(s.createdAt).slice(0, 10),
+            signedAt: s.signedAt ? String(s.signedAt).slice(0, 10) : undefined,
+            signers: (s.signers as { name: string; status: string }[]).map((x) => `${x.name} : ${x.status}`),
+          })),
+          note: "Statuts : ongoing = en attente, done = signé par tous, declined = refusé.",
+        };
       },
     },
     {

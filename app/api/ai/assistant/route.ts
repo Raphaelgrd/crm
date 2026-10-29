@@ -21,6 +21,7 @@ Règles :
 - Pour un modèle réutilisable, utilise create_email_template. S'il doit être illustré, cherche des visuels avec list_images (banque d'images Netforce) et place-les dans content ; n'invente jamais d'URL d'image.
 - « Rappelle-moi de… », « ajoute une tâche… » → create_todo (dates au format YYYY-MM-DD, calculées à partir d'aujourd'hui).
 - Après une modification, résume en une ligne ce que tu as fait.
+- NDA ou MOU à faire signer → prepare_contract avec l'id du contact : l'utilisateur vérifie et clique sur Envoyer. Ne prétends jamais avoir envoyé un contrat. Signale les champs manquants (missing) qu'il devra compléter. « A-t-il signé ? » → list_signatures.
 - Pour envoyer l'utilisateur vers une page, utilise navigate.`;
 }
 
@@ -41,6 +42,10 @@ const GROUPS: { tools: string[]; keywords: RegExp }[] = [
   },
   { tools: ["get_team_activity", "get_activity_report"], keywords: /equipe|activite|heure|pointage|qui a|travaill|tracker|canva|journee/ },
   { tools: ["list_loans", "get_stock", "list_meetings"], keywords: /stock|gant|pret|envoi|echantillon|compte rendu|reunion|decision/ },
+  {
+    tools: ["prepare_contract", "list_signatures"],
+    keywords: /\bnda\b|\bmou\b|contrat|signature|signe|yousign|confidentialit|memorandum|accord/,
+  },
   { tools: ["list_dataroom_folders", "list_files_in_folder", "show_file"], keywords: /data ?room|fichier|dossier|document|pdf|plaquette|deck/ },
 ];
 const CORE_TOOLS = ["search_contacts", "navigate"];

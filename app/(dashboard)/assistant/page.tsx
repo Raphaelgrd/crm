@@ -1,17 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, Check, Copy, Download, ExternalLink, FolderLock, Loader2, Mail, RotateCcw, Send, User, X } from "lucide-react";
+import { Bot, Check, Copy, Download, ExternalLink, FolderLock, Loader2, Mail, PenLine, RotateCcw, Send, User, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useDataRoom } from "@/lib/dataroom";
 import { authFetch, useCrmUser, useTeamMembers } from "@/lib/rapport";
 import { escapeHtml } from "@/lib/escapeHtml";
+import { ContractForm, type ContractFormData, type ContractPerson } from "@/components/documents/ContractForm";
 
 type Recipient = { id: string; email: string; firstName: string; lastName: string };
 type Action =
   | { type: "email_draft"; recipients: Recipient[]; subject: string; body: string }
   | { type: "navigate"; path: string; label: string }
-  | { type: "open_file" | "download_file"; fileId: string; name: string };
+  | { type: "open_file" | "download_file"; fileId: string; name: string }
+  | { type: "contract_draft"; contractId: string; contractName: string; contactId: string; data: ContractFormData; netforceSigner: ContractPerson | null };
 
 interface Message {
   role: "user" | "assistant";
@@ -35,6 +37,34 @@ function bodyToHtml(body: string) {
     .split(/\n\s*\n/)
     .map((p) => `<p style="margin:0 0 14px;line-height:1.55">${escapeHtml(p.trim()).replace(/\n/g, "<br/>")}</p>`)
     .join("");
+}
+
+function ContractDraftCard({ draft }: { draft: Extract<Action, { type: "contract_draft" }> }) {
+  const [sent, setSent] = useState("");
+  return (
+    <div className="border-border bg-card w-full max-w-xl overflow-hidden rounded-xl border shadow-sm">
+      <div className="border-border flex items-center gap-2 border-b bg-violet-50/60 px-4 py-2 dark:bg-violet-950/20">
+        <PenLine className="h-4 w-4 text-violet-600" aria-hidden="true" />
+        <span className="text-foreground text-sm font-semibold">{draft.contractName}</span>
+        <span className="text-muted-foreground ml-auto text-xs">Rien n&apos;est envoyé sans ton clic</span>
+      </div>
+      <div className="p-4">
+        {sent ? (
+          <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
+            <Check className="h-4 w-4" aria-hidden="true" /> {sent} Yousign envoie l&apos;email de signature à chacun.
+          </p>
+        ) : (
+          <ContractForm
+            contractId={draft.contractId}
+            contactId={draft.contactId}
+            initial={draft.data}
+            initialNetforce={draft.netforceSigner}
+            onSent={setSent}
+          />
+        )}
+      </div>
+    </div>
+  );
 }
 
 function EmailDraftCard({ draft, fromName, replyTo }: { draft: Extract<Action, { type: "email_draft" }>; fromName: string; replyTo: string }) {
@@ -196,7 +226,7 @@ export default function AssistantPage() {
         "Crée un modèle d'email de présentation des gants Impact pour les distributeurs",
         "Rappelle-moi d'appeler Laurent demain, priorité haute",
         "Résume l'activité de l'équipe aujourd'hui",
-        "Passe Sébastien Fortage en catégorie Partenaire",
+        "Envoie un NDA à Sébastien Fortage",
       ]
     : ["Combien de contacts dans le pipeline ?", "Quelles sont mes tâches du jour ?", "Montre-moi les investisseurs", "Quel est le stock de gants ?"];
 
@@ -273,6 +303,8 @@ export default function AssistantPage() {
                 {msg.actions?.map((a, j) =>
                   a.type === "email_draft" ? (
                     <EmailDraftCard key={j} draft={a} fromName={`${name || "Netforce"} · Netforce`} replyTo={user?.email ?? ""} />
+                  ) : a.type === "contract_draft" ? (
+                    <ContractDraftCard key={j} draft={a} />
                   ) : (
                     <button
                       key={j}
