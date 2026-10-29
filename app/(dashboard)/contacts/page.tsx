@@ -856,11 +856,13 @@ export default function ContactsPage() {
                         <button
                           type="button"
                           onClick={() => setSendingTo(c)}
-                          disabled={!c.email}
+                          disabled={!c.email || !!c.unsubscribedAt}
                           className="hover:bg-muted rounded p-1.5 transition-colors disabled:opacity-30"
                           aria-label="Envoyer le mail nouveaux arrivants"
                           title={
-                            c.lastEmailSentAt
+                            c.unsubscribedAt
+                              ? `Désabonné des emails le ${formatDate(c.unsubscribedAt)}`
+                              : c.lastEmailSentAt
                               ? `Mail envoyé le ${formatDate(c.lastEmailSentAt)}`
                               : "Envoyer le mail nouveaux arrivants"
                           }

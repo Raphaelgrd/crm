@@ -103,6 +103,11 @@ export default function AutomationsPage() {
     const contact = findContact(contactId);
     const template = templates.find((t) => t.id === templateId);
     if (!contact || !template || !contact.email) return;
+    if (contact.unsubscribedAt) {
+      alert(`${contact.firstName} ${contact.lastName} s'est désabonné des emails : envoi annulé.`);
+      void removeFromQueue(queueId);
+      return;
+    }
     const vars = contactVariables(contact);
     const url =
       "https://mail.google.com/mail/?view=cm&fs=1" +

@@ -52,6 +52,8 @@ export interface Contact {
   organizationId?: string;
   /** Pays (conformité export) — sinon déduit de la colonne importée « Pays ». */
   country?: string;
+  /** Date de désabonnement des emails (lien « Se désabonner ») : plus aucun envoi. */
+  unsubscribedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

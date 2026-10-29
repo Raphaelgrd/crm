@@ -30,8 +30,12 @@ function filterBySegment(contacts: Contact[], seg: Segment): Contact[] {
 interface SendResult {
   sent: number;
   failed: number;
-  results: { email: string; success: boolean; error?: string }[];
+  skipped?: number;
+  results: { email: string; success: boolean; skipped?: boolean; error?: string }[];
 }
+
+/** Contact joignable par email : adresse valide, pas un doublon, pas désabonné. */
+const reachable = (c: Contact) => !!c.email && c.email.includes("@") && c.stage !== "Doublon" && !c.unsubscribedAt;
 
 export default function EmailsPage() {
   const { contacts } = useContacts();
@@ -52,21 +56,21 @@ export default function EmailsPage() {
 
   const recipients = useMemo(() => {
     const base = filterBySegment(contacts, segment);
-    return base.filter((c) => c.email && c.email.includes("@") && c.stage !== "Doublon");
+    return base.filter(reachable);
   }, [contacts, segment]);
 
   const segments: { value: Segment; label: string; count: number }[] = [
-    { value: "tous", label: "Tous les contacts", count: filterBySegment(contacts, "tous").filter(c => c.email && c.stage !== "Doublon").length },
-    { value: "investisseurs", label: "Investisseurs (avec mise)", count: filterBySegment(contacts, "investisseurs").filter(c => c.email && c.stage !== "Doublon").length },
+    { value: "tous", label: "Tous les contacts", count: filterBySegment(contacts, "tous").filter(reachable).length },
+    { value: "investisseurs", label: "Investisseurs (avec mise)", count: filterBySegment(contacts, "investisseurs").filter(reachable).length },
     ...DEFAULT_CATEGORIES.map((cat) => ({
       value: `cat:${cat}` as Segment,
       label: `Catégorie : ${cat}`,
-      count: filterBySegment(contacts, `cat:${cat}` as Segment).filter(c => c.email && c.stage !== "Doublon").length,
+      count: filterBySegment(contacts, `cat:${cat}` as Segment).filter(reachable).length,
     })),
     ...allTags.map((tag) => ({
       value: `tag:${tag}` as Segment,
       label: `Tag : ${tag}`,
-      count: filterBySegment(contacts, `tag:${tag}` as Segment).filter(c => c.email && c.stage !== "Doublon").length,
+      count: filterBySegment(contacts, `tag:${tag}` as Segment).filter(reachable).length,
     })),
   ];
 
@@ -107,7 +111,7 @@ export default function EmailsPage() {
   };
 
   if (step === "done" && result) {
-    const failedList = result.results.filter((r) => !r.success);
+    const failedList = result.results.filter((r) => !r.success && !r.skipped);
     return (
       <div className="mx-auto max-w-2xl px-6 py-10">
         <div className="bg-card border-border rounded-2xl border p-8 text-center shadow-sm">
@@ -122,6 +126,7 @@ export default function EmailsPage() {
             {result.failed > 0 && (
               <> · <span className="text-red-500 font-semibold">{result.failed} échoués</span></>
             )}
+            {!!result.skipped && <> · {result.skipped} désabonné{result.skipped > 1 ? "s" : ""} ignoré{result.skipped > 1 ? "s" : ""}</>}
           </p>
 
           {failedList.length > 0 && (
