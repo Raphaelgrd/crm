@@ -20,7 +20,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   if (!pdfBase64 || pdfBase64.length > 900_000) return Response.json({ error: "PDF manquant ou trop lourd (650 Ko max)." }, { status: 400 });
   const bytes = new Uint8Array(Buffer.from(pdfBase64, "base64"));
   if (Buffer.from(bytes.subarray(0, 5)).toString() !== "%PDF-") return Response.json({ error: "Ce fichier n'est pas un PDF." }, { status: 400 });
-  const problem = await checkContractFile(contract, bytes).catch(() => "PDF illisible.");
+  const problem = await checkContractFile(contract, bytes);
   if (problem) return Response.json({ error: problem }, { status: 422 });
   await setDoc(doc(await crmDb(), "contract_files", contract.id), {
     id: contract.id,

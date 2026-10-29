@@ -98,7 +98,7 @@ export default function DocumentsPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Documents légaux</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Envoi des NDA et MOU pour signature via Yousign, et documents générés par l'IA</p>
+          <p className="text-sm text-muted-foreground mt-0.5">NDA rempli automatiquement depuis la fiche contact, puis signé via Yousign</p>
         </div>
         <Link
           href="/documents/modeles"
@@ -112,15 +112,15 @@ export default function DocumentsPage() {
       <YousignSend />
       <SignatureList />
 
-      <h2 className="mt-12 mb-4 border-t border-border pt-6 text-sm font-semibold">Générer un document avec l'IA</h2>
+      <h2 className="mt-12 mb-4 border-t border-border pt-6 text-sm font-semibold">Autres documents générés par l'IA</h2>
 
       {/* Step 1 — Type */}
       <div className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
           1. Type de document
         </p>
-        <div className="grid grid-cols-3 gap-3">
-          {DOC_CARDS.map((card) => {
+        <div className="grid grid-cols-1 gap-3 sm:max-w-xs">
+          {DOC_CARDS.filter((card) => card.type === "CERFA").map((card) => {
             const active = selectedType === card.type;
             return (
               <button

@@ -41,9 +41,9 @@ interface Text {
 interface Contract {
   id: string;
   name: string;
-  /** Textes qui doivent figurer dans le PDF importé, pour refuser un modèle à la mise en page différente. */
-  anchors: string[];
+  /** Nombre et format (points) des pages du modèle, pour refuser un PDF à la mise en page différente. */
   pages: number;
+  size: [number, number];
   texts: Text[];
   signatures: { netforce: SignatureField; partner: SignatureField };
 }
@@ -54,8 +54,8 @@ export const CONTRACTS: Contract[] = [
   {
     id: "NDA",
     name: "NDA – Accord de confidentialité",
-    anchors: ["PARTIE RECEPTRICE", "immatriculation", "SIGNATURES", "Partie Réceptrice"],
     pages: 6,
+    size: [612, 792],
     texts: [
       { page: 1, x: 341, y: 641, maxWidth: 222, value: (d) => upper(d.lastName) },
       { page: 1, x: 361, y: 625.4, maxWidth: 202, value: (d) => d.firstName },
@@ -107,20 +107,21 @@ export async function loadContractFile(id: string): Promise<Uint8Array | null> {
   return b64 ? new Uint8Array(Buffer.from(b64, "base64")) : null;
 }
 
-/** Vérifie qu'un PDF importé a bien la mise en page attendue. Renvoie un message d'erreur ou null. */
+/** Vérifie qu'un PDF importé a la mise en page attendue (nombre et format des pages). Renvoie un message d'erreur ou null. */
 export async function checkContractFile(contract: Contract, bytes: Uint8Array): Promise<string | null> {
-  const { PDFParse } = await import("pdf-parse");
-  // pdf.js transfère le buffer qu'on lui donne : on lui passe une copie.
-  const parser = new PDFParse({ data: bytes.slice() });
+  let pdf: PDFDocument;
   try {
-    const r = await parser.getText();
-    if (r.total !== contract.pages) return `Le modèle doit faire ${contract.pages} pages (celui-ci en a ${r.total}).`;
-    const missing = contract.anchors.filter((a) => !r.text.includes(a));
-    if (missing.length) return `Ce PDF ne ressemble pas au modèle attendu (introuvable : ${missing.join(", ")}).`;
-    return null;
-  } finally {
-    await parser.destroy().catch(() => {});
+    pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  } catch {
+    return "Ce PDF ne peut pas être ouvert : réenregistre-le depuis Word (Fichier → Exporter en PDF).";
   }
+  const n = pdf.getPageCount();
+  if (n !== contract.pages) return `Ce n'est pas le bon modèle : il doit faire ${contract.pages} pages, celui-ci en a ${n}.`;
+  const { width, height } = pdf.getPage(0).getSize();
+  if (Math.abs(width - contract.size[0]) > 2 || Math.abs(height - contract.size[1]) > 2) {
+    return "Ce n'est pas le bon modèle : le format des pages est différent.";
+  }
+  return null;
 }
 
 /** Garde les caractères que la police standard sait écrire (accents français compris). */
