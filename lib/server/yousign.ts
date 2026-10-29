@@ -1,4 +1,4 @@
-// Client minimal de l'API Yousign v3 : envoi des modèles (NDA, MOU…) pour signature et suivi.
+// Client minimal de l'API Yousign v3 : envoi des contrats remplis par le CRM pour signature, et suivi.
 // Variables Vercel : YOUSIGN_API_KEY, YOUSIGN_ENV ("sandbox" pour les clés de test), YOUSIGN_WEBHOOK_SECRET.
 
 export class YousignError extends Error {}
@@ -40,64 +40,46 @@ const json = async <T>(path: string, method: string, body?: unknown): Promise<T>
     body: body === undefined ? undefined : JSON.stringify(body),
   }).then((r) => r.json())) as T;
 
-export interface YsTemplate {
-  id: string;
-  name: string;
-  /** Libellés des signataires à renseigner à chaque envoi (ex. « Partenaire »). */
-  labels: string[];
-}
-
-type RawTemplate = { id: string; name?: string; signers?: { label?: string | null; type?: string }[]; placeholder_signers?: { label?: string }[] };
-
-const labelsOf = (t: RawTemplate) =>
-  [...(t.placeholder_signers ?? []), ...(t.signers ?? [])]
-    .map((s) => s.label?.trim() ?? "")
-    .filter((l, i, a) => l && a.indexOf(l) === i);
-
-/** Modèles Yousign du compte, avec leurs signataires à compléter. */
-export async function listTemplates(): Promise<YsTemplate[]> {
-  const res = await json<{ data?: RawTemplate[] } | RawTemplate[]>("/templates", "GET");
-  const list = Array.isArray(res) ? res : (res.data ?? []);
-  return Promise.all(
-    list.slice(0, 50).map(async (t) => {
-      let labels = labelsOf(t);
-      if (!labels.length) labels = labelsOf(await json<RawTemplate>(`/templates/${t.id}`, "GET").catch(() => t));
-      return { id: t.id, name: t.name?.trim() || "Modèle sans nom", labels };
-    }),
-  );
-}
-
-export interface YsPlaceholder {
-  label: string;
+export interface YsSigner {
   firstName: string;
   lastName: string;
   email: string;
+  /** Emplacement de la signature, en points depuis le coin haut-gauche de la page (pages à partir de 1). */
+  field: { page: number; x: number; y: number; width: number; height: number };
 }
 
-/** Crée la demande depuis un modèle, renseigne les signataires puis l'active : Yousign envoie les emails. */
-export async function sendFromTemplate(opts: {
-  templateId: string;
+/** Crée la demande, ajoute le PDF et les signataires, puis l'active : Yousign envoie les emails. */
+export async function sendForSignature(opts: {
   name: string;
   externalId: string;
-  signers: YsPlaceholder[];
+  pdf: Uint8Array;
+  filename: string;
+  signers: YsSigner[];
 }): Promise<{ id: string }> {
   const sr = await json<{ id: string }>("/signature_requests", "POST", {
     name: opts.name.slice(0, 128),
     delivery_mode: "email",
     timezone: "Europe/Paris",
     external_id: opts.externalId,
-    template_id: opts.templateId,
-    template_placeholders: {
-      signers: opts.signers.map((s) => ({
-        label: s.label,
-        info: { first_name: s.firstName, last_name: s.lastName, email: s.email, locale: "fr" },
-      })),
-    },
   });
   try {
+    const form = new FormData();
+    form.append("file", new Blob([new Uint8Array(opts.pdf)], { type: "application/pdf" }), opts.filename);
+    form.append("nature", "signable_document");
+    const document = (await call(`/signature_requests/${sr.id}/documents`, { method: "POST", body: form }).then((r) =>
+      r.json(),
+    )) as { id: string };
+    for (const s of opts.signers) {
+      await json(`/signature_requests/${sr.id}/signers`, "POST", {
+        info: { first_name: s.firstName, last_name: s.lastName, email: s.email, locale: "fr" },
+        signature_level: "electronic_signature",
+        signature_authentication_mode: "otp_email",
+        fields: [{ document_id: document.id, type: "signature", ...s.field }],
+      });
+    }
     await json(`/signature_requests/${sr.id}/activate`, "POST");
   } catch (e) {
-    // Pas de brouillon orphelin chez Yousign si l'activation échoue.
+    // Pas de brouillon orphelin chez Yousign si une étape échoue.
     await call(`/signature_requests/${sr.id}`, { method: "DELETE" }).catch(() => {});
     throw e;
   }
