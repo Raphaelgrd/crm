@@ -103,13 +103,13 @@ export async function POST(req: NextRequest) {
 
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return Response.json({ error: "GROQ_API_KEY manquante" }, { status: 500 });
-  const model = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
+  const model = process.env.GROQ_MODEL ?? "qwen/qwen3.8-27b";
 
   const callGroq = async (msgs: Message[]) => {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages: msgs, tools: TOOLS, tool_choice: "auto", max_tokens: 1024, temperature: 0.3 }),
+      body: JSON.stringify({ model, messages: msgs, tools: TOOLS, tool_choice: "auto", max_tokens: 2048, temperature: 0.3 }),
       signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) throw new Error(await res.text());
@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      return Response.json({ reply: msg.content ?? "" });
+      return Response.json({ reply: (msg.content ?? "").replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trim() });
     }
 
     return Response.json({ reply: "Je n'ai pas pu terminer la recherche." });

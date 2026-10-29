@@ -627,7 +627,7 @@ def _install_launchd(script_path: str):
         <string>{script_path}</string>
     </array>
     <key>RunAtLoad</key><true/>
-    <key>KeepAlive</key><true/>
+    <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
     <key>StandardOutPath</key><string>{Path.home()}/.netforce_tracker.log</string>
     <key>StandardErrorPath</key><string>{Path.home()}/.netforce_tracker_error.log</string>
 </dict>
@@ -638,6 +638,39 @@ def _install_launchd(script_path: str):
     subprocess.run(["launchctl", "load", str(plist_path)])
     print(f"✓ Tracker installé au démarrage : {plist_path}")
 
+# ─── Une seule instance à la fois ─────────────────────────────────────────────
+
+PID_PATH = Path.home() / ".netforce_tracker.pid"
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+def acquire_lock() -> bool:
+    """False si un autre tracker tourne déjà (deux instances écraseraient leurs compteurs)."""
+    try:
+        other = int(PID_PATH.read_text().strip())
+        if other != os.getpid() and _pid_alive(other):
+            return False
+    except (FileNotFoundError, ValueError):
+        pass
+    PID_PATH.write_text(str(os.getpid()))
+    return True
+
+def stop_other_instances():
+    try:
+        other = int(PID_PATH.read_text().strip())
+        if other != os.getpid() and _pid_alive(other):
+            os.kill(other, 15)
+            time.sleep(1)
+    except (FileNotFoundError, ValueError, OSError):
+        pass
+    if IS_MAC:
+        subprocess.run(["pkill", "-f", "netforce_tracker.py$"], capture_output=True)
+
 # ─── Boucle principale ─────────────────────────────────────────────────────────
 
 def run():
@@ -645,6 +678,11 @@ def run():
     if not cfg.get("idToken"):
         print("Pas de configuration. Lance : python3 netforce_tracker.py --setup")
         sys.exit(1)
+
+    if not acquire_lock():
+        print("Un tracker tourne déjà sur cet ordinateur : rien à faire.")
+        print("Pour le redémarrer avec cette version : python3 netforce_tracker.py --install")
+        sys.exit(0)
 
     user_id = cfg["userId"]
     print(f"Netforce Tracker v2 démarré — {cfg.get('email', user_id)}")
@@ -769,8 +807,19 @@ def run():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Netforce Activity Tracker v2")
     parser.add_argument("--setup", action="store_true", help="Configuration initiale")
+    parser.add_argument("--install", action="store_true", help="Arrête les anciens trackers et (ré)installe le démarrage automatique")
     args = parser.parse_args()
     if args.setup:
         setup()
+    elif args.install:
+        if not load_config().get("idToken"):
+            print("Pas de configuration. Lance d'abord : python3 netforce_tracker.py --setup")
+            sys.exit(1)
+        stop_other_instances()
+        if IS_MAC:
+            _install_launchd(os.path.abspath(__file__))
+            print("✓ Tracker relancé en arrière-plan. Journal : tail -f ~/.netforce_tracker.log")
+        else:
+            run()
     else:
         run()
