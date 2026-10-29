@@ -1,23 +1,11 @@
 import { NextRequest } from "next/server";
 import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 import { TOOLS, ToolError, type ToolDef } from "@/lib/server/mcpTools";
+import { ChatMessage, LlmError, chatCompletion } from "@/lib/server/llm";
 import { assistantTools, type AssistantAction, type AssistantCtx, type Person } from "@/lib/server/assistantTools";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
-
-interface Message {
-  role: "user" | "assistant" | "system" | "tool";
-  content: string;
-  tool_call_id?: string;
-  tool_calls?: ToolCall[];
-}
-
-interface ToolCall {
-  id: string;
-  type: "function";
-  function: { name: string; arguments: string };
-}
 
 function systemPrompt(me: Person, isAdmin: boolean) {
   const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" });
@@ -66,8 +54,6 @@ function pickTools(recentUserText: string): Set<string> {
   return names;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 export async function POST(req: NextRequest) {
   const user = await verifyCrmUser(req);
   if (!user) return unauthorized();
@@ -78,10 +64,6 @@ export async function POST(req: NextRequest) {
     team?: Person[];
     files?: AssistantCtx["files"];
   };
-
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return Response.json({ error: "GROQ_API_KEY manquante" }, { status: 500 });
-  const model = process.env.GROQ_MODEL ?? "qwen/qwen3.8-27b";
 
   const me: Person = { uid: user.uid, name: body.me?.uid === user.uid ? body.me.name : user.email.split("@")[0] };
   const actions: AssistantAction[] = [];
@@ -104,28 +86,6 @@ export async function POST(req: NextRequest) {
     function: { name: t.name, description: t.description, parameters: t.inputSchema },
   }));
 
-  const callGroq = async (msgs: Message[], attempt = 0): Promise<{ choices: [{ message: { content: string | null; tool_calls?: ToolCall[] } }] }> => {
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages: msgs, tools: groqTools, tool_choice: "auto", max_tokens: 2000, temperature: 0.3 }),
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (res.status === 429 && attempt < 2) {
-      // Limite de jetons par minute : Groq indique le délai à attendre.
-      const text = await res.text();
-      const wait = Number(/try again in ([\d.]+)s/.exec(text)?.[1] ?? res.headers.get("retry-after") ?? 10);
-      if (wait <= 45) {
-        await sleep(Math.ceil(wait * 1000) + 500);
-        return callGroq(msgs, attempt + 1);
-      }
-      throw new Error("Limite d'utilisation de l'IA atteinte, réessaie dans une minute.");
-    }
-    if (res.status === 429) throw new Error("Limite d'utilisation de l'IA atteinte, réessaie dans une minute.");
-    if (!res.ok) throw new Error((await res.text()).slice(0, 300));
-    return res.json() as Promise<{ choices: [{ message: { content: string | null; tool_calls?: ToolCall[] } }] }>;
-  };
-
   const runTool = async (name: string, rawArgs: string) => {
     const tool = tools.find((t) => t.name === name);
     if (!tool) return `Outil indisponible : ${name}${user.isAdmin ? "" : " (réservé aux admins)"}.`;
@@ -139,24 +99,27 @@ export async function POST(req: NextRequest) {
   };
 
   try {
-    const conversation: Message[] = [
+    const conversation: ChatMessage[] = [
       { role: "system", content: systemPrompt(me, user.isAdmin) },
       ...body.messages.slice(-8).map((m) => ({ role: m.role, content: m.content })),
     ];
+    // On reste sur le fournisseur qui a répondu, pour ne pas mélanger les modèles en cours de raisonnement.
+    let provider = 0;
     for (let i = 0; i < 6; i++) {
-      const msg = (await callGroq(conversation)).choices[0].message;
-      if (msg.tool_calls?.length) {
-        conversation.push({ role: "assistant", content: msg.content ?? "", tool_calls: msg.tool_calls });
-        for (const tc of msg.tool_calls) {
+      const r = await chatCompletion({ messages: conversation, tools: groqTools, maxTokens: 2000, startAt: provider });
+      provider = r.provider;
+      if (r.toolCalls?.length) {
+        conversation.push({ role: "assistant", content: r.content, tool_calls: r.toolCalls });
+        for (const tc of r.toolCalls) {
           conversation.push({ role: "tool", tool_call_id: tc.id, content: await runTool(tc.function.name, tc.function.arguments) });
         }
         continue;
       }
-      const reply = (msg.content ?? "").replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trim();
-      return Response.json({ reply, actions });
+      return Response.json({ reply: r.content, actions, provider: r.providerName });
     }
     return Response.json({ reply: "Je n'ai pas pu terminer : la demande demande trop d'étapes. Reformule-la en plus petit.", actions });
   } catch (e) {
-    return Response.json({ error: `Assistant indisponible : ${e instanceof Error ? e.message : String(e)}` }, { status: 502 });
+    const msg = e instanceof LlmError ? e.message : `Assistant indisponible : ${e instanceof Error ? e.message : String(e)}`;
+    return Response.json({ error: msg }, { status: 502 });
   }
 }
