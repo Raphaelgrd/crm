@@ -22,8 +22,11 @@ async function call(path: string, init: RequestInit = {}): Promise<Response> {
     if (res.status === 401 || res.status === 403) throw new YousignError("Clé Yousign refusée : vérifie YOUSIGN_API_KEY (et YOUSIGN_ENV=sandbox pour une clé de test).");
     let detail = "";
     try {
-      const j = JSON.parse(body) as { detail?: string; title?: string };
+      const j = JSON.parse(body) as { detail?: string; title?: string; invalid_params?: { name?: string; reason?: string }[] };
       detail = j.detail || j.title || "";
+      // Yousign précise les champs refusés : on les affiche pour pouvoir corriger.
+      const bad = (j.invalid_params ?? []).map((p) => [p.name, p.reason].filter(Boolean).join(" : ")).filter(Boolean);
+      if (bad.length) detail = `${detail.replace(/\.+$/, "")} (${bad.join(" ; ")})`;
     } catch {}
     throw new YousignError(`Yousign a refusé la demande (${res.status})${detail ? ` : ${detail}` : ""}.`);
   }
@@ -53,7 +56,7 @@ const labelsOf = (t: RawTemplate) =>
 
 /** Modèles Yousign du compte, avec leurs signataires à compléter. */
 export async function listTemplates(): Promise<YsTemplate[]> {
-  const res = await json<{ data?: RawTemplate[] } | RawTemplate[]>("/templates?limit=100", "GET");
+  const res = await json<{ data?: RawTemplate[] } | RawTemplate[]>("/templates", "GET");
   const list = Array.isArray(res) ? res : (res.data ?? []);
   return Promise.all(
     list.slice(0, 50).map(async (t) => {
