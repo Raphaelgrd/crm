@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createCollectionStore } from "@/lib/firebase";
 import { authFetch, useCrmUser } from "@/lib/rapport";
 
 // Fichiers de la Data Room enregistrés en ligne (Firebase) via les routes /api/dataroom du serveur :
@@ -37,14 +36,9 @@ export interface FolderMeta {
 export const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const CHUNK = 900_000;
 
-const folderStore = createCollectionStore<FolderMeta>("dataroom_folders");
 
 function makeId() {
   return `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function makeFolderId(name: string) {
-  return `folder_${name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_${Date.now().toString(36)}`;
 }
 
 /** Appel aux routes Data Room, avec 3 essais en cas de coupure réseau ou d'erreur serveur passagère. */
@@ -230,14 +224,19 @@ export function useDataRoom() {
     return (await localGet(id))?.blob ?? null;
   };
 
-  // Abonnement temps réel aux métadonnées de dossiers dans Firestore
-  useEffect(() => {
-    return folderStore.subscribe(() => {
-      setAllFolderMetas(
-        [...folderStore.get()].sort((a, b) => a.name.localeCompare(b.name)),
-      );
-    });
+  const refreshFolders = useCallback(async () => {
+    try {
+      const res = await api("/api/dataroom/folders");
+      const { folders } = (await res.json()) as { folders: FolderMeta[] };
+      setAllFolderMetas(folders.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Chargement impossible.");
+    }
   }, []);
+
+  useEffect(() => {
+    if (user) void refreshFolders();
+  }, [user, refreshFolders]);
 
   // Dossiers visibles : public, ou admin, ou partagé avec l'utilisateur courant
   const folderMetas = allFolderMetas.filter(
@@ -421,56 +420,58 @@ export function useDataRoom() {
     }
   }, []);
 
+  /** Modifie une Data Room via le serveur ; affiche l'erreur s'il y en a une. */
+  const folderCall = useCallback(
+    async (path: string, init: RequestInit, fail: string): Promise<boolean> => {
+      try {
+        await api(path, init);
+        return true;
+      } catch (e) {
+        alert(`${fail} : ${e instanceof Error ? e.message : "erreur inconnue"}`);
+        return false;
+      } finally {
+        await refreshFolders();
+      }
+    },
+    [refreshFolders],
+  );
+
+  const json = (method: string, body: unknown): RequestInit => ({
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const metaOf = (name: string) => allFolderMetas.find((f) => f.name === name);
+
   const createFolder = useCallback(
     async (name: string): Promise<void> => {
       const clean = name.trim();
-      if (!clean) return;
-      if (allFolderMetas.some((f) => f.name === clean)) return;
-      await folderStore.set({
-        id: makeFolderId(clean),
-        name: clean,
-        visibility: "public",
-        sharedWith: [],
-        createdAt: new Date().toISOString(),
-      });
+      if (!clean || allFolderMetas.some((f) => f.name === clean)) return;
+      await folderCall("/api/dataroom/folders", json("POST", { name: clean }), "Création impossible");
     },
-    [allFolderMetas],
+    [allFolderMetas, folderCall],
   );
 
   const deleteFolder = useCallback(
     async (name: string): Promise<void> => {
-      for (const m of metaRef.current) {
-        if (m.folder === name || m.folder.startsWith(name + "/")) await api(`/api/dataroom/${m.id}`, { method: "DELETE" }).catch(() => {});
-      }
       for (const m of localRef.current) {
         if (m.folder === name || m.folder.startsWith(name + "/")) await localDelete(m.id);
       }
       await refreshLocal();
-      const meta = allFolderMetas.find((f) => f.name === name);
-      if (meta) await folderStore.remove(meta.id);
+      const meta = metaOf(name);
+      if (meta) await folderCall(`/api/dataroom/folders/${meta.id}`, { method: "DELETE" }, "Suppression impossible");
       await refresh();
     },
-    [allFolderMetas, refresh],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allFolderMetas, folderCall, refresh, refreshLocal],
   );
 
   const renameFolder = useCallback(
     async (oldName: string, newName: string): Promise<void> => {
       const clean = newName.trim();
-      if (!clean || clean === oldName) return;
-      if (allFolderMetas.some((f) => f.name === clean)) return;
-      // Update Firestore meta
-      const meta = allFolderMetas.find((f) => f.name === oldName);
-      if (meta) await folderStore.update(meta.id, { name: clean });
-      // Les fichiers du dossier et de ses sous-dossiers suivent.
-      for (const m of metaRef.current) {
-        if (m.folder === oldName || m.folder.startsWith(oldName + "/")) {
-          await api(`/api/dataroom/${m.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ folder: clean + m.folder.slice(oldName.length) }),
-          }).catch(() => {});
-        }
-      }
+      if (!clean || clean === oldName || allFolderMetas.some((f) => f.name === clean)) return;
+      const meta = metaOf(oldName);
+      if (meta && !(await folderCall(`/api/dataroom/folders/${meta.id}`, json("PATCH", { name: clean }), "Renommage impossible"))) return;
       for (const m of localRef.current) {
         if (m.folder === oldName || m.folder.startsWith(oldName + "/")) {
           const r = await localGet(m.id);
@@ -480,40 +481,39 @@ export function useDataRoom() {
       await refreshLocal();
       await refresh();
     },
-    [allFolderMetas, refresh],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allFolderMetas, folderCall, refresh, refreshLocal],
   );
 
   const setFolderVisibility = useCallback(
     async (name: string, visibility: "public" | "private"): Promise<void> => {
-      const meta = allFolderMetas.find((f) => f.name === name);
-      if (!meta) return;
-      await folderStore.update(meta.id, { visibility });
+      const meta = metaOf(name);
+      if (meta) await folderCall(`/api/dataroom/folders/${meta.id}`, json("PATCH", { visibility }), "Modification impossible");
     },
-    [allFolderMetas],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allFolderMetas, folderCall],
   );
 
   const shareFolderWith = useCallback(
     async (name: string, email: string): Promise<void> => {
-      const meta = allFolderMetas.find((f) => f.name === name);
+      const meta = metaOf(name);
       if (!meta || !email.trim()) return;
-      const sharedWith = Array.from(
-        new Set([...meta.sharedWith, email.trim().toLowerCase()]),
-      );
-      await folderStore.update(meta.id, { sharedWith });
+      const sharedWith = Array.from(new Set([...meta.sharedWith, email.trim().toLowerCase()]));
+      await folderCall(`/api/dataroom/folders/${meta.id}`, json("PATCH", { sharedWith }), "Partage impossible");
     },
-    [allFolderMetas],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allFolderMetas, folderCall],
   );
 
   const unshareFolderWith = useCallback(
     async (name: string, email: string): Promise<void> => {
-      const meta = allFolderMetas.find((f) => f.name === name);
+      const meta = metaOf(name);
       if (!meta) return;
-      const sharedWith = meta.sharedWith.filter(
-        (e) => e !== email.trim().toLowerCase(),
-      );
-      await folderStore.update(meta.id, { sharedWith });
+      const sharedWith = meta.sharedWith.filter((e) => e !== email.trim().toLowerCase());
+      await folderCall(`/api/dataroom/folders/${meta.id}`, json("PATCH", { sharedWith }), "Modification impossible");
     },
-    [allFolderMetas],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allFolderMetas, folderCall],
   );
 
   /**
@@ -556,23 +556,19 @@ export function useDataRoom() {
         toPut.push({ file, name: fileName, mime: file.type, folder: folderPath });
       }
 
-      // Create any missing top-level Data Rooms
+      // Crée les Data Rooms manquantes avant d'envoyer les fichiers.
       for (const name of newDataRooms) {
         if (!allFolderMetas.some((f) => f.name === name)) {
-          await folderStore.set({
-            id: makeFolderId(name),
-            name,
-            visibility: "public",
-            sharedWith: [],
-            createdAt: new Date().toISOString(),
-          });
+          const ok = await folderCall("/api/dataroom/folders", json("POST", { name }), `Création de la Data Room « ${name} » impossible`);
+          if (!ok) return 0;
         }
       }
 
       await putMany(toPut);
       return toPut.length;
     },
-    [allFolderMetas, putMany],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allFolderMetas, putMany, folderCall],
   );
 
   return {

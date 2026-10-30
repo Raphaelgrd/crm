@@ -146,3 +146,33 @@ export async function deleteChunks(id: string, chunks: number) {
   const s = await store();
   for (let i = 0; i < chunks; i++) await s.remove("dataroom_chunks", chunkDocId(id, i));
 }
+
+// --- Dossiers (Data Rooms) ---
+
+export interface FolderRecord {
+  id: string;
+  name: string;
+  visibility: "public" | "private";
+  sharedWith: string[];
+  createdAt: string;
+}
+
+export async function listFolders(): Promise<FolderRecord[]> {
+  return ((await (await store()).list("dataroom_folders")) as unknown as FolderRecord[]).map((f) => ({
+    ...f,
+    sharedWith: f.sharedWith ?? [],
+    visibility: f.visibility === "private" ? "private" : "public",
+  }));
+}
+
+export async function saveFolder(f: FolderRecord) {
+  await (await store()).set("dataroom_folders", f.id, { ...f });
+}
+
+export async function updateFolder(id: string, patch: Partial<FolderRecord>) {
+  await (await store()).update("dataroom_folders", id, patch);
+}
+
+export async function deleteFolderRecord(id: string) {
+  await (await store()).remove("dataroom_folders", id);
+}

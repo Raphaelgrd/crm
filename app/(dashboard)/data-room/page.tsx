@@ -232,7 +232,14 @@ export default function DataRoomPage() {
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
+    try {
+      await dropItems(e);
+    } catch (err) {
+      alert(`Import impossible : ${err instanceof Error ? err.message : err}`);
+    }
+  };
 
+  const dropItems = async (e: React.DragEvent) => {
     const dtItems = Array.from(e.dataTransfer.items);
     const hasFolder = dtItems.some((item) => {
       const entry = item.webkitGetAsEntry?.();
@@ -356,9 +363,11 @@ export default function DataRoomPage() {
             <input ref={fileInput} type="file" multiple className="hidden"
               onChange={(e) => {
                 if (e.target.files?.length) {
-                  void uploadFiles(e.target.files, currentPath).then(() => {
-                    if (fileInput.current) fileInput.current.value = "";
-                  });
+                  void uploadFiles(e.target.files, currentPath)
+                    .catch((err) => alert(`Envoi impossible : ${err instanceof Error ? err.message : err}`))
+                    .finally(() => {
+                      if (fileInput.current) fileInput.current.value = "";
+                    });
                 }
               }}
             />
@@ -371,9 +380,11 @@ export default function DataRoomPage() {
                       relativePath: (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name,
                     })),
                     currentPath,
-                  ).then(() => {
-                    if (folderInput.current) folderInput.current.value = "";
-                  });
+                  )
+                    .catch((err) => alert(`Import impossible : ${err instanceof Error ? err.message : err}`))
+                    .finally(() => {
+                      if (folderInput.current) folderInput.current.value = "";
+                    });
                 }
               }}
             />
