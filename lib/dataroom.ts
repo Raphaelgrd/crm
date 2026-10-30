@@ -1,14 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bytes, deleteDoc, doc, getDoc, setDoc } from "firebase/firestore";
-import { createCollectionStore, db } from "@/lib/firebase";
+import { createCollectionStore } from "@/lib/firebase";
 import { useCrmUser } from "@/lib/rapport";
 
-// Fichiers de la Data Room stockés dans Firestore, partagés avec toute l'équipe :
-// métadonnées dans dataroom_files, contenu découpé en morceaux de 900 Ko dans dataroom_chunks
-// (un document Firestore est limité à 1 Mo ; gratuit jusqu'à 1 Go au total).
-// Les anciens fichiers restés dans le navigateur (IndexedDB) peuvent être mis en ligne via migrateLocal.
+// ⚠️ Fichiers stockés localement dans IndexedDB (voir commentaire d'origine).
+// Les métadonnées des dossiers (visibilité, partage) vivent dans Firestore.
 
 export interface StoredFile {
   id: string;
@@ -17,13 +14,8 @@ export interface StoredFile {
   size: number;
   folder: string; // "" = racine
   createdAt: string;
-  /** URL d'aperçu (object URL) pour les petites images, générée au chargement. */
+  /** URL d'aperçu (object URL) pour les images, générée au chargement. */
   url?: string;
-}
-
-interface FileMeta extends Omit<StoredFile, "url"> {
-  chunks: number;
-  uploadedBy?: string;
 }
 
 export interface FolderMeta {
@@ -34,13 +26,11 @@ export interface FolderMeta {
   createdAt: string;
 }
 
-/** Taille maximale d'un fichier (au-delà, l'envoi et la lecture deviennent trop lents). */
-export const MAX_FILE_SIZE = 50 * 1024 * 1024;
-const CHUNK = 900_000;
-const THUMB_MAX = CHUNK; // aperçu automatique pour les images d'un seul morceau
+
+const DB_NAME = "netforce-dataroom";
+const STORE = "files";
 
 const folderStore = createCollectionStore<FolderMeta>("dataroom_folders");
-const fileStore = createCollectionStore<FileMeta>("dataroom_files");
 
 function makeId() {
   return `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -50,48 +40,7 @@ function makeFolderId(name: string) {
   return `folder_${name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_${Date.now().toString(36)}`;
 }
 
-const chunkRef = (fileId: string, i: number) => doc(db, "dataroom_chunks", `${fileId}_${i}`);
-
-/** Envoie le contenu puis la fiche : un fichier n'apparaît qu'une fois complet. */
-async function putFile(meta: Omit<FileMeta, "chunks">, blob: Blob): Promise<void> {
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  const chunks = Math.max(1, Math.ceil(bytes.length / CHUNK));
-  for (let i = 0; i < chunks; i++) {
-    await setDoc(chunkRef(meta.id, i), { fileId: meta.id, i, data: Bytes.fromUint8Array(bytes.subarray(i * CHUNK, (i + 1) * CHUNK)) });
-  }
-  await fileStore.set({ ...meta, chunks });
-}
-
-const blobCache = new Map<string, Blob>();
-
-async function getBlob(meta: FileMeta): Promise<Blob> {
-  const cached = blobCache.get(meta.id);
-  if (cached) return cached;
-  const parts: Uint8Array[] = [];
-  for (let i = 0; i < meta.chunks; i++) {
-    const snap = await getDoc(chunkRef(meta.id, i));
-    if (!snap.exists()) throw new Error(`Fichier incomplet : ${meta.name}`);
-    parts.push((snap.data().data as Bytes).toUint8Array());
-  }
-  const blob = new Blob(parts as BlobPart[], { type: meta.mime });
-  blobCache.set(meta.id, blob);
-  return blob;
-}
-
-async function removeChunks(meta: FileMeta) {
-  for (let i = 0; i < meta.chunks; i++) await deleteDoc(chunkRef(meta.id, i));
-  blobCache.delete(meta.id);
-}
-
-// --- Anciens fichiers locaux (IndexedDB) ---
-const DB_NAME = "netforce-dataroom";
-const STORE = "files";
-
-interface LocalRecord extends Omit<StoredFile, "url"> {
-  blob: Blob;
-}
-
-function openLocalDb(): Promise<IDBDatabase> {
+function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = window.indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = () => {
@@ -102,21 +51,56 @@ function openLocalDb(): Promise<IDBDatabase> {
   });
 }
 
-async function localRun<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  const idb = await openLocalDb();
+interface FileRecord extends Omit<StoredFile, "url"> {
+  blob: Blob;
+}
+
+function requestAsPromise<T>(req: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbGetAll(): Promise<FileRecord[]> {
+  const db = await openDb();
   try {
-    return await new Promise<T>((resolve, reject) => {
-      const req = fn(idb.transaction(STORE, mode).objectStore(STORE));
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
+    return await requestAsPromise(
+      db.transaction(STORE, "readonly").objectStore(STORE).getAll(),
+    );
   } finally {
-    idb.close();
+    db.close();
   }
 }
 
-const localGetAll = () => localRun<LocalRecord[]>("readonly", (s) => s.getAll() as IDBRequest<LocalRecord[]>).catch(() => [] as LocalRecord[]);
-const localDelete = (id: string) => localRun("readwrite", (s) => s.delete(id));
+async function dbPut(record: FileRecord): Promise<void> {
+  const db = await openDb();
+  try {
+    await requestAsPromise(db.transaction(STORE, "readwrite").objectStore(STORE).put(record));
+  } finally {
+    db.close();
+  }
+}
+
+async function dbDelete(id: string): Promise<void> {
+  const db = await openDb();
+  try {
+    await requestAsPromise(db.transaction(STORE, "readwrite").objectStore(STORE).delete(id));
+  } finally {
+    db.close();
+  }
+}
+
+async function dbGet(id: string): Promise<FileRecord | undefined> {
+  const db = await openDb();
+  try {
+    return await requestAsPromise(
+      db.transaction(STORE, "readonly").objectStore(STORE).get(id),
+    );
+  } finally {
+    db.close();
+  }
+}
 
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
@@ -125,55 +109,36 @@ export function formatSize(bytes: number): string {
 }
 
 export function useDataRoom() {
-  const [metas, setMetas] = useState<FileMeta[]>(fileStore.get());
-  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [files, setFiles] = useState<StoredFile[]>([]);
   const [allFolderMetas, setAllFolderMetas] = useState<FolderMeta[]>([]);
-  const [loading, setLoading] = useState(!fileStore.ready());
-  const [localCount, setLocalCount] = useState(0);
-  const [busy, setBusy] = useState<{ done: number; total: number } | null>(null);
-  const urlsRef = useRef<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const urlsRef = useRef<string[]>([]);
   const { user, isAdmin } = useCrmUser();
   const userEmail = (user?.email ?? "").toLowerCase();
 
-  useEffect(
-    () =>
-      fileStore.subscribe(() => {
-        setMetas([...fileStore.get()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-        setLoading(false);
-      }),
-    [],
-  );
-
-  useEffect(() => {
-    void localGetAll().then((r) => setLocalCount(r.length));
+  const refresh = useCallback(async () => {
+    const records = await dbGetAll();
+    urlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+    urlsRef.current = [];
+    const list: StoredFile[] = records
+      .map(({ blob, ...meta }) => {
+        let url: string | undefined;
+        if (meta.mime.startsWith("image/")) {
+          url = URL.createObjectURL(blob);
+          urlsRef.current.push(url);
+        }
+        return { ...meta, url };
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    setFiles(list);
+    setLoading(false);
   }, []);
 
-  // Aperçus des petites images, chargés une seule fois chacun.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      for (const m of metas) {
-        if (cancelled) return;
-        if (!m.mime.startsWith("image/") || m.size > THUMB_MAX || urlsRef.current[m.id]) continue;
-        try {
-          const url = URL.createObjectURL(await getBlob(m));
-          urlsRef.current[m.id] = url;
-          setThumbs((t) => ({ ...t, [m.id]: url }));
-        } catch {}
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [metas]);
-
-  useEffect(() => {
+    void refresh();
     const urls = urlsRef.current;
-    return () => Object.values(urls).forEach((u) => URL.revokeObjectURL(u));
-  }, []);
-
-  const files: StoredFile[] = metas.map(({ chunks: _c, uploadedBy: _u, ...m }) => ({ ...m, url: thumbs[m.id] }));
-  const totalSize = metas.reduce((s, m) => s + m.size, 0);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [refresh]);
 
   // Abonnement temps réel aux métadonnées de dossiers dans Firestore
   useEffect(() => {
@@ -193,106 +158,70 @@ export function useDataRoom() {
   );
 
   const folders = folderMetas.map((f) => f.name);
-  const findMeta = (id: string) => fileStore.get().find((m) => m.id === id);
-
-  /** Envoie une liste de fichiers ; signale ceux trop lourds. */
-  const putMany = useCallback(
-    async (items: { file: Blob & { name?: string }; name: string; mime: string; folder: string; createdAt?: string; id?: string }[]) => {
-      const tooBig = items.filter((x) => x.file.size > MAX_FILE_SIZE);
-      const ok = items.filter((x) => x.file.size <= MAX_FILE_SIZE);
-      setBusy({ done: 0, total: ok.length });
-      let done = 0;
-      try {
-        for (const x of ok) {
-          await putFile(
-            {
-              id: x.id ?? makeId(),
-              name: x.name,
-              mime: x.mime || "application/octet-stream",
-              size: x.file.size,
-              folder: x.folder,
-              createdAt: x.createdAt ?? new Date().toISOString(),
-              uploadedBy: userEmail,
-            },
-            x.file,
-          );
-          setBusy({ done: ++done, total: ok.length });
-        }
-      } finally {
-        setBusy(null);
-      }
-      if (tooBig.length) {
-        alert(`Fichier${tooBig.length > 1 ? "s" : ""} trop lourd${tooBig.length > 1 ? "s" : ""} (50 Mo max), non envoyé${tooBig.length > 1 ? "s" : ""} : ${tooBig.map((x) => x.name).join(", ")}`);
-      }
-      return done;
-    },
-    [userEmail],
-  );
 
   const uploadFiles = useCallback(
-    (fileList: File[] | FileList, folder: string): Promise<number> =>
-      putMany(Array.from(fileList).map((f) => ({ file: f, name: f.name, mime: f.type, folder }))),
-    [putMany],
+    async (fileList: File[] | FileList, folder: string): Promise<number> => {
+      const items = Array.from(fileList);
+      for (const f of items) {
+        await dbPut({
+          id: makeId(),
+          name: f.name,
+          mime: f.type || "application/octet-stream",
+          size: f.size,
+          folder,
+          createdAt: new Date().toISOString(),
+          blob: f,
+        });
+      }
+      await refresh();
+      return items.length;
+    },
+    [refresh],
   );
 
-  /** Met en ligne les fichiers restés dans ce navigateur, puis les retire du navigateur. */
-  const migrateLocal = useCallback(async (): Promise<number> => {
-    const records = await localGetAll();
-    const known = new Set(fileStore.get().map((m) => m.id));
-    const todo = records.filter((r) => !known.has(r.id));
-    const n = await putMany(todo.map((r) => ({ id: r.id, file: r.blob, name: r.name, mime: r.mime, folder: r.folder, createdAt: r.createdAt })));
-    const online = new Set(fileStore.get().map((m) => m.id));
-    for (const r of records) if (online.has(r.id)) await localDelete(r.id);
-    setLocalCount((await localGetAll()).length);
-    return n;
-  }, [putMany]);
+  const deleteFile = useCallback(
+    async (id: string): Promise<void> => {
+      await dbDelete(id);
+      await refresh();
+    },
+    [refresh],
+  );
 
-  const deleteFile = useCallback(async (id: string): Promise<void> => {
-    const meta = findMeta(id);
-    if (!meta) return;
-    await fileStore.remove(id);
-    await removeChunks(meta);
-  }, []);
+  const renameFile = useCallback(
+    async (id: string, name: string): Promise<void> => {
+      const record = await dbGet(id);
+      if (!record || !name.trim()) return;
+      await dbPut({ ...record, name: name.trim() });
+      await refresh();
+    },
+    [refresh],
+  );
 
-  const renameFile = useCallback(async (id: string, name: string): Promise<void> => {
-    if (!findMeta(id) || !name.trim()) return;
-    await fileStore.update(id, { name: name.trim() });
-  }, []);
-
-  const moveFile = useCallback(async (id: string, folder: string): Promise<void> => {
-    if (!findMeta(id)) return;
-    await fileStore.update(id, { folder });
-  }, []);
-
-  /** Contenu d'un fichier (pour l'aperçu ou un zip). */
-  const fileBlob = useCallback(async (id: string): Promise<Blob | null> => {
-    const meta = findMeta(id);
-    return meta ? getBlob(meta) : null;
-  }, []);
+  const moveFile = useCallback(
+    async (id: string, folder: string): Promise<void> => {
+      const record = await dbGet(id);
+      if (!record) return;
+      await dbPut({ ...record, folder });
+      await refresh();
+    },
+    [refresh],
+  );
 
   const openFile = useCallback(async (id: string): Promise<void> => {
-    const meta = findMeta(id);
-    if (!meta) return;
-    // Fenêtre ouverte tout de suite : sinon le navigateur la bloque après le téléchargement.
-    const win = window.open("", "_blank");
-    try {
-      const url = URL.createObjectURL(await getBlob(meta));
-      if (win) win.location.href = url;
-      else window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch (e) {
-      win?.close();
-      alert(e instanceof Error ? e.message : "Ouverture impossible.");
-    }
+    const record = await dbGet(id);
+    if (!record) return;
+    const url = URL.createObjectURL(record.blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }, []);
 
   const downloadFile = useCallback(async (id: string): Promise<void> => {
-    const meta = findMeta(id);
-    if (!meta) return;
-    const url = URL.createObjectURL(await getBlob(meta));
+    const record = await dbGet(id);
+    if (!record) return;
+    const url = URL.createObjectURL(record.blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = meta.name;
+    a.download = record.name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }, []);
@@ -315,16 +244,15 @@ export function useDataRoom() {
 
   const deleteFolder = useCallback(
     async (name: string): Promise<void> => {
-      for (const m of fileStore.get()) {
-        if (m.folder === name || m.folder.startsWith(name + "/")) {
-          await fileStore.remove(m.id);
-          await removeChunks(m);
-        }
+      const records = await dbGetAll();
+      for (const r of records) {
+        if (r.folder === name) await dbDelete(r.id);
       }
       const meta = allFolderMetas.find((f) => f.name === name);
       if (meta) await folderStore.remove(meta.id);
+      await refresh();
     },
-    [allFolderMetas],
+    [allFolderMetas, refresh],
   );
 
   const renameFolder = useCallback(
@@ -335,14 +263,16 @@ export function useDataRoom() {
       // Update Firestore meta
       const meta = allFolderMetas.find((f) => f.name === oldName);
       if (meta) await folderStore.update(meta.id, { name: clean });
-      // Les fichiers du dossier et de ses sous-dossiers suivent.
-      for (const m of fileStore.get()) {
-        if (m.folder === oldName || m.folder.startsWith(oldName + "/")) {
-          await fileStore.update(m.id, { folder: clean + m.folder.slice(oldName.length) });
+      // Update all file records that live in this folder or subfolders
+      const records = await dbGetAll();
+      for (const r of records) {
+        if (r.folder === oldName || r.folder.startsWith(oldName + "/")) {
+          await dbPut({ ...r, folder: clean + r.folder.slice(oldName.length) });
         }
       }
+      await refresh();
     },
-    [allFolderMetas],
+    [allFolderMetas, refresh],
   );
 
   const setFolderVisibility = useCallback(
@@ -393,7 +323,7 @@ export function useDataRoom() {
       basePath: string,
     ): Promise<number> => {
       const newDataRooms = new Set<string>();
-      const toPut: { file: File; name: string; mime: string; folder: string }[] = [];
+      let count = 0;
 
       for (const { file, relativePath } of items) {
         const parts = relativePath.split("/").filter(Boolean);
@@ -415,7 +345,17 @@ export function useDataRoom() {
               ? `${basePath}/${folderSegments.join("/")}`
               : basePath;
         }
-        toPut.push({ file, name: fileName, mime: file.type, folder: folderPath });
+
+        await dbPut({
+          id: makeId(),
+          name: fileName,
+          mime: file.type || "application/octet-stream",
+          size: file.size,
+          folder: folderPath,
+          createdAt: new Date().toISOString(),
+          blob: file,
+        });
+        count++;
       }
 
       // Create any missing top-level Data Rooms
@@ -431,9 +371,10 @@ export function useDataRoom() {
         }
       }
 
-      return putMany(toPut);
+      await refresh();
+      return count;
     },
-    [allFolderMetas, putMany],
+    [allFolderMetas, refresh],
   );
 
   return {
@@ -442,11 +383,6 @@ export function useDataRoom() {
     folderMetas,
     isAdmin,
     loading,
-    totalSize,
-    busy,
-    localCount,
-    migrateLocal,
-    fileBlob,
     uploadFiles,
     importFolder,
     deleteFile,
