@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Loader2,
   ChevronRight,
   Download,
   ExternalLink,
@@ -111,7 +112,14 @@ export default function DataRoomPage() {
     setFolderVisibility,
     shareFolderWith,
     unshareFolderWith,
+    loadError,
+    totalSize,
+    busy,
+    localCount,
+    migrateLocal,
+    fileBlob,
   } = useDataRoom();
+  const [migrating, setMigrating] = useState(false);
 
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
@@ -127,19 +135,12 @@ export default function DataRoomPage() {
   const [preview, setPreview] = useState<{ file: StoredFile; url: string } | null>(null);
 
   const openPreview = async (f: StoredFile) => {
-    const db = await new Promise<IDBDatabase>((res, rej) => {
-      const r = window.indexedDB.open("netforce-dataroom", 1);
-      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
-    });
-    const record = await new Promise<{ blob: Blob } | undefined>((res) => {
-      const req = db.transaction("files", "readonly").objectStore("files").get(f.id);
-      req.onsuccess = () => res(req.result as { blob: Blob } | undefined);
-      req.onerror = () => res(undefined);
-    });
-    db.close();
-    if (!record) return;
-    const url = URL.createObjectURL(record.blob);
-    setPreview({ file: f, url });
+    try {
+      const blob = await fileBlob(f.id);
+      if (blob) setPreview({ file: f, url: URL.createObjectURL(blob) });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Aperçu impossible.");
+    }
   };
 
   const closePreview = () => {
@@ -159,28 +160,19 @@ export default function DataRoomPage() {
     const folderFiles = files.filter(
       (f) => f.folder === folderName || f.folder.startsWith(folderName + "/"),
     );
-    for (const f of folderFiles) {
-      const { dbGet } = await import("@/lib/dataroom").then(() => {
-        return { dbGet: null };
-      });
-      // fetch blob via openFile approach — reach IndexedDB directly
-      const db = await new Promise<IDBDatabase>((res, rej) => {
-        const r = window.indexedDB.open("netforce-dataroom", 1);
-        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
-      });
-      const record = await new Promise<{ blob: Blob; name: string } | undefined>((res) => {
-        const tx = db.transaction("files", "readonly");
-        const req = tx.objectStore("files").get(f.id);
-        req.onsuccess = () => res(req.result as { blob: Blob; name: string } | undefined);
-        req.onerror = () => res(undefined);
-      });
-      db.close();
-      if (record) {
-        const subPath = f.folder.startsWith(folderName + "/")
-          ? f.folder.slice(folderName.length + 1) + "/" + f.name
-          : f.name;
-        zip.file(subPath, record.blob);
+    try {
+      for (const f of folderFiles) {
+        const blob = await fileBlob(f.id);
+        if (blob) {
+          const subPath = f.folder.startsWith(folderName + "/")
+            ? f.folder.slice(folderName.length + 1) + "/" + f.name
+            : f.name;
+          zip.file(subPath, blob);
+        }
       }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Téléchargement impossible.");
+      return;
     }
     const blob = await zip.generateAsync({ type: "blob" });
     const url = URL.createObjectURL(blob);
@@ -408,6 +400,44 @@ export default function DataRoomPage() {
           </div>
         )}
 
+        {loadError && (
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+            Impossible de charger les fichiers : {loadError}
+          </div>
+        )}
+        {localCount > 0 && (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+            <span>
+              {localCount} fichier{localCount > 1 ? "s sont" : " est"} encore seulement sur cet ordinateur : l&apos;équipe ne {localCount > 1 ? "les" : "le"} voit pas.
+            </span>
+            <button
+              type="button"
+              disabled={migrating || !!busy}
+              onClick={async () => {
+                setMigrating(true);
+                try {
+                  const n = await migrateLocal();
+                  if (n) alert(`${n} fichier${n > 1 ? "s" : ""} mis en ligne.`);
+                } finally {
+                  setMigrating(false);
+                }
+              }}
+              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {migrating ? "Mise en ligne…" : "Mettre en ligne pour l'équipe"}
+            </button>
+          </div>
+        )}
+        {busy && (
+          <div className="mb-5 flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+            Envoi en ligne : {busy.done} / {busy.total} fichier{busy.total > 1 ? "s" : ""}… ne ferme pas la page.
+          </div>
+        )}
+        {isAtRoot && totalSize > 0 && (
+          <p className="text-muted-foreground mb-4 text-xs">Espace utilisé : {formatSize(totalSize)} sur 1 Go gratuits</p>
+        )}
+
         {/* Root — Data Room cards */}
         {isAtRoot && (
           loading ? (
@@ -566,6 +596,7 @@ export default function DataRoomPage() {
                       <div className="p-3">
                         <p className="text-foreground cursor-pointer truncate text-sm font-semibold hover:underline" title={f.name} onClick={() => void openPreview(f)}>{f.name}</p>
                         <p className="text-muted-foreground mt-0.5 text-xs">{formatSize(f.size)} — {formatDate(f.createdAt)}</p>
+                        {f.local && <p className="mt-0.5 text-[10px] font-medium text-amber-600">Sur cet ordinateur uniquement</p>}
                       </div>
                       <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                         <button type="button" onClick={() => void openFile(f.id)} className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700" aria-label="Ouvrir"><ExternalLink className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" /></button>

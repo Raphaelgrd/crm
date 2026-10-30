@@ -9,7 +9,7 @@ import {
 } from "firebase/auth";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { crmAdminApp } from "./admin";
-import { Firestore, doc, getFirestore, setDoc } from "firebase/firestore/lite";
+import { Firestore, connectFirestoreEmulator, doc, getFirestore, setDoc } from "firebase/firestore/lite";
 
 const CRM_APP = "server-crm";
 let crmSignIn: Promise<void> | null = null;
@@ -29,6 +29,15 @@ export async function crmDb(): Promise<Firestore> {
       },
       CRM_APP,
     );
+  // Tests en local uniquement : base de l'émulateur Firestore (variable jamais définie sur Vercel).
+  const emulator = process.env.FIRESTORE_EMULATOR_HOST;
+  if (emulator) {
+    const [host, port] = emulator.split(":");
+    try {
+      connectFirestoreEmulator(getFirestore(app), host, Number(port));
+    } catch {}
+    return getFirestore(app);
+  }
   const admin = crmAdminApp();
   const auth = getAuth(app);
   if (admin && !auth.currentUser) {
