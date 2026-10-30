@@ -436,9 +436,54 @@ export function useDataRoom() {
     [allFolderMetas, putMany],
   );
 
+  /**
+   * Recopie la Data Room de l'ancien CRM (netforce.vercel.app) : dossiers recréés avec leurs noms,
+   * fichiers téléchargés depuis son stockage puis mis en ligne ici. Relançable sans doublons.
+   */
+  const importLegacy = useCallback(async (): Promise<{ imported: number; skipped: number; failed: string[] }> => {
+    if (!user) throw new Error("Connecte-toi au CRM.");
+    const res = await fetch("/api/dataroom/legacy", { headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+    const data = (await res.json()) as { files?: { path: string; name: string; folder: string; mime: string; createdAt: string; url: string }[]; error?: string };
+    if (!res.ok || !data.files) throw new Error(data.error || "Lecture de l'ancien CRM impossible.");
+
+    const known = new Set(fileStore.get().map((m) => m.id));
+    const legacyId = (path: string) => {
+      let h = 0;
+      for (let i = 0; i < path.length; i++) h = (Math.imul(31, h) + path.charCodeAt(i)) | 0;
+      return `legacy_${(h >>> 0).toString(36)}_${path.length.toString(36)}`;
+    };
+    const todo = data.files.filter((f) => !known.has(legacyId(f.path)));
+
+    const existing = new Set(folderStore.get().map((f) => f.name));
+    for (const name of new Set(todo.map((f) => f.folder.split("/")[0]).filter(Boolean))) {
+      if (existing.has(name)) continue;
+      await folderStore.set({ id: makeFolderId(name), name, visibility: "private", sharedWith: [], createdAt: new Date().toISOString() });
+    }
+
+    const failed: string[] = [];
+    let imported = 0;
+    setBusy({ done: 0, total: todo.length });
+    try {
+      for (const f of todo) {
+        try {
+          const r = await fetch(f.url);
+          if (!r.ok) throw new Error(String(r.status));
+          imported += await putMany([{ id: legacyId(f.path), file: await r.blob(), name: f.name, mime: f.mime, folder: f.folder, createdAt: f.createdAt }]);
+        } catch {
+          failed.push(f.name);
+        }
+        setBusy({ done: imported + failed.length, total: todo.length });
+      }
+    } finally {
+      setBusy(null);
+    }
+    return { imported, skipped: data.files.length - todo.length, failed };
+  }, [user, putMany]);
+
   return {
     files,
     folders,
+    importLegacy,
     folderMetas,
     isAdmin,
     loading,

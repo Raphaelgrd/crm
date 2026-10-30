@@ -116,6 +116,7 @@ export default function DataRoomPage() {
     busy,
     localCount,
     migrateLocal,
+    importLegacy,
     fileBlob,
   } = useDataRoom();
   const [migrating, setMigrating] = useState(false);
@@ -307,6 +308,31 @@ export default function DataRoomPage() {
             {isAtRoot ? (
               isAdmin && (
                 <>
+                  <button
+                    type="button"
+                    disabled={migrating || !!busy}
+                    onClick={async () => {
+                      if (!confirm("Recopier ici tous les dossiers et documents de la Data Room de l'ancien CRM (netforce.vercel.app) ? Les dossiers importés seront privés (visibles des admins). Ne ferme pas la page pendant l'import.")) return;
+                      setMigrating(true);
+                      try {
+                        const r = await importLegacy();
+                        alert(
+                          `${r.imported} document${r.imported > 1 ? "s" : ""} importé${r.imported > 1 ? "s" : ""}` +
+                            (r.skipped ? `, ${r.skipped} déjà présent${r.skipped > 1 ? "s" : ""}` : "") +
+                            (r.failed.length ? `.\nÉchec (relance l'import pour réessayer) : ${r.failed.join(", ")}` : "."),
+                        );
+                      } catch (e) {
+                        alert(e instanceof Error ? e.message : "Import interrompu, relance-le.");
+                      } finally {
+                        setMigrating(false);
+                      }
+                    }}
+                    className="border-border bg-card text-foreground hover:bg-muted inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+                    title="Recopier la Data Room de netforce.vercel.app"
+                  >
+                    <FileUp className="h-4 w-4" aria-hidden="true" />
+                    {migrating ? "Import en cours…" : "Importer l'ancien CRM"}
+                  </button>
                   <button
                     type="button"
                     onClick={() => folderInput.current?.click()}
