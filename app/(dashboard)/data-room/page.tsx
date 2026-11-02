@@ -12,9 +12,7 @@ import {
   FolderLock,
   FolderOpen,
   FolderPlus,
-  Globe,
   Home,
-  Lock,
   Pencil,
   Plus,
   Search,
@@ -90,6 +88,46 @@ async function readAllDirEntries(dir: FileSystemDirectoryEntry): Promise<FileSys
     readBatch();
   });
   return all;
+}
+
+/** Interrupteur Public (vert, toute l'équipe) / Privé (rouge, admins et invités). */
+function VisibilitySwitch({ isPrivate, editable, onChange }: { isPrivate: boolean; editable: boolean; onChange: (priv: boolean) => void }) {
+  // Affichage immédiat au clic, le serveur confirme ensuite.
+  const [pending, setPending] = useState<boolean | null>(null);
+  useEffect(() => setPending(null), [isPrivate]);
+  const priv = pending ?? isPrivate;
+  const label = priv ? "Privé" : "Public";
+  const hint = priv ? "Admins et invités uniquement" : "Visible par toute l'équipe";
+  if (!editable) {
+    return (
+      <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${priv ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`} title={hint}>
+        <span className={`h-2 w-2 rounded-full ${priv ? "bg-red-500" : "bg-green-500"}`} aria-hidden="true" />
+        {label}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={!priv}
+      aria-label={`${label} : ${hint}. Cliquer pour rendre ${priv ? "public" : "privé"}`}
+      title={hint}
+      onClick={() => {
+        setPending(!priv);
+        onChange(!priv);
+      }}
+      className="group/switch inline-flex items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${priv ? "bg-red-500" : "bg-green-500"}`}>
+        <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${priv ? "translate-x-0.5" : "translate-x-[22px]"}`} />
+      </span>
+      <span className="text-left leading-tight">
+        <span className={`block text-xs font-semibold ${priv ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>{label}</span>
+        <span className="text-muted-foreground block text-[10px]">{hint}</span>
+      </span>
+    </button>
+  );
 }
 
 export default function DataRoomPage() {
@@ -500,14 +538,6 @@ export default function DataRoomPage() {
                               <button type="button" onClick={() => { setRenameFolderName(meta.name); setRenameFolderTarget(meta.name); }} className="rounded-lg p-1.5 hover:bg-muted transition-colors" title="Renommer">
                                 <Pencil className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                               </button>
-                              <button type="button" onClick={() => void setFolderVisibility(meta.name, isPrivate ? "public" : "private")} className="rounded-lg p-1.5 hover:bg-muted transition-colors" title={isPrivate ? "Rendre public" : "Rendre privé"}>
-                                {isPrivate ? <Globe className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> : <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
-                              </button>
-                              {isPrivate && (
-                                <button type="button" onClick={() => { setShareEmail(""); setShareModalFolder(meta.name); }} className="rounded-lg p-1.5 hover:bg-muted transition-colors" title="Partager">
-                                  <Share2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                                </button>
-                              )}
                               {confirmDelete === `folder:${meta.name}` ? (
                                 <button type="button" onClick={() => { setConfirmDelete(null); void deleteFolder(meta.name); }} className="rounded-lg bg-red-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-red-600">Confirmer ?</button>
                               ) : (
@@ -525,11 +555,24 @@ export default function DataRoomPage() {
                           <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                           {count} document{count !== 1 ? "s" : ""}
                         </span>
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${isPrivate ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" : "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"}`}>
-                          {isPrivate ? <Lock className="h-3 w-3 shrink-0" aria-hidden="true" /> : <Globe className="h-3 w-3 shrink-0" aria-hidden="true" />}
-                          {isPrivate ? "Privé" : "Public"}
-                        </span>
                         <span>Créé le {formatDate(meta.createdAt)}</span>
+                      </div>
+                      <div className="border-border mt-4 flex items-center justify-between gap-3 border-t pt-3" onClick={(e) => e.stopPropagation()}>
+                        <VisibilitySwitch
+                          isPrivate={isPrivate}
+                          editable={isAdmin}
+                          onChange={(priv) => void setFolderVisibility(meta.name, priv ? "private" : "public")}
+                        />
+                        {isAdmin && isPrivate && (
+                          <button
+                            type="button"
+                            onClick={() => { setShareEmail(""); setShareModalFolder(meta.name); }}
+                            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs font-medium"
+                          >
+                            <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            {meta.sharedWith.length ? `Invités (${meta.sharedWith.length})` : "Inviter"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
