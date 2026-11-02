@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore/lite";
 import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
-import { crmDb } from "@/lib/server/db";
+import { store } from "@/lib/server/store";
 import { CONTRACTS, fillContract, loadContractFile, readContractBody } from "@/lib/server/contracts";
 import { logContactActivity } from "@/lib/server/signatures";
 import { YousignError, sendForSignature, yousignConfigured, yousignEnv } from "@/lib/server/yousign";
@@ -15,11 +14,19 @@ const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0
 /** Connexion Yousign, contrats disponibles et signataire Netforce enregistré. */
 export async function GET(req: NextRequest) {
   if (!(await verifyCrmUser(req))) return unauthorized();
-  const db = await crmDb();
-  const contracts = await Promise.all(
+  try {
+    return Response.json({ configured: yousignConfigured(), env: yousignEnv(), contracts: await contractStatus() });
+  } catch (e) {
+    console.error("[yousign] GET", e);
+    return Response.json({ error: "Impossible de lire les modèles de contrat. Réessaie dans un instant." }, { status: 500 });
+  }
+}
+
+async function contractStatus() {
+  const db = await store();
+  return Promise.all(
     CONTRACTS.map(async (c) => {
-      const snap = await getDoc(doc(db, "contract_files", c.id));
-      const d = snap.exists() ? snap.data() : null;
+      const d = await db.get("contract_files", c.id);
       return {
         id: c.id,
         name: c.name,
@@ -29,7 +36,6 @@ export async function GET(req: NextRequest) {
       };
     }),
   );
-  return Response.json({ configured: yousignConfigured(), env: yousignEnv(), contracts });
 }
 
 /** Remplit le contrat avec les infos du partenaire et l'envoie pour signature. */
@@ -88,10 +94,10 @@ export async function POST(req: NextRequest) {
       createdAt: now,
       updatedAt: now,
     };
-    const db = await crmDb();
-    await setDoc(doc(db, "signatures", id), record);
+    const db = await store();
+    await db.set("signatures", id, record);
     // Le signataire Netforce est retenu pour les prochains envois.
-    await updateDoc(doc(db, "contract_files", contract.id), { netforceSigner: netforce }).catch(() => {});
+    await db.update("contract_files", contract.id, { netforceSigner: netforce }).catch(() => {});
     await logContactActivity(record.contactId, `${contract.id} envoyé pour signature via Yousign (${record.signers.map((s) => s.name).join(", ")}).`);
     return Response.json({ signature: record });
   } catch (e) {

@@ -121,7 +121,7 @@ export function ContractForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload()),
       });
-      const d = (await r.json()) as { error?: string };
+      const d = (await r.json().catch(() => ({ error: `Erreur du serveur (${r.status}). Réessaie dans un instant.` }))) as { error?: string };
       if (!r.ok || d.error) throw new Error(d.error || "Envoi impossible.");
       setDone(true);
       onSent(`${contractId} envoyé à ${form.firstName} ${form.lastName} et ${netforce.firstName} ${netforce.lastName}.`);

@@ -13,6 +13,7 @@ import { Firestore, connectFirestoreEmulator, doc, getFirestore, setDoc } from "
 
 const CRM_APP = "server-crm";
 let crmSignIn: Promise<void> | null = null;
+let crmSignInRetryAt = 0;
 
 /** Base du CRM pour les routes serveur, avec une session « serveur » quand le compte de service est configuré. */
 export async function crmDb(): Promise<Firestore> {
@@ -40,15 +41,21 @@ export async function crmDb(): Promise<Firestore> {
   }
   const admin = crmAdminApp();
   const auth = getAuth(app);
-  if (admin && !auth.currentUser) {
-    crmSignIn ??= getAdminAuth(admin)
-      .createCustomToken("crm-server", { crm: true, admin: true, server: true })
-      .then((t) => signInWithCustomToken(auth, t))
-      .then(() => undefined)
-      .finally(() => {
-        crmSignIn = null;
-      });
-    await crmSignIn;
+  if (admin && !auth.currentUser && Date.now() >= crmSignInRetryAt) {
+    crmSignIn ??= (async () => {
+      const token = await getAdminAuth(admin).createCustomToken("crm-server", { crm: true, admin: true, server: true });
+      await signInWithCustomToken(auth, token);
+    })().finally(() => {
+      crmSignIn = null;
+    });
+    try {
+      await crmSignIn;
+    } catch (e) {
+      // Session serveur impossible (ex. clé d'API Firebase restreinte aux sites web) : on continue sans session
+      // plutôt que de faire échouer la requête, et on ne réessaie qu'au bout de 5 minutes.
+      crmSignInRetryAt = Date.now() + 5 * 60_000;
+      console.error("[crmDb] session serveur impossible, accès sans session :", e instanceof Error ? e.message : e);
+    }
   }
   return getFirestore(app);
 }

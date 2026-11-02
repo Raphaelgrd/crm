@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
-import { doc, updateDoc } from "firebase/firestore/lite";
 import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
-import { crmDb } from "@/lib/server/db";
+import { store } from "@/lib/server/store";
 import { getRecord, logContactActivity, refreshRecord } from "@/lib/server/signatures";
 import { YousignError, cancelSignature } from "@/lib/server/yousign";
 
@@ -31,7 +30,7 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
   if (!rec) return Response.json({ error: "Demande introuvable." }, { status: 404 });
   try {
     await cancelSignature(rec.yousignId);
-    await updateDoc(doc(await crmDb(), "signatures", rec.id), { status: "canceled", updatedAt: new Date().toISOString() });
+    await (await store()).update("signatures", rec.id, { status: "canceled", updatedAt: new Date().toISOString() });
     await logContactActivity(rec.contactId, `${rec.docType} : demande de signature Yousign annulée.`);
     return Response.json({ ok: true });
   } catch (e) {

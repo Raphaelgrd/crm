@@ -89,7 +89,12 @@ export function YousignSend() {
   async function load() {
     try {
       const r = await authFetch("/api/yousign");
-      const d = (await r.json()) as { configured?: boolean; env?: string; contracts?: ContractInfo[]; error?: string };
+      const d = (await r.json().catch(() => ({ error: `Erreur du serveur (${r.status}). Réessaie dans un instant.` }))) as {
+        configured?: boolean;
+        env?: string;
+        contracts?: ContractInfo[];
+        error?: string;
+      };
       if (!r.ok) throw new Error(d.error || "Chargement impossible.");
       setState({ configured: !!d.configured, env: d.env ?? "production", contracts: d.contracts ?? [] });
       if (d.contracts?.length === 1) setContractId(d.contracts[0].id);
@@ -117,7 +122,7 @@ export function YousignSend() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pdfBase64: btoa(bin) }),
       });
-      const d = (await r.json()) as { error?: string };
+      const d = (await r.json().catch(() => ({ error: `Erreur du serveur (${r.status}).` }))) as { error?: string };
       if (!r.ok) throw new Error(d.error || "Import impossible.");
       await load();
     } catch (e) {

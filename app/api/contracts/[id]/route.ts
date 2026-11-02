@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
-import { doc, setDoc } from "firebase/firestore/lite";
 import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
-import { crmDb } from "@/lib/server/db";
+import { store } from "@/lib/server/store";
 import { checkContractFile, fillContract, findContract, loadContractFile, readContractBody } from "@/lib/server/contracts";
 
 export const runtime = "nodejs";
@@ -22,12 +21,16 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   if (Buffer.from(bytes.subarray(0, 5)).toString() !== "%PDF-") return Response.json({ error: "Ce fichier n'est pas un PDF." }, { status: 400 });
   const problem = await checkContractFile(contract, bytes);
   if (problem) return Response.json({ error: problem }, { status: 422 });
-  await setDoc(doc(await crmDb(), "contract_files", contract.id), {
+  // Remplace le modèle en gardant les autres champs (signataire Netforce mémorisé).
+  const db = await store();
+  const previous = (await db.get("contract_files", contract.id)) ?? {};
+  await db.set("contract_files", contract.id, {
+    ...previous,
     id: contract.id,
     data: pdfBase64,
     uploadedAt: new Date().toISOString(),
     uploadedBy: user.email,
-  }, { merge: true });
+  });
   return Response.json({ ok: true });
 }
 

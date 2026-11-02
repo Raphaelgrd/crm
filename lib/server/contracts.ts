@@ -1,6 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { doc, getDoc } from "firebase/firestore/lite";
-import { crmDb } from "./db";
+import { store } from "./store";
 
 // Contrats Netforce pré-remplis par le CRM puis signés via Yousign.
 // Le PDF modèle est importé dans le CRM (collection contract_files, le dépôt du code étant public) ;
@@ -102,8 +101,8 @@ export function readContractBody(b: Record<string, unknown>) {
 
 /** Le modèle importé, en octets, ou null s'il n'a pas encore été importé. */
 export async function loadContractFile(id: string): Promise<Uint8Array | null> {
-  const snap = await getDoc(doc(await crmDb(), "contract_files", id));
-  const b64 = snap.exists() ? (snap.data().data as string | undefined) : undefined;
+  const d = await (await store()).get("contract_files", id);
+  const b64 = d?.data as string | undefined;
   return b64 ? new Uint8Array(Buffer.from(b64, "base64")) : null;
 }
 
