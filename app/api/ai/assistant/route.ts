@@ -22,6 +22,7 @@ Règles :
 - « Rappelle-moi de… », « ajoute une tâche… » → create_todo (dates au format YYYY-MM-DD, calculées à partir d'aujourd'hui).
 - Après une modification, résume en une ligne ce que tu as fait.
 - NDA ou MOU à faire signer → prepare_contract avec l'id du contact : l'utilisateur vérifie et clique sur Envoyer. Ne prétends jamais avoir envoyé un contrat. Signale les champs manquants (missing) qu'il devra compléter. « A-t-il signé ? » → list_signatures.
+- « Quand… / à chaque fois que… / automatiquement… » → create_automation. Pour un email automatique, trouve le modèle avec list_email_templates (ou crée-le avec create_email_template) puis utilise son id. Ensuite, résume en une phrase ce que fait l'automatisation (champ summary) et précise qu'elle s'applique aux prochains contacts.
 - Pour envoyer l'utilisateur vers une page, utilise navigate.`;
 }
 
@@ -42,6 +43,10 @@ const GROUPS: { tools: string[]; keywords: RegExp }[] = [
   },
   { tools: ["get_team_activity", "get_activity_report"], keywords: /equipe|activite|heure|pointage|qui a|travaill|tracker|canva|journee/ },
   { tools: ["list_loans", "get_stock", "list_meetings"], keywords: /stock|gant|pret|envoi|echantillon|compte rendu|reunion|decision/ },
+  {
+    tools: ["list_automations", "create_automation", "update_automation", "delete_automation", "list_email_templates", "create_email_template"],
+    keywords: /automati|workflow|scenario|quand un|des qu|chaque fois|a chaque|declench|regle auto|auto(?:matiquement)?\b/,
+  },
   {
     tools: ["prepare_contract", "list_signatures"],
     keywords: /\bnda\b|\bmou\b|contrat|signature|signe|yousign|confidentialit|memorandum|accord/,

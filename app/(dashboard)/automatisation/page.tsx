@@ -150,8 +150,8 @@ export default function AutomationsPage() {
             <Zap className="mx-auto h-10 w-10 text-gray-300" aria-hidden="true" />
             <p className="text-foreground mt-3 text-sm font-semibold">Aucune automatisation</p>
             <p className="text-muted-foreground mt-1 text-sm">
-              Crée ton premier scénario : par exemple « à chaque nouveau contact, mettre le mail de
-              bienvenue en file d&apos;attente et créer une tâche de rappel ».
+              Crée ton premier scénario ici, ou demande-le à l&apos;Assistant IA : par exemple « à chaque nouvel
+              investisseur, envoie le mail de bienvenue et crée une tâche de rappel à J+2 ».
             </p>
           </div>
         ) : (
@@ -178,7 +178,7 @@ export default function AutomationsPage() {
                       role="switch"
                       aria-checked={a.active}
                       aria-label={a.active ? "Désactiver" : "Activer"}
-                      onClick={() => void updateAutomation(a.id, { active: !a.active })}
+                      onClick={() => void updateAutomation(a.id, { active: !a.active }).catch((e) => alert(e instanceof Error ? e.message : "Modification impossible."))}
                       className={
                         "relative h-6 w-11 shrink-0 rounded-full transition-colors " +
                         (a.active ? "bg-emerald-500" : "bg-gray-300")
@@ -196,6 +196,7 @@ export default function AutomationsPage() {
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
                       <TriggerIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                      {a.trigger.category ? `${a.trigger.category} · ` : ""}
                       {a.trigger.type === "contact_created"
                         ? "Nouveau contact"
                         : `Étape → ${a.trigger.stage || "toutes"}`}
@@ -231,7 +232,7 @@ export default function AutomationsPage() {
                           type="button"
                           onClick={() => {
                             setConfirmDeleteId(null);
-                            void deleteAutomation(a.id);
+                            void deleteAutomation(a.id).catch((e) => alert(e instanceof Error ? e.message : "Suppression impossible."));
                           }}
                           onBlur={() => setConfirmDeleteId(null)}
                           className="rounded-lg bg-red-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-600"
@@ -280,7 +281,7 @@ export default function AutomationsPage() {
                     <button
                       type="button"
                       disabled={already}
-                      onClick={() => void addAutomation({ ...p, active: false })}
+                      onClick={() => void addAutomation({ ...p, active: false }).catch((e) => alert(e instanceof Error ? e.message : "Ajout impossible."))}
                       className={
                         "shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors " +
                         (already
@@ -378,8 +379,8 @@ export default function AutomationsPage() {
               </table>
             </div>
             <p className="text-muted-foreground mt-2 text-xs">
-              L&apos;envoi automatique (sans passer par Gmail) sera activé au branchement du compte
-              Google.
+              Emails mis en attente avant l&apos;activation de l&apos;envoi automatique : envoie-les via Gmail ou
+              supprime-les. Les nouveaux emails des automatisations partent désormais tout seuls.
             </p>
           </div>
         )}

@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore/lite";
 import { crmDb } from "@/lib/server/db";
 import { safeEqual } from "@/lib/server/apiKey";
+import { runAutomationsSafely } from "@/lib/server/automations";
 
 // Reçoit les formulaires du site netforce-defense.com (contact + investisseurs).
 // Le serveur du site POST ici avec l'en-tête `x-webhook-secret`, qui doit
@@ -153,6 +154,8 @@ export async function POST(req: NextRequest) {
       updatedAt: now,
     });
 
+    // Nouveau contact venu du site : les automatisations « nouveau contact » s'appliquent aussi.
+    if (created) await runAutomationsSafely({ type: "contact_created", contactId });
     return Response.json({ ok: true, id: contactId, created }, { status: created ? 201 : 200 });
   } catch (err) {
     console.error("[webhook contact-form]", err);

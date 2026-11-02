@@ -9,6 +9,7 @@ import {
   where,
 } from "firebase/firestore/lite";
 import { crmDb, rapportDb } from "./db";
+import { runAutomationsSafely } from "./automations";
 
 type Args = Record<string, unknown>;
 type Doc = Record<string, unknown> & { id: string };
@@ -461,7 +462,8 @@ export const TOOLS: ToolDef[] = [
       };
       await setDoc(doc((await crmDb()), "contacts", id), contact);
       await logActivity(id, "note", "Contact créé par l'assistant IA", true);
-      return { created: contactSummary(contact) };
+      const automations = await runAutomationsSafely({ type: "contact_created", contactId: id });
+      return { created: contactSummary(contact), ...(automations.length ? { automations } : {}) };
     },
   },
   {
@@ -485,10 +487,12 @@ export const TOOLS: ToolDef[] = [
       if (patch.tags !== undefined) patch.tags = Array.isArray(patch.tags) ? patch.tags.map(String) : [];
       if (!Object.keys(patch).length) throw new ToolError("Aucun champ à modifier.");
       await updateDoc(doc((await crmDb()), "contacts", id), { ...patch, updatedAt: now() });
+      let automations: Awaited<ReturnType<typeof runAutomationsSafely>> = [];
       if (patch.stage && patch.stage !== c.stage) {
         await logActivity(id, "stage", `Étape : ${c.stage} → ${patch.stage}`, true);
+        automations = await runAutomationsSafely({ type: "stage_changed", contactId: id, from: String(c.stage ?? ""), to: String(patch.stage) });
       }
-      return { updated: id, changes: patch };
+      return { updated: id, changes: patch, ...(automations.length ? { automations } : {}) };
     },
   },
   {

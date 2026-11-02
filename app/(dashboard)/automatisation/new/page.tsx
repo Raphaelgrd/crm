@@ -65,6 +65,8 @@ export default function NewAutomationPage() {
   const [active, setActive] = useState(true);
   const [triggerType, setTriggerType] = useState<TriggerType>("contact_created");
   const [triggerStage, setTriggerStage] = useState<StageName | "">("");
+  const [triggerCategory, setTriggerCategory] = useState("");
+  const [saving, setSaving] = useState(false);
   const [actions, setActions] = useState<ActionItem[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [error, setError] = useState("");
@@ -81,6 +83,7 @@ export default function NewAutomationPage() {
       setActive(a.active);
       setTriggerType(a.trigger.type);
       setTriggerStage(a.trigger.stage);
+      setTriggerCategory(a.trigger.category ?? "");
       setActions(a.actions.map((action) => ({ key: makeKey(), action })));
     });
   }, [getAutomation]);
@@ -108,12 +111,23 @@ export default function NewAutomationPage() {
       name: name.trim(),
       description: description.trim(),
       active,
-      trigger: { type: triggerType, stage: triggerType === "stage_changed" ? triggerStage : "" as const },
+      trigger: {
+        type: triggerType,
+        stage: triggerType === "stage_changed" ? triggerStage : ("" as const),
+        ...(triggerCategory ? { category: triggerCategory } : {}),
+      },
       actions: actions.map((a) => a.action),
     };
-    if (editId) await updateAutomation(editId, input);
-    else await addAutomation(input);
-    router.push("/automatisation");
+    setSaving(true);
+    try {
+      if (editId) await updateAutomation(editId, input);
+      else await addAutomation(input);
+      router.push("/automatisation");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enregistrement impossible.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const TriggerIcon = triggerType === "contact_created" ? UserPlus : ArrowRightLeft;
@@ -202,11 +216,25 @@ export default function NewAutomationPage() {
                             </select>
                           </>
                         )}
+                        <span className="text-muted-foreground text-xs">pour</span>
+                        <select
+                          className={smallSelect}
+                          value={triggerCategory}
+                          onChange={(e) => setTriggerCategory(e.target.value)}
+                          aria-label="Catégorie de contact"
+                        >
+                          <option value="">tous les contacts</option>
+                          {DEFAULT_CATEGORIES.map((c) => (
+                            <option key={c} value={c}>
+                              les {c.toLowerCase()}s
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {triggerType === "contact_created"
-                          ? "Déclenché à la création d'un contact (manuelle ou import CSV)"
-                          : "Déclenché quand un contact est déplacé dans le pipeline"}
+                          ? "Déclenché à chaque nouveau contact : saisie, import, scan de carte, formulaire du site, assistant IA"
+                          : "Déclenché quand un contact change d'étape, depuis l'écran ou l'assistant IA"}
                       </p>
                     </div>
                   </div>
@@ -270,7 +298,7 @@ export default function NewAutomationPage() {
                                     ))}
                                   </select>
                                   <span className="text-muted-foreground text-xs">
-                                    → file d&apos;attente, envoi direct après branchement Google
+                                    → envoyé automatiquement au contact (sauf s&apos;il s&apos;est désabonné)
                                   </span>
                                 </>
                               )}
@@ -428,9 +456,10 @@ export default function NewAutomationPage() {
               {error && <p className="text-sm text-red-600">{error}</p>}
               <button
                 type="submit"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 w-full cursor-pointer rounded-xl px-5 py-2.5 text-sm font-semibold shadow-(--shadow-card) transition-all duration-200"
+                disabled={saving}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 w-full cursor-pointer rounded-xl px-5 py-2.5 text-sm font-semibold shadow-(--shadow-card) transition-all duration-200 disabled:opacity-50"
               >
-                {editId ? "Enregistrer les modifications" : "Enregistrer le workflow"}
+                {saving ? "Enregistrement…" : editId ? "Enregistrer les modifications" : "Enregistrer le workflow"}
               </button>
             </aside>
           </div>

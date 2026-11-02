@@ -1,6 +1,18 @@
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from "firebase/firestore/lite";
 import { crmDb } from "./db";
 import { CONTRACTS, contractDataFromContact, findContract, type ContractData } from "./contracts";
+import {
+  AutomationError,
+  CATEGORIES as AUTO_CATEGORIES,
+  STAGES as AUTO_STAGES,
+  createAutomation,
+  deleteAutomation,
+  describeAutomation,
+  getAutomation,
+  listAutomations,
+  patchAutomation,
+  validateAutomation,
+} from "./automations";
 import { ToolError, type ToolDef } from "./mcpTools";
 
 // Outils propres à l'Assistant IA du CRM (en plus de ceux du serveur MCP) :
@@ -503,6 +515,134 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
       },
     },
     {
+      name: "list_automations",
+      description: "Liste les automatisations du CRM (déclencheur, actions, active ou non, nombre d'exécutions).",
+      annotations: { readOnlyHint: true },
+      inputSchema: { type: "object", properties: {} },
+      async run() {
+        const db = await crmDb();
+        const tpls = new Map((await getDocs(collection(db, "templates"))).docs.map((d) => [d.id, String(d.data().name ?? d.id)]));
+        return {
+          automations: (await listAutomations()).map((a) => ({
+            id: a.id,
+            name: a.name,
+            active: a.active,
+            runs: a.runs ?? 0,
+            summary: describeAutomation(a, (id) => tpls.get(id) ?? id),
+          })),
+        };
+      },
+    },
+    {
+      name: "create_automation",
+      description: `Crée une automatisation qui s'exécute toute seule.
+Déclencheur (trigger) : type "contact_created" (nouveau contact : saisie, import, scan de carte, formulaire du site, assistant) ou "stage_changed" (changement d'étape ; stage = étape d'arrivée, "" = n'importe laquelle). category = ne concerne que cette catégorie de contact (facultatif).
+Étapes : ${AUTO_STAGES.join(", ")}. Catégories : ${AUTO_CATEGORIES.join(", ")}.
+Actions, exécutées dans l'ordre :
+- send_email {templateId} : envoie automatiquement un modèle d'email au contact. Cherche l'id avec list_email_templates ; si le modèle n'existe pas, crée-le d'abord avec create_email_template.
+- create_task {title, dueInDays} : tâche dans l'agenda, liée au contact, à J+dueInDays.
+- set_stage {stage} ; set_category {category}.
+Active par défaut (active=false pour la créer en pause).`,
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Nom court et clair" },
+          description: { type: "string" },
+          active: { type: "boolean" },
+          trigger: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: ["contact_created", "stage_changed"] },
+              stage: { type: "string" },
+              category: { type: "string" },
+            },
+            required: ["type"],
+          },
+          actions: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                type: { type: "string", enum: ["send_email", "create_task", "set_stage", "set_category"] },
+                templateId: { type: "string" },
+                title: { type: "string" },
+                dueInDays: { type: "number" },
+                stage: { type: "string" },
+                category: { type: "string" },
+              },
+              required: ["type"],
+            },
+          },
+        },
+        required: ["name", "trigger", "actions"],
+      },
+      async run(a) {
+        adminOnly("create_automation");
+        try {
+          const created = await createAutomation(await validateAutomation(a));
+          const db = await crmDb();
+          const tpls = new Map((await getDocs(collection(db, "templates"))).docs.map((d) => [d.id, String(d.data().name ?? d.id)]));
+          ctx.actions.push({ type: "navigate", path: "/automatisation", label: "Voir les automatisations" });
+          return {
+            created: { id: created.id, name: created.name, active: created.active },
+            summary: describeAutomation(created, (id) => tpls.get(id) ?? id),
+            note: "Elle s'applique aux prochains événements, pas aux contacts déjà existants.",
+          };
+        } catch (e) {
+          if (e instanceof AutomationError) throw new ToolError(e.message);
+          throw e;
+        }
+      },
+    },
+    {
+      name: "update_automation",
+      description:
+        "Modifie une automatisation (id via list_automations) : activer/désactiver (active), renommer, ou remplacer le déclencheur et/ou toutes les actions (mêmes formats que create_automation).",
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        type: "object",
+        properties: {
+          automationId: { type: "string" },
+          active: { type: "boolean" },
+          name: { type: "string" },
+          description: { type: "string" },
+          trigger: { type: "object" },
+          actions: { type: "array", items: { type: "object" } },
+        },
+        required: ["automationId"],
+      },
+      async run(a) {
+        adminOnly("update_automation");
+        const current = await getAutomation(str(a.automationId));
+        if (!current) throw new ToolError("Automatisation introuvable : utilise list_automations.");
+        const { automationId: _id, ...changes } = a;
+        if (!Object.keys(changes).length) throw new ToolError("Rien à modifier.");
+        try {
+          const onlyToggle = Object.keys(changes).every((k) => k === "active");
+          const patch = onlyToggle ? { active: changes.active === true } : await validateAutomation({ ...current, ...changes });
+          await patchAutomation(current.id, patch);
+          return { updated: current.id, changes: Object.keys(changes) };
+        } catch (e) {
+          if (e instanceof AutomationError) throw new ToolError(e.message);
+          throw e;
+        }
+      },
+    },
+    {
+      name: "delete_automation",
+      description: "Supprime définitivement une automatisation. Seulement si l'utilisateur le demande explicitement ; pour la mettre en pause, utilise update_automation avec active=false.",
+      annotations: { readOnlyHint: false, destructiveHint: true },
+      inputSchema: { type: "object", properties: { automationId: { type: "string" } }, required: ["automationId"] },
+      async run(a) {
+        adminOnly("delete_automation");
+        const current = await getAutomation(str(a.automationId));
+        if (!current) throw new ToolError("Automatisation introuvable : utilise list_automations.");
+        await deleteAutomation(current.id);
+        return { deleted: current.name };
+      },
+    },
+    {
       name: "list_files_in_folder",
       description: "Liste les fichiers d'une Data Room ou d'un sous-dossier (fichiers de ce navigateur).",
       annotations: { readOnlyHint: true },
@@ -533,7 +673,7 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
     {
       name: "navigate",
       description:
-        "Propose un bouton pour ouvrir une page du CRM : /contacts, /investisseurs, /closing, /organisations, /taches, /agenda, /emails, /templates, /comptes-rendus, /stock, /prets, /data-room, /equipe, /rapport, /analytics.",
+        "Propose un bouton pour ouvrir une page du CRM : /automatisation, /documents, /contacts, /investisseurs, /closing, /organisations, /taches, /agenda, /emails, /templates, /comptes-rendus, /stock, /prets, /data-room, /equipe, /rapport, /analytics.",
       annotations: { readOnlyHint: true },
       inputSchema: {
         type: "object",

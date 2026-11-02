@@ -1,13 +1,10 @@
-import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
-import { Bytes, collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from "firebase/firestore/lite";
-import { crmAdminApp } from "./admin";
+import type { Bytes } from "firebase/firestore/lite";
 import type { CrmUser } from "./auth";
-import { crmDb } from "./db";
+import { store } from "./store";
 
 // Data Room côté serveur : les fichiers passent par les routes /api/dataroom. Métadonnées dans dataroom_files,
 // contenu en morceaux de 900 Ko dans dataroom_chunks (un document Firestore est limité à 1 Mo).
-// Avec le compte de service, on écrit avec l'accès administrateur (indépendant des règles de la base) ;
-// sinon avec la session du serveur. L'accès suit la visibilité du dossier.
+// Accès à la base via lib/server/store (administrateur si possible). L'accès suit la visibilité du dossier.
 
 export const CHUNK_SIZE = 900_000;
 export const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -27,45 +24,6 @@ interface FolderMeta {
   name: string;
   visibility: "public" | "private";
   sharedWith?: string[];
-}
-
-type Data = Record<string, unknown>;
-
-/** Accès minimal aux collections de la Data Room, quel que soit le mode de connexion. */
-interface Store {
-  get(col: string, id: string): Promise<Data | null>;
-  set(col: string, id: string, data: Data): Promise<void>;
-  update(col: string, id: string, data: Data): Promise<void>;
-  remove(col: string, id: string): Promise<void>;
-  list(col: string): Promise<Data[]>;
-  bytes(u8: Uint8Array): unknown;
-}
-
-async function store(): Promise<Store> {
-  const admin = crmAdminApp();
-  if (admin) {
-    const fs = getAdminFirestore(admin);
-    return {
-      get: async (c, id) => (await fs.collection(c).doc(id).get()).data() ?? null,
-      set: async (c, id, d) => void (await fs.collection(c).doc(id).set(d)),
-      update: async (c, id, d) => void (await fs.collection(c).doc(id).update(d)),
-      remove: async (c, id) => void (await fs.collection(c).doc(id).delete()),
-      list: async (c) => (await fs.collection(c).get()).docs.map((d) => d.data()),
-      bytes: (u8) => Buffer.from(u8),
-    };
-  }
-  const db = await crmDb();
-  return {
-    get: async (c, id) => {
-      const s = await getDoc(doc(db, c, id));
-      return s.exists() ? s.data() : null;
-    },
-    set: (c, id, d) => setDoc(doc(db, c, id), d),
-    update: (c, id, d) => updateDoc(doc(db, c, id), d),
-    remove: (c, id) => deleteDoc(doc(db, c, id)),
-    list: async (c) => (await getDocs(collection(db, c))).docs.map((d) => d.data()),
-    bytes: (u8) => Bytes.fromUint8Array(u8),
-  };
 }
 
 /** Contenu d'un morceau, qu'il ait été écrit en mode administrateur (Buffer) ou session (Bytes). */

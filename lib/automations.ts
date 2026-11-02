@@ -2,17 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createCollectionStore } from "@/lib/firebase";
-import {
-  Contact,
-  CrmEvent,
-  StageName,
-  applyContactPatch,
-  contactFullName,
-} from "@/lib/contacts";
-import { addEventRecord, toDateKey } from "@/lib/agenda";
+import { CrmEvent, StageName } from "@/lib/contacts";
+import { authFetch } from "@/lib/rapport";
 
-// Moteur branché sur Firestore. Il s'exécute dans le navigateur via
-// AutomationRunner (monté dans le layout) qui écoute les événements CRM.
+// Automatisations : lues en temps réel ici, enregistrées et exécutées par le serveur
+// (lib/server/automations.ts). L'écran transmet ses événements via AutomationRunner ;
+// le formulaire du site, l'assistant IA et le connecteur MCP déclenchent directement côté serveur.
 
 export type TriggerType = "contact_created" | "stage_changed";
 
@@ -20,6 +15,8 @@ export interface Trigger {
   type: TriggerType;
   /** Pour stage_changed : étape d'arrivée ("" = n'importe laquelle). */
   stage: StageName | "";
+  /** Limite aux contacts de cette catégorie (absent = tous). */
+  category?: string;
 }
 
 export type Action =
@@ -69,88 +66,29 @@ export const automationStores = {
   queue: queueStore,
 };
 
-function makeId(prefix: string) {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-// --- Moteur ---
-
-function actionSummary(action: Action): string {
-  switch (action.type) {
-    case "send_email":
-      return `Mail ajouté à la file d'attente`;
-    case "create_task":
-      return `Tâche créée : « ${action.title} »`;
-    case "set_stage":
-      return `Étape → ${action.stage}`;
-    case "set_category":
-      return `Catégorie → ${action.category}`;
-  }
-}
-
-async function executeActions(automation: Automation, contact: Contact): Promise<string[]> {
-  const summary: string[] = [];
-  for (const action of automation.actions) {
-    switch (action.type) {
-      case "send_email":
-        await queueStore.set({
-          id: makeId("q"),
-          contactId: contact.id,
-          templateId: action.templateId,
-          automationName: automation.name,
-          at: new Date().toISOString(),
-        });
-        break;
-      case "create_task": {
-        const due = new Date();
-        due.setDate(due.getDate() + action.dueInDays);
-        await addEventRecord({
-          type: "tache",
-          title: action.title,
-          date: toDateKey(due),
-          startTime: "",
-          endTime: "",
-          contactId: contact.id,
-          contactName: contactFullName(contact) || contact.email,
-          notes: `Créée par l'automatisation « ${automation.name} »`,
-          visio: false,
-          done: false,
-        });
-        break;
-      }
-      case "set_stage":
-        await applyContactPatch(contact.id, { stage: action.stage });
-        break;
-      case "set_category":
-        await applyContactPatch(contact.id, { category: action.category });
-        break;
-    }
-    summary.push(actionSummary(action));
-  }
-  return summary;
-}
-
-/** Exécute les automatisations qui matchent l'événement. */
+/** Transmet un événement de l'écran au serveur, qui exécute les automatisations correspondantes. */
 export async function runAutomationsForEvent(event: CrmEvent): Promise<void> {
-  const matching = automationsStore.get().filter((a) => {
-    if (!a.active || a.trigger.type !== event.type) return false;
-    if (event.type === "stage_changed" && a.trigger.stage && a.trigger.stage !== event.to) {
-      return false;
-    }
-    return true;
-  });
+  await authFetch("/api/automations/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(
+      event.type === "stage_changed"
+        ? { type: event.type, contactId: event.contact.id, from: event.from, to: event.to }
+        : { type: event.type, contactId: event.contact.id },
+    ),
+  }).catch(() => {});
+}
 
-  for (const automation of matching) {
-    const summary = await executeActions(automation, event.contact);
-    await logStore.set({
-      id: makeId("l"),
-      automationName: automation.name,
-      contactName: contactFullName(event.contact) || event.contact.email,
-      summary,
-      at: new Date().toISOString(),
-    });
-    await automationsStore.update(automation.id, { runs: automation.runs + 1 });
-  }
+/** Appel API ; renvoie le message d'erreur du serveur si besoin. */
+async function api(path: string, method: string, body?: unknown): Promise<Record<string, unknown>> {
+  const res = await authFetch(path, {
+    method,
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Enregistrement impossible.");
+  return data;
 }
 
 // --- Hooks ---
@@ -193,27 +131,19 @@ export function useAutomations() {
   }, []);
 
   const addAutomation = useCallback(async (input: AutomationInput): Promise<Automation> => {
-    const now = new Date().toISOString();
-    const automation: Automation = {
-      ...input,
-      id: makeId("a"),
-      runs: 0,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await automationsStore.set(automation);
+    const { automation } = (await api("/api/automations", "POST", input)) as { automation: Automation };
     return automation;
   }, []);
 
   const updateAutomation = useCallback(
     async (id: string, input: Partial<AutomationInput>): Promise<void> => {
-      await automationsStore.update(id, { ...input, updatedAt: new Date().toISOString() });
+      await api(`/api/automations/${id}`, "PATCH", input);
     },
     [],
   );
 
   const deleteAutomation = useCallback(async (id: string): Promise<void> => {
-    await automationsStore.remove(id);
+    await api(`/api/automations/${id}`, "DELETE");
   }, []);
 
   const removeFromQueue = useCallback(async (id: string): Promise<void> => {
