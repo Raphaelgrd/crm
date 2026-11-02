@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import JSZip from "jszip";
 import { FolderMeta, StoredFile, formatSize, useDataRoom } from "@/lib/dataroom";
+import { GuestShareModal } from "@/components/dataroom/GuestShareModal";
 
 const ACCENT_GRADIENTS = [
   "from-red-400 to-rose-500",
@@ -189,6 +190,7 @@ export default function DataRoomPage() {
   const [editName, setEditName] = useState("");
   const [editFolder, setEditFolder] = useState("");
   const [shareModalFolder, setShareModalFolder] = useState<string | null>(null);
+  const [guestShareOpen, setGuestShareOpen] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
   const [renameFolderTarget, setRenameFolderTarget] = useState<string | null>(null);
   const [renameFolderName, setRenameFolderName] = useState("");
@@ -229,6 +231,7 @@ export default function DataRoomPage() {
 
   const isAtRoot = currentPath === "";
   const pathSegments = currentPath ? currentPath.split("/") : [];
+  const currentRoomMeta = folderMetas.find((f) => f.name === pathSegments[0]);
 
   // Files at exactly the current path
   const filesAtPath = useMemo(() => {
@@ -379,6 +382,17 @@ export default function DataRoomPage() {
               )
             ) : (
               <>
+                {isAdmin && currentRoomMeta && (
+                  <button
+                    type="button"
+                    onClick={() => setGuestShareOpen(true)}
+                    className="border-border bg-card text-foreground hover:bg-muted inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+                    title="Donner un accès temporaire à une personne extérieure"
+                  >
+                    <Share2 className="h-4 w-4" aria-hidden="true" />
+                    Partager
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => folderInput.current?.click()}
@@ -794,6 +808,10 @@ export default function DataRoomPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {guestShareOpen && currentRoomMeta && (
+        <GuestShareModal folderId={currentRoomMeta.id} folderName={currentRoomMeta.name} onClose={() => setGuestShareOpen(false)} />
       )}
 
       {/* Modale de partage */}

@@ -176,3 +176,37 @@ export async function updateFolder(id: string, patch: Partial<FolderRecord>) {
 export async function deleteFolderRecord(id: string) {
   await (await store()).remove("dataroom_folders", id);
 }
+
+// --- Partages temporaires (comptes invités) ---
+// Un invité reçoit un lien signé par email. Au premier clic, son compte invité est activé (email + date) :
+// il ne voit que la Data Room partagée, jusqu'à la date d'expiration ou la révocation.
+
+export interface ShareRecord {
+  id: string;
+  folderId: string;
+  email: string;
+  expiresAt: string;
+  createdAt: string;
+  createdBy: string;
+  revoked?: boolean;
+  activatedAt?: string;
+  lastOpenedAt?: string;
+  opens?: number;
+}
+
+export async function listShares(): Promise<ShareRecord[]> {
+  return (await (await store()).list("dataroom_shares")) as unknown as ShareRecord[];
+}
+
+export async function getShare(id: string): Promise<ShareRecord | null> {
+  if (!/^sh_[a-z0-9_]{6,60}$/.test(id)) return null;
+  return ((await (await store()).get("dataroom_shares", id)) as unknown as ShareRecord | null) ?? null;
+}
+
+export async function saveShare(s: ShareRecord) {
+  await (await store()).set("dataroom_shares", s.id, { ...s });
+}
+
+export async function updateShare(id: string, patch: Partial<ShareRecord>) {
+  await (await store()).update("dataroom_shares", id, patch);
+}
