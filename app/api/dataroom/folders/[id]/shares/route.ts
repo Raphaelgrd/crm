@@ -84,6 +84,18 @@ ${message ? `<p style="font-size:15px;line-height:1.55;background:#f1f5f9;border
 <p style="margin:28px 0"><a href="${url}" style="background:#0f172a;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block">Ouvrir la Data Room</a></p>
 <p style="font-size:13px;color:#475569;line-height:1.5">Votre accès invité est créé automatiquement à votre première visite, avec cette adresse email. Il est valable jusqu'au <strong>${until}</strong>. Les documents sont confidentiels : merci de ne pas transférer ce lien.</p>
 </div>`;
+      // Version texte en plus du HTML : les messageries notent mieux les emails qui ont les deux.
+      const text = [
+        "Bonjour,",
+        "",
+        `${senderName} vous donne accès à la Data Room « ${r.folder.name} » de Netforce.`,
+        ...(message ? ["", message] : []),
+        "",
+        `Ouvrir la Data Room : ${url}`,
+        "",
+        `Votre accès invité est créé automatiquement à votre première visite, avec cette adresse email. Il est valable jusqu'au ${until}.`,
+        "Les documents sont confidentiels : merci de ne pas transférer ce lien.",
+      ].join("\n");
       try {
         const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
           from: `${senderName} · Netforce <contact@mail.netforce-defense.com>`,
@@ -91,6 +103,7 @@ ${message ? `<p style="font-size:15px;line-height:1.55;background:#f1f5f9;border
           replyTo: r.user.email || undefined,
           subject: `Accès à la Data Room « ${r.folder.name} » — Netforce`,
           html,
+          text,
         });
         if (error) emailError = error.message;
         else emailed = true;

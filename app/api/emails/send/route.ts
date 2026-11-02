@@ -22,6 +22,23 @@ export interface SendEmailPayload {
   replyTo?: string;
 }
 
+/** Version texte d'un email HTML (les messageries notent mieux les emails qui ont les deux). */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<a [^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi, "$2 ($1)")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export async function POST(req: NextRequest) {
   if (!(await verifyCrmUser(req))) return unauthorized();
   if (!process.env.RESEND_API_KEY) {
@@ -77,6 +94,7 @@ export async function POST(req: NextRequest) {
         replyTo: replyTo || undefined,
         subject,
         html: fullHtml,
+        text: htmlToText(fullHtml),
         // Bouton « Se désabonner » natif de Gmail / Outlook (désabonnement en un clic).
         headers: { "List-Unsubscribe": `<${unsubLink}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
       });

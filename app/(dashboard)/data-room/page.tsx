@@ -149,8 +149,6 @@ export default function DataRoomPage() {
     deleteFolder,
     renameFolder,
     setFolderVisibility,
-    shareFolderWith,
-    unshareFolderWith,
     loadError,
     totalSize,
     busy,
@@ -189,9 +187,7 @@ export default function DataRoomPage() {
   const [editingFile, setEditingFile] = useState<StoredFile | null>(null);
   const [editName, setEditName] = useState("");
   const [editFolder, setEditFolder] = useState("");
-  const [shareModalFolder, setShareModalFolder] = useState<string | null>(null);
-  const [guestShareOpen, setGuestShareOpen] = useState(false);
-  const [shareEmail, setShareEmail] = useState("");
+  const [guestShareFolder, setGuestShareFolder] = useState<FolderMeta | null>(null);
   const [renameFolderTarget, setRenameFolderTarget] = useState<string | null>(null);
   const [renameFolderName, setRenameFolderName] = useState("");
 
@@ -299,10 +295,6 @@ export default function DataRoomPage() {
     }
   };
 
-  const shareModalMeta: FolderMeta | undefined = shareModalFolder
-    ? folderMetas.find((f) => f.name === shareModalFolder)
-    : undefined;
-
   const navigate = (path: string) => {
     setSearch("");
     setCurrentPath(path);
@@ -385,7 +377,7 @@ export default function DataRoomPage() {
                 {isAdmin && currentRoomMeta && (
                   <button
                     type="button"
-                    onClick={() => setGuestShareOpen(true)}
+                    onClick={() => setGuestShareFolder(currentRoomMeta)}
                     className="border-border bg-card text-foreground hover:bg-muted inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
                     title="Donner un accès temporaire à une personne extérieure"
                   >
@@ -577,14 +569,14 @@ export default function DataRoomPage() {
                           editable={isAdmin}
                           onChange={(priv) => void setFolderVisibility(meta.name, priv ? "private" : "public")}
                         />
-                        {isAdmin && isPrivate && (
+                        {isAdmin && (
                           <button
                             type="button"
-                            onClick={() => { setShareEmail(""); setShareModalFolder(meta.name); }}
+                            onClick={() => setGuestShareFolder(meta)}
                             className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs font-medium"
                           >
                             <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                            {meta.sharedWith.length ? `Invités (${meta.sharedWith.length})` : "Inviter"}
+                            Partager
                           </button>
                         )}
                       </div>
@@ -810,42 +802,8 @@ export default function DataRoomPage() {
         </div>
       )}
 
-      {guestShareOpen && currentRoomMeta && (
-        <GuestShareModal folderId={currentRoomMeta.id} folderName={currentRoomMeta.name} onClose={() => setGuestShareOpen(false)} />
-      )}
-
-      {/* Modale de partage */}
-      {shareModalFolder && shareModalMeta && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShareModalFolder(null)}>
-          <div className="bg-card w-full max-w-sm rounded-xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-foreground text-lg font-bold">Partager « {shareModalMeta.name} »</h2>
-              <button type="button" onClick={() => setShareModalFolder(null)} className="hover:bg-muted rounded p-1 transition-colors" aria-label="Fermer"><X className="h-5 w-5 text-gray-400" aria-hidden="true" /></button>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); if (!shareEmail.trim()) return; void shareFolderWith(shareModalMeta.name, shareEmail).then(() => setShareEmail("")); }}>
-              <label className="text-foreground mb-1 block text-xs font-medium">Ajouter un accès</label>
-              <div className="flex gap-2">
-                <input type="email" value={shareEmail} onChange={(e) => setShareEmail(e.target.value)} placeholder="email@exemple.com" className="border-border bg-card text-foreground focus:border-primary/50 focus:ring-primary/20 flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none" />
-                <button type="submit" className="bg-primary text-primary-foreground shrink-0 rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-90">Ajouter</button>
-              </div>
-            </form>
-            <div className="mt-4">
-              <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase">Accès partagé</p>
-              {shareModalMeta.sharedWith.length === 0 ? (
-                <p className="text-muted-foreground text-sm">Aucun partage pour l&apos;instant.</p>
-              ) : (
-                <ul className="space-y-1">
-                  {shareModalMeta.sharedWith.map((email) => (
-                    <li key={email} className="bg-muted flex items-center justify-between rounded-lg px-3 py-2">
-                      <span className="text-foreground truncate text-sm">{email}</span>
-                      <button type="button" onClick={() => void unshareFolderWith(shareModalMeta.name, email)} className="ml-2 shrink-0 rounded p-1 hover:bg-red-50" aria-label={`Révoquer l'accès de ${email}`}><X className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" aria-hidden="true" /></button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
+      {guestShareFolder && (
+        <GuestShareModal folderId={guestShareFolder.id} folderName={guestShareFolder.name} onClose={() => setGuestShareFolder(null)} />
       )}
 
       {/* Lightbox image */}

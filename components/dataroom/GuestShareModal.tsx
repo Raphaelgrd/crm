@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, Loader2, Send, UserX, X } from "lucide-react";
 import { authFetch, useCrmUser } from "@/lib/rapport";
+import { useContacts } from "@/lib/contacts";
 
 interface Share {
   id: string;
@@ -26,7 +27,10 @@ const fmt = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { day: "n
 /** Partage temporaire d'une Data Room avec une personne extérieure (compte invité, lien par email). */
 export function GuestShareModal({ folderId, folderName, onClose }: { folderId: string; folderName: string; onClose: () => void }) {
   const { name } = useCrmUser();
+  const { contacts } = useContacts();
   const [email, setEmail] = useState("");
+  const [picked, setPicked] = useState("");
+  const [showList, setShowList] = useState(false);
   const [days, setDays] = useState(7);
   const [message, setMessage] = useState("");
   const [shares, setShares] = useState<Share[] | null>(null);
@@ -34,6 +38,15 @@ export function GuestShareModal({ folderId, folderName, onClose }: { folderId: s
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ email: string; url: string; emailed: boolean; emailError: string } | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Recherche dans les contacts du CRM (prénom, nom, société, email) ; seuls ceux qui ont un email sont proposés.
+  const q = email.trim().toLowerCase();
+  const matches =
+    q.length >= 2 && !picked
+      ? contacts
+          .filter((c) => c.email && `${c.firstName} ${c.lastName} ${c.lastName} ${c.firstName} ${c.company} ${c.email}`.toLowerCase().includes(q))
+          .slice(0, 6)
+      : [];
 
   async function load() {
     try {
@@ -54,6 +67,10 @@ export function GuestShareModal({ folderId, folderName, onClose }: { folderId: s
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError(matches.length ? "Choisis un contact dans la liste, ou tape une adresse email complète." : "Aucun contact trouvé : tape l'adresse email complète.");
+      return;
+    }
     setSending(true);
     setError("");
     setResult(null);
@@ -67,6 +84,7 @@ export function GuestShareModal({ folderId, folderName, onClose }: { folderId: s
       if (!r.ok || !d.url) throw new Error(d.error || "Partage impossible.");
       setResult({ email: email.trim().toLowerCase(), url: d.url, emailed: !!d.emailed, emailError: d.emailError ?? "" });
       setEmail("");
+      setPicked("");
       setMessage("");
       await load();
     } catch (err) {
@@ -104,10 +122,52 @@ export function GuestShareModal({ folderId, folderName, onClose }: { folderId: s
         </p>
 
         <form onSubmit={(e) => void send(e)} className="space-y-3">
-          <label className="block space-y-1">
-            <span className="text-muted-foreground text-xs">Email de la personne</span>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="prenom.nom@societe.com" className={input} />
-          </label>
+          <div className="relative space-y-1">
+            <label htmlFor="guest-email" className="text-muted-foreground block text-xs">
+              Personne : cherche un contact ou tape son email
+            </label>
+            <input
+              id="guest-email"
+              type="text"
+              required
+              autoComplete="off"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setPicked("");
+                setShowList(true);
+              }}
+              onFocus={() => setShowList(true)}
+              onBlur={() => setTimeout(() => setShowList(false), 150)}
+              placeholder="Prénom, nom, société ou email"
+              className={input}
+            />
+            {picked && <p className="text-xs text-green-700 dark:text-green-400">Contact du CRM : {picked}</p>}
+            {showList && matches.length > 0 && (
+              <ul className="border-border bg-card absolute right-0 left-0 z-10 mt-1 overflow-hidden rounded-lg border shadow-lg">
+                {matches.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setEmail(c.email);
+                        setPicked([c.firstName, c.lastName].filter(Boolean).join(" ") + (c.company ? ` · ${c.company}` : ""));
+                        setShowList(false);
+                      }}
+                      className="hover:bg-muted block w-full px-3 py-2 text-left"
+                    >
+                      <span className="text-foreground block truncate text-sm font-medium">
+                        {[c.firstName, c.lastName].filter(Boolean).join(" ") || c.email}
+                        {c.company && <span className="text-muted-foreground font-normal"> · {c.company}</span>}
+                      </span>
+                      <span className="text-muted-foreground block truncate text-xs">{c.email}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <label className="block space-y-1">
             <span className="text-muted-foreground text-xs">Accès pendant</span>
             <select value={days} onChange={(e) => setDays(Number(e.target.value))} className={input}>
