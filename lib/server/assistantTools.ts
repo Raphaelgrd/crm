@@ -1,6 +1,9 @@
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from "firebase/firestore/lite";
 import { crmDb } from "./db";
 import { CONTRACTS, contractDataFromContact, findContract, type ContractData } from "./contracts";
+import { GLOVE_COLORS, GLOVE_SIZES, GLOVE_TYPES, OperationError, createLoan, moveStock, returnLoan } from "./operations";
+import { listFolders, updateFolder } from "./dataroom";
+import { SHARE_DURATIONS, createGuestShare } from "./shares";
 import {
   AutomationError,
   CATEGORIES as AUTO_CATEGORIES,
@@ -640,6 +643,152 @@ Active par défaut (active=false pour la créer en pause).`,
         if (!current) throw new ToolError("Automatisation introuvable : utilise list_automations.");
         await deleteAutomation(current.id);
         return { deleted: current.name };
+      },
+    },
+    {
+      name: "adjust_stock",
+      description: `Entrée (réception, fabrication) ou sortie (vente, casse) de gants dans le stock. Modèles : ${GLOVE_TYPES.join(", ")} ; coloris : ${GLOVE_COLORS.join(", ")} ; tailles : ${GLOVE_SIZES.join(", ")}. Une sortie supérieure au stock est refusée. Pour un prêt ou un envoi à un contact, utilise plutôt create_loan.`,
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: [...GLOVE_TYPES] },
+          color: { type: "string", enum: [...GLOVE_COLORS] },
+          size: { type: "string", enum: [...GLOVE_SIZES] },
+          qty: { type: "number", description: "Nombre de paires (entier > 0)" },
+          direction: { type: "string", enum: ["in", "out"], description: "in = entrée, out = sortie" },
+          note: { type: "string", description: "Motif (ex. réception commande usine)" },
+        },
+        required: ["type", "color", "size", "qty", "direction"],
+      },
+      async run(a) {
+        adminOnly("adjust_stock");
+        try {
+          const r = await moveStock({
+            type: str(a.type),
+            color: str(a.color),
+            size: str(a.size),
+            qty: Number(a.qty),
+            direction: str(a.direction) === "in" ? "in" : "out",
+            note: str(a.note),
+          });
+          return { stock: r.label, before: r.before, after: r.after };
+        } catch (e) {
+          if (e instanceof OperationError) throw new ToolError(e.message);
+          throw e;
+        }
+      },
+    },
+    {
+      name: "create_loan",
+      description:
+        "Enregistre un prêt de démonstration (kind=loan, le gant revient ; dueAt = date de retour YYYY-MM-DD) ou un envoi définitif (kind=shipment : échantillon, commande) de gants à un contact (id via search_contacts). Sort du stock par défaut (fromStock=false si les gants ne viennent pas du stock suivi). Noté dans l'historique du contact.",
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        type: "object",
+        properties: {
+          contactId: { type: "string" },
+          kind: { type: "string", enum: ["loan", "shipment"] },
+          type: { type: "string", enum: [...GLOVE_TYPES] },
+          color: { type: "string", enum: [...GLOVE_COLORS] },
+          size: { type: "string", enum: [...GLOVE_SIZES] },
+          qty: { type: "number" },
+          dueAt: { type: "string", description: "Retour prévu YYYY-MM-DD (prêt uniquement)" },
+          notes: { type: "string" },
+          fromStock: { type: "boolean", description: "Défaut : true" },
+        },
+        required: ["contactId", "kind", "type", "color", "size", "qty"],
+      },
+      async run(a) {
+        adminOnly("create_loan");
+        try {
+          const loan = await createLoan({
+            contactId: str(a.contactId),
+            kind: str(a.kind) === "shipment" ? "shipment" : "loan",
+            type: str(a.type),
+            color: str(a.color),
+            size: str(a.size),
+            qty: Number(a.qty),
+            dueAt: str(a.dueAt),
+            notes: str(a.notes),
+            fromStock: a.fromStock !== false,
+          });
+          ctx.actions.push({ type: "navigate", path: "/prets", label: "Voir les prêts & envois" });
+          return { created: { id: loan.id, contact: loan.contactName, kind: loan.kind, qty: loan.qty, dueAt: loan.dueAt || undefined } };
+        } catch (e) {
+          if (e instanceof OperationError) throw new ToolError(e.message);
+          throw e;
+        }
+      },
+    },
+    {
+      name: "return_loan",
+      description: "Enregistre le retour d'un prêt en cours (id via list_loans), avec le retour terrain du contact ; remet les gants en stock s'ils en étaient sortis.",
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        type: "object",
+        properties: { loanId: { type: "string" }, feedback: { type: "string", description: "Retour terrain (avis, résultats d'essai)" } },
+        required: ["loanId"],
+      },
+      async run(a) {
+        adminOnly("return_loan");
+        try {
+          const loan = await returnLoan(str(a.loanId), str(a.feedback));
+          return { returned: loan.id, contact: loan.contactName, backInStock: !!loan.stockLinked };
+        } catch (e) {
+          if (e instanceof OperationError) throw new ToolError(e.message);
+          throw e;
+        }
+      },
+    },
+    {
+      name: "share_dataroom",
+      description: `Donne à une personne extérieure un accès temporaire à une Data Room (nom via list_dataroom_folders) : elle reçoit un lien par email, son compte invité est créé à la première visite, elle ne voit que cette Data Room. Durées possibles (jours) : ${SHARE_DURATIONS.join(", ")}. L'email part immédiatement : vérifie l'adresse (search_contacts) et la Data Room avec l'utilisateur avant d'appeler.`,
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        type: "object",
+        properties: {
+          dataRoom: { type: "string", description: "Nom exact de la Data Room" },
+          email: { type: "string" },
+          days: { type: "number", description: "Durée d'accès en jours (défaut 7)" },
+          message: { type: "string", description: "Message personnel ajouté à l'invitation (facultatif)" },
+        },
+        required: ["dataRoom", "email"],
+      },
+      async run(a) {
+        adminOnly("share_dataroom");
+        const email = str(a.email).toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ToolError("Adresse email invalide.");
+        const days = a.days === undefined ? 7 : Number(a.days);
+        if (!SHARE_DURATIONS.includes(days)) throw new ToolError(`Durée possible : ${SHARE_DURATIONS.join(", ")} jours.`);
+        const folder = (await listFolders()).find((f) => norm(f.name) === norm(str(a.dataRoom)));
+        if (!folder) throw new ToolError(`Data Room introuvable : « ${str(a.dataRoom)} ». Utilise list_dataroom_folders.`);
+        const r = await createGuestShare({ folder, email, days, message: str(a.message).slice(0, 1000), senderName: ctx.me.name || "L'équipe Netforce", senderEmail: "" });
+        return {
+          shared: folder.name,
+          with: email,
+          until: r.share.expiresAt.slice(0, 10),
+          emailed: r.emailed,
+          ...(r.emailed ? {} : { emailError: r.emailError, link: r.url, note: "L'email n'est pas parti : donne ce lien à l'utilisateur pour qu'il le transmette." }),
+        };
+      },
+    },
+    {
+      name: "set_dataroom_visibility",
+      description: "Rend une Data Room publique (visible par toute l'équipe) ou privée (admins et invités uniquement).",
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        type: "object",
+        properties: { dataRoom: { type: "string" }, visibility: { type: "string", enum: ["public", "private"] } },
+        required: ["dataRoom", "visibility"],
+      },
+      async run(a) {
+        adminOnly("set_dataroom_visibility");
+        const folder = (await listFolders()).find((f) => norm(f.name) === norm(str(a.dataRoom)));
+        if (!folder) throw new ToolError(`Data Room introuvable : « ${str(a.dataRoom)} ». Utilise list_dataroom_folders.`);
+        const visibility = str(a.visibility) === "private" ? "private" : "public";
+        await updateFolder(folder.id, { visibility });
+        return { dataRoom: folder.name, visibility };
       },
     },
     {

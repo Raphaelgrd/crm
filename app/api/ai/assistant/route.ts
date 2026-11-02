@@ -23,6 +23,7 @@ Règles :
 - Après une modification, résume en une ligne ce que tu as fait.
 - NDA ou MOU à faire signer → prepare_contract avec l'id du contact : l'utilisateur vérifie et clique sur Envoyer. Ne prétends jamais avoir envoyé un contrat. Signale les champs manquants (missing) qu'il devra compléter. « A-t-il signé ? » → list_signatures.
 - « Quand… / à chaque fois que… / automatiquement… » → create_automation. Pour un email automatique, trouve le modèle avec list_email_templates (ou crée-le avec create_email_template) puis utilise son id. Ensuite, résume en une phrase ce que fait l'automatisation (champ summary) et précise qu'elle s'applique aux prochains contacts.
+- Data Room : share_dataroom envoie l'invitation immédiatement — confirme d'abord l'adresse et la Data Room avec l'utilisateur. Prêt ou envoi de gants → create_loan ; retour → return_loan ; réception ou casse → adjust_stock.
 - Pour envoyer l'utilisateur vers une page, utilise navigate.`;
 }
 
@@ -42,7 +43,10 @@ const GROUPS: { tools: string[]; keywords: RegExp }[] = [
     keywords: /rdv|agenda|rendez|calendrier|planifi|semaine|demain|lundi|mardi|mercredi|jeudi|vendredi/,
   },
   { tools: ["get_team_activity", "get_activity_report"], keywords: /equipe|activite|heure|pointage|qui a|travaill|tracker|canva|journee/ },
-  { tools: ["list_loans", "get_stock", "list_meetings"], keywords: /stock|gant|pret|envoi|echantillon|compte rendu|reunion|decision/ },
+  {
+    tools: ["list_loans", "get_stock", "list_meetings", "adjust_stock", "create_loan", "return_loan"],
+    keywords: /stock|gant|paire|pret|prete|envoi|echantillon|demo|rendu|retour|compte rendu|reunion|decision/,
+  },
   {
     tools: ["list_automations", "create_automation", "update_automation", "delete_automation", "list_email_templates", "create_email_template"],
     keywords: /automati|workflow|scenario|quand un|des qu|chaque fois|a chaque|declench|regle auto|auto(?:matiquement)?\b/,
@@ -51,7 +55,7 @@ const GROUPS: { tools: string[]; keywords: RegExp }[] = [
     tools: ["prepare_contract", "list_signatures"],
     keywords: /\bnda\b|\bmou\b|contrat|signature|signe|yousign|confidentialit|memorandum|accord/,
   },
-  { tools: ["list_dataroom_folders", "list_files_in_folder", "show_file"], keywords: /data ?room|fichier|dossier|document|pdf|plaquette|deck/ },
+  { tools: ["list_dataroom_folders", "list_files_in_folder", "show_file", "share_dataroom", "set_dataroom_visibility"], keywords: /data ?room|fichier|dossier|document|pdf|plaquette|deck|partag|invit|acces|prive|public/ },
 ];
 const CORE_TOOLS = ["search_contacts", "navigate"];
 const DEFAULT_GROUPS = [0, 1, 2];

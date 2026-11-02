@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore/lite";
 import { crmDb, rapportDb } from "./db";
 import { runAutomationsSafely } from "./automations";
+import { listFiles, listFolders } from "./dataroom";
 
 type Args = Record<string, unknown>;
 type Doc = Record<string, unknown> & { id: string };
@@ -352,13 +353,29 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "list_dataroom_folders",
-    description:
-      "Liste les dossiers de la Data Room (nom, visibilité). Les fichiers eux-mêmes sont stockés dans le navigateur et ne sont pas accessibles ici.",
+    description: "Liste les Data Rooms (nom, visibilité public/privé) et leurs fichiers en ligne (nom, sous-dossier, taille).",
     annotations: { readOnlyHint: true },
-    inputSchema: { type: "object", properties: {} },
-    async run() {
-      const folders = await all("dataroom_folders");
-      return { folders: folders.map((f) => ({ name: f.name, visibility: f.visibility })) };
+    inputSchema: { type: "object", properties: { folder: { type: "string", description: "Nom d'une Data Room pour ne lister que ses fichiers (facultatif)" } } },
+    async run(a) {
+      const [folders, files] = await Promise.all([listFolders(), listFiles()]);
+      const only = str(a.folder);
+      return {
+        dataRooms: folders
+          .filter((f) => !only || f.name === only)
+          .map((f) => {
+            const inside = files.filter((x) => x.folder === f.name || x.folder.startsWith(f.name + "/"));
+            return {
+              name: f.name,
+              visibility: f.visibility,
+              files: inside.slice(0, 100).map((x) => ({
+                name: x.name,
+                path: x.folder === f.name ? "" : x.folder.slice(f.name.length + 1),
+                sizeKo: Math.round(x.size / 1024),
+              })),
+              totalFiles: inside.length,
+            };
+          }),
+      };
     },
   },
   {
