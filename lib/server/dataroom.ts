@@ -211,3 +211,33 @@ export async function saveShare(s: ShareRecord) {
 export async function updateShare(id: string, patch: Partial<ShareRecord>) {
   await (await store()).update("dataroom_shares", id, patch);
 }
+
+// --- Doublons ---
+
+/** Empreinte SHA-256 du contenu complet d'un fichier (lu morceau par morceau, avec une pause entre deux lectures). */
+export async function fileDigest(meta: FileMeta, pauseMs = 0): Promise<string> {
+  const { createHash } = await import("node:crypto");
+  const h = createHash("sha256");
+  let left = meta.size;
+  for (let i = 0; i < meta.chunks; i++) {
+    if (pauseMs && i > 0) await new Promise((r) => setTimeout(r, pauseMs));
+    const bytes = await readChunk(meta, i);
+    if (!bytes) throw new Error(`morceau ${i + 1}/${meta.chunks} introuvable`);
+    // Un fichier vide est stocké comme un octet nul : on ne compte que la vraie taille.
+    const part = bytes.subarray(0, Math.max(0, Math.min(bytes.length, left)));
+    h.update(part);
+    left -= part.length;
+  }
+  return h.digest("hex");
+}
+
+/** Fichiers candidats : même Data Room, même sous-dossier, même nom, même taille (le contenu est vérifié ensuite). */
+export function duplicateCandidates(files: FileMeta[]): FileMeta[][] {
+  const groups = new Map<string, FileMeta[]>();
+  for (const f of files) {
+    const key = `${f.folder}\u0000${f.name}\u0000${f.size}`;
+    groups.set(key, [...(groups.get(key) ?? []), f]);
+  }
+  const older = (a: FileMeta, b: FileMeta) => String(a.createdAt).localeCompare(String(b.createdAt)) || a.id.localeCompare(b.id);
+  return [...groups.values()].filter((g) => g.length > 1).map((g) => g.sort(older));
+}

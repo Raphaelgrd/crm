@@ -14,6 +14,7 @@ import { collection, deleteDoc, doc, getCountFromServer, getDocs } from "firebas
 import { db } from "@/lib/firebase";
 import { TeamAccess } from "@/components/settings/TeamAccess";
 import { FileStorage } from "@/components/settings/FileStorage";
+import { DuplicateFiles } from "@/components/settings/DuplicateFiles";
 
 // Page Paramètres / Admin du CRM : équipe et accès, état des données,
 // sauvegarde JSON, intégrations, zone de danger.
@@ -118,6 +119,8 @@ export default function SettingsPage() {
         <TeamAccess />
 
         <FileStorage />
+
+        <DuplicateFiles />
 
         {/* Données */}
         <div className="border-border bg-card rounded-2xl border p-5 shadow-(--shadow-card)">
