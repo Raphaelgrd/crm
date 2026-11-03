@@ -3,6 +3,7 @@ import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 import {
   CHUNK_SIZE,
   MAX_FILE_SIZE,
+  currentStorage,
   folderAccess,
   hasChunk,
   listFiles,
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest) {
       createdAt: str(b.createdAt, 40) || new Date().toISOString(),
       chunks,
       uploadedBy: user.email,
+      storage: currentStorage(),
     };
     await saveMeta(meta);
     return Response.json({ file: meta });

@@ -68,7 +68,7 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
     for (const f of await listFiles()) {
       if (under(f.folder, r.folder.name)) {
         await deleteMeta(f.id);
-        await deleteChunks(f.id, f.chunks);
+        await deleteChunks(f);
       }
     }
     await deleteFolderRecord(r.folder.id);

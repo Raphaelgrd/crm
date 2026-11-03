@@ -13,6 +13,7 @@ import {
 import { collection, deleteDoc, doc, getCountFromServer, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { TeamAccess } from "@/components/settings/TeamAccess";
+import { FileStorage } from "@/components/settings/FileStorage";
 
 // Page Paramètres / Admin du CRM : équipe et accès, état des données,
 // sauvegarde JSON, intégrations, zone de danger.
@@ -116,6 +117,8 @@ export default function SettingsPage() {
 
         <TeamAccess />
 
+        <FileStorage />
+
         {/* Données */}
         <div className="border-border bg-card rounded-2xl border p-5 shadow-(--shadow-card)">
           <div className="mb-4 flex items-center justify-between">
@@ -147,8 +150,7 @@ export default function SettingsPage() {
           </div>
           <p className="text-muted-foreground mt-3 text-xs">
             La sauvegarde JSON contient toutes les collections ci-dessus — garde-la précieusement
-            avant toute grosse manipulation. (La Data Room est stockée localement dans ce
-            navigateur, elle n&apos;est pas incluse.)
+            avant toute grosse manipulation. (Les fichiers de la Data Room ne sont pas inclus.)
           </p>
         </div>
 

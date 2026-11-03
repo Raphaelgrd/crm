@@ -26,3 +26,6 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# Secret du stockage o2switch
+o2switch/fichiers/config.php

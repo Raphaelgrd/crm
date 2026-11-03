@@ -42,7 +42,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     if (!meta || p.n >= meta.chunks || !(await folderAccess(user))(meta.folder)) {
       return Response.json({ error: "Fichier introuvable." }, { status: 404 });
     }
-    const bytes = await readChunk(p.id, p.n);
+    const bytes = await readChunk(meta, p.n);
     if (!bytes) return Response.json({ error: "Contenu manquant." }, { status: 404 });
     return new Response(new Uint8Array(bytes), {
       headers: { "Content-Type": "application/octet-stream", "Cache-Control": "private, max-age=3600" },

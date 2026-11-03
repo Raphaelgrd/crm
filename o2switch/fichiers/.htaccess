@@ -1,0 +1,11 @@
+# Stockage Data Room Netforce : seul index.php répond, en HTTPS.
+Options -Indexes
+DirectoryIndex index.php
+
+RewriteEngine On
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+<FilesMatch "^(config\.php|config\.exemple\.php|\.ht.*)$">
+    Require all denied
+</FilesMatch>

@@ -1,6 +1,7 @@
 import type { Bytes } from "firebase/firestore/lite";
 import type { CrmUser } from "./auth";
 import { store } from "./store";
+import { RemoteFilesError, remoteDelete, remoteFilesConfigured, remoteGet, remoteHas, remotePut } from "./remoteFiles";
 
 // Data Room côté serveur : les fichiers passent par les routes /api/dataroom. Métadonnées dans dataroom_files,
 // contenu en morceaux de 900 Ko dans dataroom_chunks (un document Firestore est limité à 1 Mo).
@@ -18,7 +19,12 @@ export interface FileMeta {
   createdAt: string;
   chunks: number;
   uploadedBy?: string;
+  /** Où est rangé le contenu : "o2switch", ou Firestore (absent ou "firestore"). */
+  storage?: "o2switch" | "firestore";
 }
+
+/** Emplacement des nouveaux fichiers : o2switch dès que FILES_URL et FILES_SECRET sont configurés. */
+export const currentStorage = (): "o2switch" | "firestore" => (remoteFilesConfigured() ? "o2switch" : "firestore");
 
 interface FolderMeta {
   name: string;
@@ -37,6 +43,7 @@ export function toBytes(v: unknown): Uint8Array {
 export function storageError(e: unknown): Response {
   const code = (e as { code?: string | number }).code;
   console.error("[dataroom]", e);
+  if (e instanceof RemoteFilesError) return Response.json({ error: e.message }, { status: 502 });
   if (code === "permission-denied" || code === 7) {
     return Response.json(
       {
@@ -86,23 +93,57 @@ export async function deleteMeta(id: string) {
   await (await store()).remove("dataroom_files", id);
 }
 
-export async function hasChunk(id: string, i: number) {
-  return !!(await (await store()).get("dataroom_chunks", chunkDocId(id, i)));
-}
-
-export async function saveChunk(id: string, i: number, bytes: Uint8Array, by: string) {
-  const s = await store();
-  await s.set("dataroom_chunks", chunkDocId(id, i), { fileId: id, i, data: s.bytes(bytes), by });
-}
-
-export async function readChunk(id: string, i: number): Promise<Uint8Array | null> {
+async function firestoreChunk(id: string, i: number): Promise<Uint8Array | null> {
   const d = await (await store()).get("dataroom_chunks", chunkDocId(id, i));
   return d ? toBytes(d.data) : null;
 }
 
-export async function deleteChunks(id: string, chunks: number) {
+/** Le morceau est-il arrivé (à l'emplacement des nouveaux fichiers) ? */
+export async function hasChunk(id: string, i: number) {
+  if (currentStorage() === "o2switch") return remoteHas(id, i);
+  return !!(await (await store()).get("dataroom_chunks", chunkDocId(id, i)));
+}
+
+export async function saveChunk(id: string, i: number, bytes: Uint8Array, by: string) {
+  if (currentStorage() === "o2switch") return remotePut(id, i, bytes);
   const s = await store();
-  for (let i = 0; i < chunks; i++) await s.remove("dataroom_chunks", chunkDocId(id, i));
+  await s.set("dataroom_chunks", chunkDocId(id, i), { fileId: id, i, data: s.bytes(bytes), by });
+}
+
+/** Lit un morceau là où le fichier est rangé ; s'il n'y est pas (transfert en cours), essaie l'autre emplacement. */
+export async function readChunk(meta: Pick<FileMeta, "id" | "storage">, i: number): Promise<Uint8Array | null> {
+  if (meta.storage === "o2switch") {
+    return (await remoteGet(meta.id, i)) ?? (await firestoreChunk(meta.id, i));
+  }
+  const local = await firestoreChunk(meta.id, i);
+  if (local || !remoteFilesConfigured()) return local;
+  return remoteGet(meta.id, i);
+}
+
+/** Supprime le contenu d'un fichier, où qu'il soit rangé. */
+export async function deleteChunks(meta: Pick<FileMeta, "id" | "chunks" | "storage">) {
+  if (meta.storage === "o2switch") {
+    await remoteDelete(meta.id);
+    return;
+  }
+  const s = await store();
+  for (let i = 0; i < meta.chunks; i++) await s.remove("dataroom_chunks", chunkDocId(meta.id, i));
+}
+
+/**
+ * Transfère un fichier de Firestore vers o2switch : chaque morceau est copié et vérifié (empreinte SHA-256),
+ * puis le fichier est marqué « o2switch », et seulement ensuite les morceaux Firestore sont effacés.
+ */
+export async function moveFileToRemote(meta: FileMeta): Promise<void> {
+  if (meta.storage === "o2switch") return;
+  for (let i = 0; i < meta.chunks; i++) {
+    const bytes = await firestoreChunk(meta.id, i);
+    if (!bytes) throw new Error(`morceau ${i + 1}/${meta.chunks} absent de Firebase`);
+    await remotePut(meta.id, i, bytes);
+  }
+  await updateMeta(meta.id, { storage: "o2switch" });
+  const s = await store();
+  for (let i = 0; i < meta.chunks; i++) await s.remove("dataroom_chunks", chunkDocId(meta.id, i));
 }
 
 // --- Dossiers (Data Rooms) ---

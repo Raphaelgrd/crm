@@ -37,7 +37,7 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
     const meta = await getMeta((await params).id);
     if (!meta || !(await folderAccess(user))(meta.folder)) return Response.json({ error: "Fichier introuvable." }, { status: 404 });
     await deleteMeta(meta.id);
-    await deleteChunks(meta.id, meta.chunks);
+    await deleteChunks(meta);
     return Response.json({ ok: true });
   } catch (e) {
     return storageError(e);
