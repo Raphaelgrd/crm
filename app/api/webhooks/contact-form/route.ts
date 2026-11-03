@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { store } from "@/lib/server/store";
 import { safeEqual } from "@/lib/server/apiKey";
 import { runAutomationsSafely } from "@/lib/server/automations";
+import { notifyNewLead } from "@/lib/server/leadNotify";
 
 // Reçoit les formulaires du site netforce-defense.com (contact + investisseurs).
 // Le serveur du site POST ici avec l'en-tête `x-webhook-secret`, qui doit
@@ -142,6 +143,9 @@ export async function POST(req: NextRequest) {
 
     // Nouveau contact venu du site : les automatisations « nouveau contact » s'appliquent aussi.
     if (created) await runAutomationsSafely({ type: "contact_created", contactId });
+    // Alerte email à l'équipe (n'empêche jamais l'enregistrement).
+    const alert = await notifyNewLead({ created, firstName, lastName, email, phone, company, category, subjects, source, details: note });
+    if (!alert.sent) console.error("[webhook contact-form] alerte non envoyée :", alert.error);
     return Response.json({ ok: true, id: contactId, created }, { status: created ? 201 : 200 });
   } catch (err) {
     console.error("[webhook contact-form]", err);
