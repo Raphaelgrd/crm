@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 import { listFiles, moveFileToRemote, storageError } from "@/lib/server/dataroom";
-import { remoteFilesConfigured, remotePing } from "@/lib/server/remoteFiles";
+import { RemoteBusyError, remoteFilesConfigured, remotePing } from "@/lib/server/remoteFiles";
 
 // Stockage des fichiers de la Data Room (admins) : état (Firebase / o2switch) et transfert vers o2switch.
 
@@ -9,6 +9,8 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const BUDGET_MS = 35_000;
+const PAUSE_MS = 250; // entre deux morceaux
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function admin(req: NextRequest) {
   const user = await verifyCrmUser(req);
@@ -48,22 +50,34 @@ export async function POST(req: NextRequest) {
   const skip = new Set(Array.isArray(body.skip) ? body.skip.map(String) : []);
   try {
     const ping = await remotePing();
-    if (!ping.ok) return Response.json({ error: `o2switch ne répond pas correctement : ${"error" in ping ? ping.error : "erreur inconnue"}` }, { status: 502 });
+    if (!ping.ok) {
+      const error = "error" in ping ? ping.error : "erreur inconnue";
+      // Surcharge passagère : le navigateur fait une pause puis reprend.
+      if (/surchargé/.test(error)) return Response.json({ moved: [], failed: [], remaining: -1, paused: true, error });
+      return Response.json({ error: `o2switch ne répond pas correctement : ${error}` }, { status: 502 });
+    }
     const start = Date.now();
     const todo = (await listFiles()).filter((f) => f.storage !== "o2switch" && !skip.has(f.id));
     const moved: string[] = [];
     const failed: { id: string; name: string; error: string }[] = [];
+    let paused = false;
     for (const f of todo) {
       if (Date.now() - start > BUDGET_MS) break;
       try {
-        await moveFileToRemote(f);
+        await moveFileToRemote(f, PAUSE_MS);
         moved.push(f.name);
       } catch (e) {
+        // o2switch sature : on s'arrête sans compter le fichier en échec (il reste sur Firebase, intact).
+        if (e instanceof RemoteBusyError) {
+          paused = true;
+          break;
+        }
         failed.push({ id: f.id, name: f.name, error: e instanceof Error ? e.message : String(e) });
       }
+      await sleep(PAUSE_MS);
     }
     const remaining = todo.length - moved.length - failed.length;
-    return Response.json({ moved, failed, remaining });
+    return Response.json({ moved, failed, remaining, paused });
   } catch (e) {
     return storageError(e);
   }

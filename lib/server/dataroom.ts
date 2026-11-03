@@ -134,9 +134,11 @@ export async function deleteChunks(meta: Pick<FileMeta, "id" | "chunks" | "stora
  * Transfère un fichier de Firestore vers o2switch : chaque morceau est copié et vérifié (empreinte SHA-256),
  * puis le fichier est marqué « o2switch », et seulement ensuite les morceaux Firestore sont effacés.
  */
-export async function moveFileToRemote(meta: FileMeta): Promise<void> {
+export async function moveFileToRemote(meta: FileMeta, pauseMs = 0): Promise<void> {
   if (meta.storage === "o2switch") return;
   for (let i = 0; i < meta.chunks; i++) {
+    // Petite pause entre deux envois pour ne pas déclencher la protection anti-surcharge d'o2switch.
+    if (pauseMs && i > 0) await new Promise((r) => setTimeout(r, pauseMs));
     const bytes = await firestoreChunk(meta.id, i);
     if (!bytes) throw new Error(`morceau ${i + 1}/${meta.chunks} absent de Firebase`);
     await remotePut(meta.id, i, bytes);

@@ -20,18 +20,38 @@ function signedUrl(op: string, id = "", i = 0): string {
   return u.toString();
 }
 
+/** o2switch demande de ralentir (503 / 429) : on fait une pause au lieu d'insister. */
+export class RemoteBusyError extends RemoteFilesError {}
+
+const BUSY = new Set([429, 503]);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function call(op: string, id: string, i: number, init: RequestInit = {}): Promise<Response> {
   let lastError: unknown;
-  // Deux nouvelles tentatives en cas de coupure réseau ou d'erreur passagère du serveur.
-  for (let attempt = 0; attempt < 3; attempt++) {
+  let lastStatus = 0;
+  // Nouvelles tentatives espacées en cas de coupure réseau, de surcharge ou d'erreur passagère.
+  const waits = [1000, 2500, 5000];
+  for (let attempt = 0; attempt <= waits.length; attempt++) {
     try {
       const res = await fetch(signedUrl(op, id, i), { ...init, signal: AbortSignal.timeout(30_000), cache: "no-store" });
-      if (res.status < 500 || attempt === 2) return res;
+      if (res.status < 500 && !BUSY.has(res.status)) return res;
+      // Erreur du script (ex. disque plein) : on garde sa réponse pour afficher son message.
+      if (!BUSY.has(res.status) && attempt === waits.length) return res;
+      lastStatus = res.status;
       lastError = new RemoteFilesError(`o2switch a répondu ${res.status}`);
+      if (attempt === waits.length) break;
+      const retryAfter = Number(res.headers.get("retry-after"));
+      await res.body?.cancel();
+      await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 10_000) : waits[attempt]);
+      continue;
     } catch (e) {
       lastError = e;
+      lastStatus = 0;
     }
-    await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    if (attempt < waits.length) await sleep(waits[attempt]);
+  }
+  if (BUSY.has(lastStatus)) {
+    throw new RemoteBusyError(`o2switch est surchargé ou bloque temporairement le CRM (erreur ${lastStatus}). Réessaie dans quelques minutes.`);
   }
   throw new RemoteFilesError(`Stockage o2switch injoignable : ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }

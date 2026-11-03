@@ -52,6 +52,7 @@ export function FileStorage() {
     const skip: string[] = [];
     const failed: { name: string; error: string }[] = [];
     let moved = 0;
+    let pauses = 0;
     try {
       for (;;) {
         setProgress(`Transfert en cours… ${moved} fichier${moved > 1 ? "s" : ""} transféré${moved > 1 ? "s" : ""}. Garde cette page ouverte.`);
@@ -60,7 +61,7 @@ export function FileStorage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ skip }),
         });
-        const j = await readJson<{ moved: string[]; failed: { id: string; name: string; error: string }[]; remaining: number }>(res);
+        const j = await readJson<{ moved: string[]; failed: { id: string; name: string; error: string }[]; remaining: number; paused?: boolean }>(res);
         if (!res.ok) throw new Error(j.error ?? `Erreur ${res.status}`);
         moved += j.moved.length;
         for (const f of j.failed) {
@@ -68,6 +69,17 @@ export function FileStorage() {
           failed.push({ name: f.name, error: f.error });
         }
         if (j.remaining === 0) break;
+        if (j.paused) {
+          // o2switch demande de ralentir : pause de plus en plus longue (1, 2, 3… min), 10 fois au plus.
+          if (j.moved.length) pauses = 0;
+          pauses += 1;
+          if (pauses > 10) throw new Error("o2switch reste surchargé.");
+          for (let left = 60 * pauses; left > 0; left--) {
+            setProgress(`o2switch demande une pause (protection anti-surcharge). Reprise automatique dans ${left} s… ${moved} fichier${moved > 1 ? "s" : ""} déjà transféré${moved > 1 ? "s" : ""}. Garde cette page ouverte.`);
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+          continue;
+        }
         if (!j.moved.length && !j.failed.length) throw new Error("Le transfert n'avance plus. Réessaie dans un instant.");
       }
       setProgress(`Terminé : ${moved} fichier${moved > 1 ? "s" : ""} transféré${moved > 1 ? "s" : ""} vers o2switch.`);
@@ -129,6 +141,15 @@ export function FileStorage() {
             <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-700">
               o2switch ne répond pas : {status.remote && !status.remote.ok ? status.remote.error : "erreur inconnue"}
             </span>
+          )}
+          {status.configured && !remoteOk && status.o2switch.files > 0 && (
+            <p className="text-muted-foreground w-full text-xs">
+              Tant qu&apos;o2switch ne répond pas, les {status.o2switch.files} fichiers rangés sur o2switch ne s&apos;ouvrent pas
+              dans la Data Room. Ceux encore sur Firebase restent accessibles.
+              <button type="button" onClick={() => void load()} className="ml-2 font-semibold text-blue-700 underline">
+                Revérifier
+              </button>
+            </p>
           )}
           {remoteOk && status.firebase.files > 0 && (
             <button
