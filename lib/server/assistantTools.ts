@@ -1,5 +1,4 @@
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from "firebase/firestore/lite";
-import { crmDb } from "./db";
+import { store } from "./store";
 import { CONTRACTS, contractDataFromContact, findContract, type ContractData } from "./contracts";
 import { GLOVE_COLORS, GLOVE_SIZES, GLOVE_TYPES, OperationError, createLoan, moveStock, returnLoan } from "./operations";
 import { listFolders, updateFolder } from "./dataroom";
@@ -69,6 +68,15 @@ function blocksFrom(heading: string, paragraphs: string[], buttonLabel: string, 
   return blocks;
 }
 
+// Accès aux collections du CRM (compte de service en priorité, voir store.ts).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyDoc = Record<string, any>;
+const listCol = async (c: string) => (await (await store()).list(c)) as AnyDoc[];
+const getOne = async (c: string, id: string) => (id ? ((await (await store()).get(c, id)) as AnyDoc | null) : null);
+const setOne = async (c: string, id: string, d: AnyDoc) => (await store()).set(c, id, d);
+const updateOne = async (c: string, id: string, d: AnyDoc) => (await store()).update(c, id, d);
+const templateNames = async () => new Map((await listCol("templates")).map((t) => [String(t.id), String(t.name ?? t.id)]));
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.netforce-defense.com";
 
 type ContentItem = { type?: string; text?: string; imageId?: string; alt?: string; label?: string; url?: string; width?: number };
@@ -84,14 +92,14 @@ async function blocksFromContent(items: ContentItem[]) {
       blocks.push({ id: makeId("b"), type: "text", props: { text: str(it.text), align: "left", color: "#334155", fontSize: 16 } });
     } else if (type === "image") {
       const id = str(it.imageId);
-      const meta = id ? await getDoc(doc(await crmDb(), "image_bank", id)) : null;
-      if (!meta?.exists()) throw new ToolError(`Image introuvable dans la banque : ${id}. Utilise list_images.`);
+      const meta = await getOne("image_bank", id);
+      if (!meta) throw new ToolError(`Image introuvable dans la banque : ${id}. Utilise list_images.`);
       blocks.push({
         id: makeId("b"),
         type: "image",
         props: {
           src: `${APP_URL}/api/images/${id}`,
-          alt: str(it.alt) || meta.data().description || meta.data().name,
+          alt: str(it.alt) || meta.description || meta.name,
           width: Math.min(100, Math.max(20, Number(it.width) || 100)),
           align: "center",
           href: str(it.url),
@@ -175,10 +183,8 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
       inputSchema: { type: "object", properties: { query: { type: "string" } } },
       async run(a) {
         const q = norm(str(a.query));
-        const snap = await getDocs(collection(await crmDb(), "templates"));
         return {
-          templates: snap.docs
-            .map((d) => d.data())
+          templates: (await listCol("templates"))
             .filter((t) => !q || norm(`${t.name} ${t.subject}`).includes(q))
             .map((t) => ({ id: t.id, name: t.name, type: t.type, subject: t.subject })),
         };
@@ -190,9 +196,8 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
       annotations: { readOnlyHint: true },
       inputSchema: { type: "object", properties: { templateId: { type: "string" } }, required: ["templateId"] },
       async run(a) {
-        const snap = await getDoc(doc(await crmDb(), "templates", str(a.templateId)));
-        if (!snap.exists()) throw new ToolError("Modèle introuvable.");
-        const t = snap.data();
+        const t = await getOne("templates", str(a.templateId));
+        if (!t) throw new ToolError("Modèle introuvable.");
         return { id: t.id, name: t.name, type: t.type, subject: t.subject, content: templateText(t) };
       },
     },
@@ -208,7 +213,7 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
         if (!name) throw new ToolError("Nom obligatoire.");
         const id = makeId("t");
         const t = now();
-        await setDoc(doc(await crmDb(), "templates", id), {
+        await setOne("templates", id, {
           id,
           name,
           type: "Email",
@@ -232,9 +237,7 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
       async run(a) {
         adminOnly("update_email_template");
         const id = str(a.templateId);
-        const ref = doc(await crmDb(), "templates", id);
-        const snap = await getDoc(ref);
-        if (!snap.exists()) throw new ToolError("Modèle introuvable.");
+        if (!(await getOne("templates", id))) throw new ToolError("Modèle introuvable.");
         const patch: Record<string, unknown> = { updatedAt: now() };
         if (a.name !== undefined) patch.name = str(a.name);
         if (a.subject !== undefined) patch.subject = str(a.subject);
@@ -243,7 +246,7 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
         } else if (Array.isArray(a.paragraphs)) {
           patch.blocks = blocksFrom(str(a.heading), a.paragraphs.map(String), str(a.buttonLabel), str(a.buttonUrl));
         }
-        await updateDoc(ref, patch);
+        await updateOne("templates", id, patch);
         ctx.actions.push({ type: "navigate", path: `/templates/${id}`, label: "Ouvrir le modèle" });
         return { updated: id };
       },
@@ -260,9 +263,7 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
       async run(a) {
         const words = norm(str(a.query)).split(/\s+/).filter((w) => w.length > 2);
         const tag = norm(str(a.tag));
-        const snap = await getDocs(collection(await crmDb(), "image_bank"));
-        const scored = snap.docs
-          .map((d) => d.data())
+        const scored = (await listCol("image_bank"))
           .filter((i) => !tag || (i.tags ?? []).map(norm).includes(tag))
           .map((i) => {
             const hay = norm(`${i.name} ${i.description} ${(i.tags ?? []).join(" ")}`);
@@ -296,9 +297,7 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
       },
       async run(a) {
         const p = resolvePerson(ctx, a.person);
-        const snap = await getDocs(collection(await crmDb(), "todos"));
-        const list = snap.docs
-          .map((d) => d.data())
+        const list = (await listCol("todos"))
           .filter((t) => t.ownerId === p.uid && (a.includeDone === true || t.status !== "done"))
           .sort((x, y) => x.priority - y.priority || String(x.due || "9999").localeCompare(String(y.due || "9999")))
           .map((t) => ({ id: t.id, title: t.title, priority: `P${t.priority}`, due: t.due || null, status: t.status, top3: t.focus }));
@@ -332,12 +331,12 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
         let contactName = "";
         const contactId = str(a.contactId);
         if (contactId) {
-          const c = await getDoc(doc(await crmDb(), "contacts", contactId));
-          if (c.exists()) contactName = `${c.data().firstName ?? ""} ${c.data().lastName ?? ""}`.trim();
+          const c = await getOne("contacts", contactId);
+          if (c) contactName = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
         }
         const id = makeId("td");
         const t = now();
-        await setDoc(doc(await crmDb(), "todos", id), {
+        await setOne("todos", id, {
           id,
           title,
           notes: str(a.notes),
@@ -375,10 +374,9 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
         required: ["todoId"],
       },
       async run(a) {
-        const ref = doc(await crmDb(), "todos", str(a.todoId));
-        const snap = await getDoc(ref);
-        if (!snap.exists()) throw new ToolError("Tâche introuvable.");
-        if (snap.data().ownerId !== ctx.me.uid) adminOnly("update_todo d'un collègue");
+        const todo = await getOne("todos", str(a.todoId));
+        if (!todo) throw new ToolError("Tâche introuvable.");
+        if (todo.ownerId !== ctx.me.uid) adminOnly("update_todo d'un collègue");
         const patch: Record<string, unknown> = { updatedAt: now() };
         if (a.title !== undefined) patch.title = str(a.title);
         if (a.status !== undefined) {
@@ -388,7 +386,7 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
         if (a.priority !== undefined) patch.priority = Math.min(4, Math.max(1, Math.round(Number(a.priority))));
         if (a.due !== undefined) patch.due = str(a.due);
         if (a.top3 !== undefined) patch.focus = a.top3 === true;
-        await updateDoc(ref, patch);
+        await updateOne("todos", str(a.todoId), patch);
         return { updated: str(a.todoId) };
       },
     },
@@ -409,12 +407,11 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
       async run(a) {
         adminOnly("draft_email");
         const ids = Array.isArray(a.contactIds) ? a.contactIds.map(String).slice(0, 200) : [];
-        const db = await crmDb();
         const recipients = [];
         for (const id of ids) {
-          const c = await getDoc(doc(db, "contacts", id));
-          if (c.exists() && c.data().email) {
-            recipients.push({ id, email: c.data().email, firstName: c.data().firstName ?? "", lastName: c.data().lastName ?? "" });
+          const c = await getOne("contacts", id);
+          if (c?.email) {
+            recipients.push({ id, email: c.email, firstName: c.firstName ?? "", lastName: c.lastName ?? "" });
           }
         }
         if (!recipients.length) throw new ToolError("Aucun destinataire valide (contact introuvable ou sans email).");
@@ -450,14 +447,13 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
             `Le ${id || "contrat demandé"} n'est pas encore disponible dans le CRM. Contrats disponibles : ${CONTRACTS.map((c) => c.id).join(", ")}. Pour ajouter un modèle, il faut transmettre son PDF à l'équipe technique.`,
           );
         }
-        const db = await crmDb();
-        const file = await getDoc(doc(db, "contract_files", contract.id));
-        if (!file.exists() || !file.data().data) {
+        const file = await getOne("contract_files", contract.id);
+        if (!file?.data) {
           throw new ToolError(`Le modèle PDF du ${contract.id} n'est pas encore importé : un admin doit l'importer dans Documents légaux.`);
         }
-        const c = await getDoc(doc(db, "contacts", str(a.contactId)));
-        if (!c.exists()) throw new ToolError(`Contact introuvable : ${str(a.contactId)}. Utilise search_contacts.`);
-        const data = contractDataFromContact(c.data());
+        const c = await getOne("contacts", str(a.contactId));
+        if (!c) throw new ToolError(`Contact introuvable : ${str(a.contactId)}. Utilise search_contacts.`);
+        const data = contractDataFromContact(c);
         for (const k of ["email", "company", "jobTitle", "address", "registration", "representedBy", "shortName"] as const) {
           if (str(a[k])) data[k] = str(a[k]);
         }
@@ -465,7 +461,7 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
           data.representedBy = [[data.firstName, data.lastName].filter(Boolean).join(" "), data.jobTitle].filter(Boolean).join(", ");
         }
         if (str(a.company) && !str(a.shortName)) data.shortName = data.company;
-        const netforceSigner = (file.data().netforceSigner as { firstName: string; lastName: string; email: string } | undefined) ?? null;
+        const netforceSigner = (file.netforceSigner as { firstName: string; lastName: string; email: string } | undefined) ?? null;
         ctx.actions.push({ type: "contract_draft", contractId: contract.id, contractName: contract.name, contactId: c.id, data, netforceSigner });
         const labels: Record<string, string> = {
           email: "email",
@@ -497,9 +493,7 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
         },
       },
       async run(a) {
-        const snap = await getDocs(collection(await crmDb(), "signatures"));
-        const all = snap.docs
-          .map((d) => d.data())
+        const all = (await listCol("signatures"))
           .filter((s) => (!str(a.contactId) || s.contactId === str(a.contactId)) && (!str(a.status) || s.status === str(a.status)))
           .sort((x, y) => String(y.createdAt).localeCompare(String(x.createdAt)))
           .slice(0, 30);
@@ -523,8 +517,7 @@ export function assistantTools(ctx: AssistantCtx): ToolDef[] {
       annotations: { readOnlyHint: true },
       inputSchema: { type: "object", properties: {} },
       async run() {
-        const db = await crmDb();
-        const tpls = new Map((await getDocs(collection(db, "templates"))).docs.map((d) => [d.id, String(d.data().name ?? d.id)]));
+        const tpls = await templateNames();
         return {
           automations: (await listAutomations()).map((a) => ({
             id: a.id,
@@ -584,8 +577,7 @@ Active par défaut (active=false pour la créer en pause).`,
         adminOnly("create_automation");
         try {
           const created = await createAutomation(await validateAutomation(a));
-          const db = await crmDb();
-          const tpls = new Map((await getDocs(collection(db, "templates"))).docs.map((d) => [d.id, String(d.data().name ?? d.id)]));
+          const tpls = await templateNames();
           ctx.actions.push({ type: "navigate", path: "/automatisation", label: "Voir les automatisations" });
           return {
             created: { id: created.id, name: created.name, active: created.active },

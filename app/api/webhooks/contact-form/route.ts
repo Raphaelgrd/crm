@@ -1,15 +1,5 @@
 import { NextRequest } from "next/server";
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  setDoc,
-  updateDoc,
-  where,
-} from "firebase/firestore/lite";
-import { crmDb } from "@/lib/server/db";
+import { store } from "@/lib/server/store";
 import { safeEqual } from "@/lib/server/apiKey";
 import { runAutomationsSafely } from "@/lib/server/automations";
 
@@ -91,16 +81,13 @@ export async function POST(req: NextRequest) {
     .join("\n");
 
   const now = new Date().toISOString();
-  const firestore = await crmDb();
-
   try {
-    const existing = await getDocs(
-      query(collection(firestore, "contacts"), where("email", "==", email), limit(1)),
-    );
+    const db = await store();
+    const existing = await db.where("contacts", "email", email);
 
     let contactId: string;
     let created = false;
-    if (existing.empty) {
+    if (existing.length === 0) {
       contactId = makeId("c");
       const extra: Record<string, string> = { Source: "Site web" };
       if (source) extra["Provenance"] = source;
@@ -110,7 +97,7 @@ export async function POST(req: NextRequest) {
       if (siret) extra["SIRET"] = siret;
       if (activities) extra["Activités"] = activities;
       if (typeof b.consent === "boolean") extra["Consentement"] = b.consent ? "Oui" : "Non";
-      await setDoc(doc(firestore, "contacts", contactId), {
+      await db.set("contacts", contactId, {
         id: contactId,
         firstName,
         lastName,
@@ -128,10 +115,9 @@ export async function POST(req: NextRequest) {
       });
       created = true;
     } else {
-      const found = existing.docs[0];
-      contactId = found.id;
+      const data = existing[0] as { id: string; phone?: string; company?: string; extra?: Record<string, string> };
+      contactId = data.id;
       const patch: Record<string, unknown> = { updatedAt: now };
-      const data = found.data();
       if (!data.phone && phone) patch.phone = phone;
       if (!data.company && company) patch.company = company;
       if (amountDigits && !data.extra?.["Investissement"]) {
@@ -139,11 +125,11 @@ export async function POST(req: NextRequest) {
       }
       if (siret && !data.extra?.["SIRET"]) patch["extra.SIRET"] = siret;
       if (activities && !data.extra?.["Activités"]) patch["extra.Activités"] = activities;
-      await updateDoc(found.ref, patch);
+      await db.update("contacts", contactId, patch);
     }
 
     const activityId = makeId("a");
-    await setDoc(doc(firestore, "activities", activityId), {
+    await db.set("activities", activityId, {
       id: activityId,
       contactId,
       type: "note",

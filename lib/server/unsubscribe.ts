@@ -1,7 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
-import { collection, doc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore/lite";
 import { safeEqual } from "./apiKey";
-import { crmDb } from "./db";
+import { store } from "./store";
 
 // Désabonnements des emails envoyés depuis le CRM (collection unsubscribes, une entrée par adresse).
 // Le lien de désabonnement est signé : on ne peut pas fabriquer celui d'une autre personne.
@@ -40,17 +39,16 @@ export function emailFromToken(token: string): string | null {
 /** Enregistre le désabonnement et le note sur les fiches contact concernées. */
 export async function unsubscribe(email: string, source: string): Promise<void> {
   const e = norm(email);
-  const db = await crmDb();
+  const db = await store();
   const at = new Date().toISOString();
-  await setDoc(doc(db, "unsubscribes", keyOf(e)), { id: keyOf(e), email: e, at, source });
+  await db.set("unsubscribes", keyOf(e), { id: keyOf(e), email: e, at, source });
   const variants = [...new Set([e, email.trim()])];
   for (const v of variants) {
-    const snap = await getDocs(query(collection(db, "contacts"), where("email", "==", v)));
-    for (const c of snap.docs) {
-      if (c.data().unsubscribedAt) continue;
-      await updateDoc(c.ref, { unsubscribedAt: at, updatedAt: at });
+    for (const c of await db.where("contacts", "email", v)) {
+      if (c.unsubscribedAt) continue;
+      await db.update("contacts", String(c.id), { unsubscribedAt: at, updatedAt: at });
       const id = `act_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-      await setDoc(doc(db, "activities", id), {
+      await db.set("activities", id, {
         id,
         contactId: c.id,
         type: "email",
@@ -66,6 +64,6 @@ export async function unsubscribe(email: string, source: string): Promise<void> 
 
 /** Adresses désabonnées (en minuscules). */
 export async function unsubscribedEmails(): Promise<Set<string>> {
-  const snap = await getDocs(collection(await crmDb(), "unsubscribes"));
-  return new Set(snap.docs.map((d) => String(d.data().email ?? "").toLowerCase()));
+  const all = await (await store()).list("unsubscribes");
+  return new Set(all.map((d) => String(d.email ?? "").toLowerCase()));
 }

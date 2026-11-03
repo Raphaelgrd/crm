@@ -4,11 +4,10 @@ import {
   getDoc,
   getDocs,
   query,
-  setDoc,
-  updateDoc,
   where,
 } from "firebase/firestore/lite";
-import { crmDb, rapportDb } from "./db";
+import { rapportDb } from "./db";
+import { store } from "./store";
 import { runAutomationsSafely } from "./automations";
 import { listFiles, listFolders } from "./dataroom";
 
@@ -53,20 +52,19 @@ const makeId = (prefix: string) =>
 const isDateKey = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 async function all(name: string): Promise<Doc[]> {
-  const snap = await getDocs(collection((await crmDb()), name));
-  return snap.docs.map((d) => ({ ...(d.data() as Record<string, unknown>), id: d.id }));
+  return (await (await store()).list(name)) as Doc[];
 }
 
 async function one(name: string, id: string): Promise<Doc | null> {
   if (!id) return null;
-  const snap = await getDoc(doc((await crmDb()), name, id));
-  return snap.exists() ? { ...(snap.data() as Record<string, unknown>), id: snap.id } : null;
+  const d = await (await store()).get(name, id);
+  return d ? { ...d, id } : null;
 }
 
 async function logActivity(contactId: string, type: string, text: string, auto: boolean) {
   const t = now();
   const id = makeId("act");
-  await setDoc(doc((await crmDb()), "activities", id), {
+  await (await store()).set("activities", id, {
     id,
     contactId,
     type,
@@ -197,22 +195,21 @@ export const TOOLS: ToolDef[] = [
       const id = str(a.contactId);
       const c = await one("contacts", id);
       if (!c) throw new ToolError(`Contact introuvable : ${id}`);
-      const db = (await crmDb());
+      const db = await store();
       const [acts, events, loans] = await Promise.all([
-        getDocs(query(collection(db, "activities"), where("contactId", "==", id))),
-        getDocs(query(collection(db, "agenda"), where("contactId", "==", id))),
-        getDocs(query(collection(db, "loans"), where("contactId", "==", id))),
+        db.where("activities", "contactId", id),
+        db.where("agenda", "contactId", id),
+        db.where("loans", "contactId", id),
       ]);
-      const timeline = acts.docs
-        .map((d) => d.data() as Record<string, unknown>)
+      const timeline = acts
         .sort((x, y) => String(y.at).localeCompare(String(x.at)))
         .slice(0, 50)
         .map((x) => ({ at: x.at, type: x.type, text: x.text }));
       return {
         contact: c,
         timeline,
-        agenda: events.docs.map((d) => d.data()),
-        loans: loans.docs.map((d) => d.data()),
+        agenda: events,
+        loans,
       };
     },
   },
@@ -454,9 +451,9 @@ export const TOOLS: ToolDef[] = [
       checkFollowUp(a.nextFollowUpAt);
       const email = str(a.email).toLowerCase();
       if (email) {
-        const dup = await getDocs(query(collection((await crmDb()), "contacts"), where("email", "==", email)));
-        if (!dup.empty) {
-          throw new ToolError(`Un contact existe déjà avec l'email ${email} (id : ${dup.docs[0].id}). Utilise update_contact.`);
+        const dup = await (await store()).where("contacts", "email", email);
+        if (dup.length) {
+          throw new ToolError(`Un contact existe déjà avec l'email ${email} (id : ${dup[0].id}). Utilise update_contact.`);
         }
       }
       const t = now();
@@ -477,7 +474,7 @@ export const TOOLS: ToolDef[] = [
         createdAt: t,
         updatedAt: t,
       };
-      await setDoc(doc((await crmDb()), "contacts", id), contact);
+      await (await store()).set("contacts", id, contact);
       await logActivity(id, "note", "Contact créé par l'assistant IA", true);
       const automations = await runAutomationsSafely({ type: "contact_created", contactId: id });
       return { created: contactSummary(contact), ...(automations.length ? { automations } : {}) };
@@ -503,7 +500,7 @@ export const TOOLS: ToolDef[] = [
       if (typeof patch.email === "string") patch.email = patch.email.toLowerCase();
       if (patch.tags !== undefined) patch.tags = Array.isArray(patch.tags) ? patch.tags.map(String) : [];
       if (!Object.keys(patch).length) throw new ToolError("Aucun champ à modifier.");
-      await updateDoc(doc((await crmDb()), "contacts", id), { ...patch, updatedAt: now() });
+      await (await store()).update("contacts", id, { ...patch, updatedAt: now() });
       let automations: Awaited<ReturnType<typeof runAutomationsSafely>> = [];
       if (patch.stage && patch.stage !== c.stage) {
         await logActivity(id, "stage", `Étape : ${c.stage} → ${patch.stage}`, true);
@@ -585,7 +582,7 @@ export const TOOLS: ToolDef[] = [
         createdAt: t,
         updatedAt: t,
       };
-      await setDoc(doc((await crmDb()), "agenda", id), event);
+      await (await store()).set("agenda", id, event);
       return { created: event };
     },
   },
@@ -612,7 +609,7 @@ export const TOOLS: ToolDef[] = [
       const patch = pick(a, ["title", "date", "startTime", "endTime", "notes", "done"]);
       if (patch.date !== undefined && !isDateKey(String(patch.date))) throw new ToolError("date doit être au format YYYY-MM-DD.");
       if (!Object.keys(patch).length) throw new ToolError("Aucun champ à modifier.");
-      await updateDoc(doc((await crmDb()), "agenda", id), { ...patch, updatedAt: now() });
+      await (await store()).update("agenda", id, { ...patch, updatedAt: now() });
       return { updated: id, changes: patch };
     },
   },
@@ -651,7 +648,7 @@ export const TOOLS: ToolDef[] = [
         createdAt: t,
         updatedAt: t,
       };
-      await setDoc(doc((await crmDb()), "organizations", id), org);
+      await (await store()).set("organizations", id, org);
       return { created: org };
     },
   },

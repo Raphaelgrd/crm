@@ -1,5 +1,5 @@
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
-import { Bytes, collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from "firebase/firestore/lite";
+import { Bytes, collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore/lite";
 import { crmAdminApp } from "./admin";
 import { crmDb } from "./db";
 
@@ -14,7 +14,10 @@ export interface Store {
   set(col: string, id: string, data: Data): Promise<void>;
   update(col: string, id: string, data: Data): Promise<void>;
   remove(col: string, id: string): Promise<void>;
+  /** Tous les documents de la collection ; chaque document porte son identifiant dans `id`. */
   list(col: string): Promise<Data[]>;
+  /** Documents dont le champ `field` vaut exactement `value` (avec `id`). */
+  where(col: string, field: string, value: unknown): Promise<Data[]>;
   bytes(u8: Uint8Array): unknown;
 }
 
@@ -27,7 +30,8 @@ export async function store(): Promise<Store> {
       set: async (c, id, d) => void (await fs.collection(c).doc(id).set(d)),
       update: async (c, id, d) => void (await fs.collection(c).doc(id).update(d)),
       remove: async (c, id) => void (await fs.collection(c).doc(id).delete()),
-      list: async (c) => (await fs.collection(c).get()).docs.map((d) => d.data()),
+      list: async (c) => (await fs.collection(c).get()).docs.map((d) => ({ ...d.data(), id: d.id })),
+      where: async (c, f, v) => (await fs.collection(c).where(f, "==", v).get()).docs.map((d) => ({ ...d.data(), id: d.id })),
       bytes: (u8) => Buffer.from(u8),
     };
   }
@@ -40,7 +44,9 @@ export async function store(): Promise<Store> {
     set: (c, id, d) => setDoc(doc(db, c, id), d),
     update: (c, id, d) => updateDoc(doc(db, c, id), d),
     remove: (c, id) => deleteDoc(doc(db, c, id)),
-    list: async (c) => (await getDocs(collection(db, c))).docs.map((d) => d.data()),
+    list: async (c) => (await getDocs(collection(db, c))).docs.map((d) => ({ ...d.data(), id: d.id })),
+    where: async (c, f, v) =>
+      (await getDocs(query(collection(db, c), where(f, "==", v)))).docs.map((d) => ({ ...d.data(), id: d.id })),
     bytes: (u8) => Bytes.fromUint8Array(u8),
   };
 }
