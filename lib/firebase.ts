@@ -36,6 +36,10 @@ export const getCrmAuth = () => getAuth(firebaseApp);
  * Ouvre la session CRM pour l'utilisateur connecté (compte du projet rapport).
  * Tant que le serveur n'est pas configuré (503), on continue sans session : les règles actuelles le permettent encore.
  */
+/** Raison pour laquelle le serveur n'a pas ouvert la session du CRM (affichée dans le bandeau). */
+let crmSessionIssue: string | null = null;
+export const getCrmSessionIssue = () => crmSessionIssue;
+
 export async function ensureCrmSession(idToken: string, uid: string): Promise<"ok" | "unconfigured" | "denied"> {
   const crmAuth = getCrmAuth();
   await crmAuth.authStateReady();
@@ -44,7 +48,13 @@ export async function ensureCrmSession(idToken: string, uid: string): Promise<"o
     method: "POST",
     headers: { Authorization: `Bearer ${idToken}` },
   });
-  if (res.status === 503) return "unconfigured";
+  if (res.status === 503) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    crmSessionIssue = j.error ?? "Le serveur n'a pas pu ouvrir la session du CRM.";
+    syncListeners.forEach((l) => l());
+    return "unconfigured";
+  }
+  crmSessionIssue = null;
   if (!res.ok) return "denied";
   const { token } = (await res.json()) as { token: string };
   await signInWithCustomToken(crmAuth, token);

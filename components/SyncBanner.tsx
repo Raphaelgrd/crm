@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { subscribeSyncErrors, syncErrorsSnapshot } from "@/lib/firebase";
+import { getCrmSessionIssue, subscribeSyncErrors, syncErrorsSnapshot } from "@/lib/firebase";
 
 // Bandeau discret quand la synchronisation avec la base est coupée depuis plus de 10 secondes :
 // les données affichées peuvent alors être en retard. Les écoutes se relancent toutes seules.
@@ -24,12 +24,19 @@ export default function SyncBanner() {
 
   if (!visible || !errors.size) return null;
   const code = [...errors.values()][0];
+  const issue = getCrmSessionIssue();
   return (
     <div role="status" className="flex items-center gap-3 bg-amber-50 px-4 py-2 text-sm text-amber-900">
       <RefreshCw className="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />
       <p className="min-w-0 flex-1">
-        Synchronisation avec la base interrompue ({code}) : les données affichées peuvent être en retard. Nouvelle
-        tentative automatique…
+        Synchronisation avec la base interrompue ({code}) : les données affichées peuvent être en retard.{" "}
+        {issue ? (
+          <>
+            <strong>{issue}</strong> Diagnostic : /api/auth/crm-token
+          </>
+        ) : (
+          "Nouvelle tentative automatique…"
+        )}
       </p>
       <button
         type="button"
