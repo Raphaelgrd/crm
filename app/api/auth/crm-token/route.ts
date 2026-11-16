@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { getAuth } from "firebase-admin/auth";
+import { getSecurityRules } from "firebase-admin/security-rules";
 import { checkServiceAccount, crmAdminApp, rapportAdminApp } from "@/lib/server/admin";
+import { sameRules } from "@/lib/server/crmRules";
 import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 
 // Échange le jeton du compte (projet rapport) contre un jeton du projet CRM :
@@ -59,13 +61,33 @@ async function browserPathCheck(): Promise<Record<string, string>> {
   return out;
 }
 
+/** Règles Firestore réellement actives sur la base (default) du projet du CRM. */
+async function activeRules(): Promise<Record<string, string>> {
+  const crm = crmAdminApp();
+  if (!crm) return { etat: "lecture impossible : FIREBASE_SERVICE_ACCOUNT_CRM" };
+  try {
+    const r = await getSecurityRules(crm).getFirestoreRuleset();
+    const content = r.source.map((f) => f.content).join("\n");
+    return {
+      etat: sameRules(content) ? "ok : ce sont les règles du CRM" : "DIFFÉRENTES des règles du CRM",
+      publiees_le: r.createTime,
+      contenu: content.replace(/\s+/g, " ").trim().slice(0, 700),
+    };
+  } catch (e) {
+    return { etat: `lecture impossible : ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
 /** Diagnostic (à ouvrir dans le navigateur) : les deux comptes de service sont-ils présents et acceptés par Google ? */
 export async function GET() {
   const [crm, rapport] = await Promise.all([
     checkServiceAccount("FIREBASE_SERVICE_ACCOUNT_CRM", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? ""),
     checkServiceAccount("FIREBASE_SERVICE_ACCOUNT_RAPPORT", "netforce-38edf"),
   ]);
-  const path = await browserPathCheck().catch((e) => ({ erreur: e instanceof Error ? e.message : String(e) }));
+  const [path, rules] = await Promise.all([
+    browserPathCheck().catch((e) => ({ erreur: e instanceof Error ? e.message : String(e) })),
+    activeRules(),
+  ]);
   const ok = crm.status === "ok" && rapport.status === "ok" && Object.values(path).every((v) => v.startsWith("ok"));
   return Response.json(
     {
@@ -73,6 +95,7 @@ export async function GET() {
       FIREBASE_SERVICE_ACCOUNT_CRM: crm.status + (crm.project ? ` (projet ${crm.project})` : ""),
       FIREBASE_SERVICE_ACCOUNT_RAPPORT: rapport.status + (rapport.project ? ` (projet ${rapport.project})` : ""),
       chemin_du_navigateur: path,
+      regles_firestore_actives: rules,
       attendu: { crm: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "?", rapport: "netforce-38edf" },
     },
     { headers: { "Cache-Control": "no-store" } },

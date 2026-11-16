@@ -15,6 +15,7 @@ import { db } from "@/lib/firebase";
 import { TeamAccess } from "@/components/settings/TeamAccess";
 import { FileStorage } from "@/components/settings/FileStorage";
 import { DuplicateFiles } from "@/components/settings/DuplicateFiles";
+import { RulesRepair } from "@/components/settings/RulesRepair";
 
 // Page Paramètres / Admin du CRM : équipe et accès, état des données,
 // sauvegarde JSON, intégrations, zone de danger.
@@ -117,6 +118,8 @@ export default function SettingsPage() {
         )}
 
         <TeamAccess />
+
+        <RulesRepair />
 
         <FileStorage />
 
