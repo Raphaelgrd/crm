@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Loader2,
   ChevronRight,
@@ -23,6 +23,7 @@ import {
 import JSZip from "jszip";
 import { FolderMeta, StoredFile, formatSize, useDataRoom } from "@/lib/dataroom";
 import { GuestShareModal } from "@/components/dataroom/GuestShareModal";
+import { FilePreview } from "@/components/dataroom/FilePreview";
 
 const ACCENT_GRADIENTS = [
   "from-red-400 to-rose-500",
@@ -169,21 +170,14 @@ export default function DataRoomPage() {
   const [newFolderName, setNewFolderName] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<StoredFile | null>(null);
-  const [preview, setPreview] = useState<{ file: StoredFile; url: string } | null>(null);
-
-  const openPreview = async (f: StoredFile) => {
-    try {
-      const blob = await fileBlob(f.id);
-      if (blob) setPreview({ file: f, url: URL.createObjectURL(blob) });
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Aperçu impossible.");
-    }
-  };
-
-  const closePreview = () => {
-    if (preview) URL.revokeObjectURL(preview.url);
-    setPreview(null);
-  };
+  const [preview, setPreview] = useState<StoredFile | null>(null);
+  const openPreview = (f: StoredFile) => setPreview(f);
+  const closePreview = useCallback(() => setPreview(null), []);
+  const loadPreview = useCallback(async () => {
+    const blob = preview ? await fileBlob(preview.id) : null;
+    if (!blob) throw new Error("fichier introuvable");
+    return blob;
+  }, [preview, fileBlob]);
   const [editingFile, setEditingFile] = useState<StoredFile | null>(null);
   const [editName, setEditName] = useState("");
   const [editFolder, setEditFolder] = useState("");
@@ -644,7 +638,7 @@ export default function DataRoomPage() {
                     <div key={f.id} className="group border-border bg-card relative overflow-hidden rounded-xl border shadow-(--shadow-card)">
                       <div
                         className="bg-muted flex h-28 cursor-pointer items-center justify-center overflow-hidden"
-                        onClick={() => void openPreview(f)}
+                        onClick={() => openPreview(f)}
                       >
                         {f.url ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -654,7 +648,7 @@ export default function DataRoomPage() {
                         )}
                       </div>
                       <div className="p-3">
-                        <p className="text-foreground cursor-pointer truncate text-sm font-semibold hover:underline" title={f.name} onClick={() => void openPreview(f)}>{f.name}</p>
+                        <p className="text-foreground cursor-pointer truncate text-sm font-semibold hover:underline" title={f.name} onClick={() => openPreview(f)}>{f.name}</p>
                         <p className="text-muted-foreground mt-0.5 text-xs">{formatSize(f.size)} — {formatDate(f.createdAt)}</p>
                         {f.local && <p className="mt-0.5 text-[10px] font-medium text-amber-600">Sur cet ordinateur uniquement</p>}
                       </div>
@@ -677,60 +671,16 @@ export default function DataRoomPage() {
         )}
       </div>
 
-      {/* Modale aperçu fichier */}
+      {/* Aperçu du fichier avant téléchargement */}
       {preview && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/80" onClick={closePreview}>
-          <div className="flex items-center justify-between px-4 py-3 bg-black/60" onClick={(e) => e.stopPropagation()}>
-            <span className="text-white text-sm font-semibold truncate max-w-[60vw]">{preview.file.name}</span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void downloadFile(preview.file.id)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs font-medium text-white transition-colors"
-              >
-                <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                Télécharger
-              </button>
-              <button
-                type="button"
-                onClick={closePreview}
-                className="rounded-lg bg-white/10 hover:bg-white/20 p-1.5 text-white transition-colors"
-                aria-label="Fermer"
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-          <div className="flex-1 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            {preview.file.mime.startsWith("image/") ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={preview.url}
-                alt={preview.file.name}
-                className="h-full w-full object-contain"
-              />
-            ) : preview.file.mime === "application/pdf" ? (
-              <iframe
-                src={preview.url}
-                className="h-full w-full border-0"
-                title={preview.file.name}
-              />
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-4 text-white">
-                <FileIcon className="h-16 w-16 text-white/30" aria-hidden="true" />
-                <p className="text-sm text-white/60">Aperçu non disponible pour ce type de fichier</p>
-                <button
-                  type="button"
-                  onClick={() => void openFile(preview.file.id)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-white/10 hover:bg-white/20 px-4 py-2 text-sm font-medium text-white transition-colors"
-                >
-                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                  Ouvrir dans un nouvel onglet
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <FilePreview
+          key={preview.id}
+          name={preview.name}
+          mime={preview.mime}
+          load={loadPreview}
+          onDownload={() => void downloadFile(preview.id)}
+          onClose={closePreview}
+        />
       )}
 
       {/* Modale renommer Data Room */}

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Download, ExternalLink, FileText, Folder, FolderLock, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Download, Eye, FileText, Folder, FolderLock, Loader2 } from "lucide-react";
 import JSZip from "jszip";
+import { FilePreview } from "@/components/dataroom/FilePreview";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
@@ -35,6 +36,7 @@ export default function GuestDataRoom({ token }: { token: string }) {
   const [data, setData] = useState<ShareData | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [preview, setPreview] = useState<SharedFile | null>(null);
 
   useEffect(() => {
     fetch(`/api/partage/${encodeURIComponent(token)}`, { cache: "no-store" })
@@ -52,7 +54,7 @@ export default function GuestDataRoom({ token }: { token: string }) {
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b, "fr"));
   }, [data]);
 
-  async function blobOf(f: SharedFile): Promise<Blob> {
+  const blobOf = useCallback(async (f: SharedFile): Promise<Blob> => {
     const parts: ArrayBuffer[] = [];
     for (let i = 0; i < f.chunks; i++) {
       const r = await fetch(`/api/partage/${encodeURIComponent(token)}/files/${f.id}/${i}`, { cache: "no-store" });
@@ -60,7 +62,13 @@ export default function GuestDataRoom({ token }: { token: string }) {
       parts.push(await r.arrayBuffer());
     }
     return new Blob(parts, { type: f.mime }).slice(0, f.size, f.mime);
-  }
+  }, [token]);
+
+  const loadPreview = useCallback(async () => {
+    if (!preview) throw new Error("fichier introuvable");
+    return blobOf(preview);
+  }, [preview, blobOf]);
+  const closePreview = useCallback(() => setPreview(null), []);
 
   async function run(key: string, fn: () => Promise<void>) {
     setBusy(key);
@@ -80,21 +88,6 @@ export default function GuestDataRoom({ token }: { token: string }) {
     a.download = name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-  };
-
-  const open = (f: SharedFile) => {
-    const win = window.open("", "_blank");
-    void run(`open:${f.id}`, async () => {
-      try {
-        const url = URL.createObjectURL(await blobOf(f));
-        if (win) win.location.href = url;
-        else window.open(url, "_blank");
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      } catch (e) {
-        win?.close();
-        throw e;
-      }
-    });
   };
 
   const downloadAll = () =>
@@ -165,18 +158,21 @@ export default function GuestDataRoom({ token }: { token: string }) {
                         <li key={f.id} className="flex items-center gap-3 px-4 py-3">
                           <FileText className="text-muted-foreground h-5 w-5 shrink-0" aria-hidden="true" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-foreground truncate text-sm font-medium">{f.name}</p>
+                            <button type="button" onClick={() => setPreview(f)} className="text-foreground block max-w-full truncate text-left text-sm font-medium hover:underline">
+                              {f.name}
+                            </button>
                             <p className="text-muted-foreground text-xs">{formatSize(f.size)}</p>
                           </div>
                           <button
                             type="button"
-                            onClick={() => open(f)}
+                            onClick={() => setPreview(f)}
                             disabled={!!busy}
-                            className="hover:bg-muted rounded-lg p-2 disabled:opacity-40"
-                            aria-label={`Ouvrir ${f.name}`}
-                            title="Ouvrir"
+                            className="hover:bg-muted inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium disabled:opacity-40"
+                            aria-label={`Voir ${f.name}`}
+                            title="Voir"
                           >
-                            {busy === `open:${f.id}` ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ExternalLink className="h-4 w-4" aria-hidden="true" />}
+                            <Eye className="h-4 w-4" aria-hidden="true" />
+                            <span className="hidden sm:inline">Voir</span>
                           </button>
                           <button
                             type="button"
@@ -199,6 +195,16 @@ export default function GuestDataRoom({ token }: { token: string }) {
           </>
         )}
       </main>
+      {preview && (
+        <FilePreview
+          key={preview.id}
+          name={preview.name}
+          mime={preview.mime}
+          load={loadPreview}
+          onDownload={() => void run(`dl:${preview.id}`, async () => save(await blobOf(preview), preview.name))}
+          onClose={closePreview}
+        />
+      )}
     </div>
   );
 }
