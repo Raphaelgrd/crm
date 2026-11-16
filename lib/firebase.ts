@@ -1,7 +1,7 @@
 "use client";
 
 import { getApps, initializeApp } from "firebase/app";
-import { getAuth, signInWithCustomToken } from "firebase/auth";
+import { getAuth, onAuthStateChanged, signInWithCustomToken } from "firebase/auth";
 import {
   Firestore,
   collection,
@@ -84,28 +84,88 @@ export interface CollectionStore<T extends { id: string }> {
   remove: (id: string) => Promise<void>;
 }
 
+// --- État de la synchronisation (bandeau d'alerte si une écoute est coupée) ---
+
+const syncErrors = new Map<string, string>();
+const syncListeners = new Set<() => void>();
+
+function setSyncError(name: string, code: string | null) {
+  if ((syncErrors.get(name) ?? null) === code) return;
+  if (code) syncErrors.set(name, code);
+  else syncErrors.delete(name);
+  syncListeners.forEach((l) => l());
+}
+
+/** Collections dont l'écoute temps réel est actuellement coupée (nom → code d'erreur). */
+export function syncErrorsSnapshot(): Map<string, string> {
+  return new Map(syncErrors);
+}
+
+export function subscribeSyncErrors(cb: () => void): () => void {
+  syncListeners.add(cb);
+  return () => {
+    syncListeners.delete(cb);
+  };
+}
+
 export function createCollectionStore<T extends { id: string }>(
   name: string,
 ): CollectionStore<T> {
   let cache: T[] = [];
   let isReady = false;
   let started = false;
+  let unsubscribe: (() => void) | null = null;
+  let failures = 0;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
   const listeners = new Set<() => void>();
 
-  function start() {
-    if (started) return;
-    started = true;
-    onSnapshot(
+  // Écoute temps réel. Firestore coupe définitivement une écoute en erreur (session expirée, refus
+  // passager, réseau) : on la relance alors nous-mêmes, sinon la page resterait figée sur sa copie locale.
+  function listen() {
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+    unsubscribe?.();
+    unsubscribe = onSnapshot(
       collection(db, name),
       (snap) => {
+        if (!snap.metadata.fromCache) {
+          failures = 0;
+          setSyncError(name, null);
+        }
         cache = snap.docs.map((d) => d.data() as T);
         isReady = true;
         listeners.forEach((l) => l());
       },
       (err) => {
         console.error(`Firestore [${name}]`, err);
+        unsubscribe = null;
+        failures += 1;
+        setSyncError(name, (err as { code?: string }).code ?? "erreur");
+        retryTimer = setTimeout(listen, Math.min(30_000, 1000 * 2 ** Math.min(failures - 1, 5)));
       },
     );
+  }
+
+  function start() {
+    if (started) return;
+    started = true;
+    if (typeof window === "undefined") return;
+    // Démarre quand la session CRM est connue, et repart à chaque ouverture de session.
+    let lastUid: string | null | undefined;
+    onAuthStateChanged(getCrmAuth(), (u) => {
+      const uid = u?.uid ?? null;
+      if (uid === lastUid && unsubscribe) return;
+      lastUid = uid;
+      listen();
+    });
+    // Retour sur l'onglet ou retour du réseau : relance immédiate si l'écoute est coupée.
+    const revive = () => {
+      if (!unsubscribe && document.visibilityState === "visible") listen();
+    };
+    document.addEventListener("visibilitychange", revive);
+    window.addEventListener("online", revive);
   }
 
   return {

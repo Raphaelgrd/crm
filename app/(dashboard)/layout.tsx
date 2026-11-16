@@ -3,6 +3,7 @@ import { Header } from "@/components/Header";
 import AutomationRunner from "@/components/automation/AutomationRunner";
 import MigrationBanner from "@/components/MigrationBanner";
 import AuthGate from "@/components/AuthGate";
+import SyncBanner from "@/components/SyncBanner";
 import type { ReactNode } from "react";
 
 export default function DashboardLayout({
@@ -18,6 +19,7 @@ export default function DashboardLayout({
       <Sidebar />
       <main className="flex flex-1 flex-col overflow-hidden lg:ml-0">
         <Header />
+        <SyncBanner />
         <div className="flex-1 overflow-y-auto">
           <div className="h-full">{children}</div>
         </div>
