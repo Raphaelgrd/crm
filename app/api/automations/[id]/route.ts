@@ -25,11 +25,12 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Ctx) {
-  if (!(await verifyCrmUser(req))) return unauthorized();
+  const user = await verifyCrmUser(req);
+  if (!user) return unauthorized();
   try {
     const current = await getAutomation((await params).id);
     if (!current) return Response.json({ error: "Automatisation introuvable." }, { status: 404 });
-    await deleteAutomation(current.id);
+    await deleteAutomation(current.id, user.email);
     return Response.json({ ok: true });
   } catch (e) {
     console.error("[automations]", e);

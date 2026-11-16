@@ -141,8 +141,15 @@ export async function patchAutomation(id: string, patch: Partial<AutomationInput
   await (await store()).update("automations", id, { ...patch, updatedAt: new Date().toISOString() });
 }
 
-export async function deleteAutomation(id: string): Promise<void> {
-  await (await store()).remove("automations", id);
+export async function deleteAutomation(id: string, by = ""): Promise<void> {
+  const s = await store();
+  const a = await s.get("automations", id);
+  if (a) {
+    // Corbeille (restaurable 30 jours). Import dynamique : trash.ts dépend de la Data Room.
+    const { putInTrash } = await import("./trash");
+    await putInTrash({ kind: "automations", collection: "automations", docId: id, label: String(a.name ?? id), data: a, deletedBy: by });
+  }
+  await s.remove("automations", id);
 }
 
 /** Phrase lisible pour l'assistant et l'écran. */

@@ -1,9 +1,7 @@
 import { NextRequest } from "next/server";
 import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
+import { trashDataroomFolder } from "@/lib/server/trash";
 import {
-  deleteChunks,
-  deleteFolderRecord,
-  deleteMeta,
   listFiles,
   listFolders,
   storageError,
@@ -27,7 +25,7 @@ async function adminFolder(req: NextRequest, ctx: Ctx) {
   const folders = await listFolders();
   const folder = folders.find((f) => f.id === id);
   if (!folder) return { res: Response.json({ error: "Data Room introuvable." }, { status: 404 }) };
-  return { folder, folders };
+  return { folder, folders, user };
 }
 
 /** Renomme (avec ses fichiers), change la visibilité ou la liste de partage. */
@@ -65,13 +63,9 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
   try {
     const r = await adminFolder(req, ctx);
     if ("res" in r) return r.res;
-    for (const f of await listFiles()) {
-      if (under(f.folder, r.folder.name)) {
-        await deleteMeta(f.id);
-        await deleteChunks(f);
-      }
-    }
-    await deleteFolderRecord(r.folder.id);
+    // Corbeille : la Data Room et ses fichiers restent restaurables 30 jours (contenu conservé jusque-là).
+    const files = (await listFiles()).filter((f) => under(f.folder, r.folder.name));
+    await trashDataroomFolder({ ...r.folder }, files, r.user.email);
     return Response.json({ ok: true });
   } catch (e) {
     return storageError(e);

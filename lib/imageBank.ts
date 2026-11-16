@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { deleteDoc, doc, setDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { createCollectionStore, db } from "@/lib/firebase";
 
 // Banque d'images : métadonnées dans "image_bank", contenu (base64) dans "image_blobs".
@@ -150,7 +150,8 @@ export function useImageBank() {
   }, []);
 
   const remove = useCallback(async (id: string) => {
-    await Promise.all([store.remove(id), deleteDoc(doc(db, "image_blobs", id))]);
+    // L'image part à la corbeille ; son contenu (image_blobs) n'est effacé qu'à la suppression définitive.
+    await store.remove(id);
   }, []);
 
   return { images, loading, upload, update, remove };

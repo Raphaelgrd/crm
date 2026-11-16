@@ -33,6 +33,7 @@ import {
   ListTodo,
   Images,
   ScanLine,
+  Trash2,
 } from "lucide-react";
 import { TodoBadge } from "@/components/todos/TodoBadge";
 
@@ -159,14 +160,18 @@ export function Sidebar() {
             </div>
           ))}
         </div>
-        {/* Paramètres en bas de nav */}
-        <div className="px-2 mt-2 pt-2 border-t border-sidebar-border/50">
-          {(() => {
-            const active = pathname === "/settings";
+        {/* Corbeille et Paramètres en bas de nav */}
+        <div className="px-2 mt-2 pt-2 border-t border-sidebar-border/50 space-y-0.5">
+          {[
+            { href: "/corbeille", label: "Corbeille", icon: Trash2 },
+            { href: "/settings", label: "Paramètres", icon: Settings },
+          ].map(({ href, label, icon: Icon }) => {
+            const active = pathname === href;
             return (
               <Link
-                href="/settings"
-                title="Paramètres"
+                key={href}
+                href={href}
+                title={label}
                 className={
                   `flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-colors duration-150 active:scale-[0.97] ` +
                   (expanded ? "px-3" : "justify-center px-2") +
@@ -176,11 +181,11 @@ export function Sidebar() {
                     : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground")
                 }
               >
-                <Settings className="h-5 w-5 shrink-0" aria-hidden="true" />
-                {expanded && <span className="whitespace-nowrap overflow-hidden">Paramètres</span>}
+                <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                {expanded && <span className="whitespace-nowrap overflow-hidden">{label}</span>}
               </Link>
             );
-          })()}
+          })}
         </div>
       </nav>
 

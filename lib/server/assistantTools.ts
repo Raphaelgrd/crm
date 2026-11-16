@@ -633,8 +633,8 @@ Active par défaut (active=false pour la créer en pause).`,
         adminOnly("delete_automation");
         const current = await getAutomation(str(a.automationId));
         if (!current) throw new ToolError("Automatisation introuvable : utilise list_automations.");
-        await deleteAutomation(current.id);
-        return { deleted: current.name };
+        await deleteAutomation(current.id, `Assistant IA (${ctx.me.name})`);
+        return { deleted: current.name, note: "Placée dans la corbeille du CRM : restaurable 30 jours." };
       },
     },
     {

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
-import { deleteChunks, deleteMeta, folderAccess, getMeta, storageError, updateMeta } from "@/lib/server/dataroom";
+import { folderAccess, getMeta, storageError, updateMeta } from "@/lib/server/dataroom";
+import { trashDataroomFile } from "@/lib/server/trash";
 
 export const runtime = "nodejs";
 
@@ -36,8 +37,8 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
   try {
     const meta = await getMeta((await params).id);
     if (!meta || !(await folderAccess(user))(meta.folder)) return Response.json({ error: "Fichier introuvable." }, { status: 404 });
-    await deleteMeta(meta.id);
-    await deleteChunks(meta);
+    // Corbeille : la fiche est retirée, le contenu reste 30 jours (restaurable).
+    await trashDataroomFile(meta, user.email);
     return Response.json({ ok: true });
   } catch (e) {
     return storageError(e);

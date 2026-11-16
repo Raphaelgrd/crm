@@ -1,8 +1,6 @@
 import { NextRequest } from "next/server";
 import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 import {
-  deleteChunks,
-  deleteMeta,
   duplicateCandidates,
   fileDigest,
   getMeta,
@@ -11,6 +9,7 @@ import {
   type FileMeta,
 } from "@/lib/server/dataroom";
 import { RemoteBusyError } from "@/lib/server/remoteFiles";
+import { trashDataroomFile } from "@/lib/server/trash";
 
 // Doublons de la Data Room (admins).
 // GET : groupes candidats (même dossier, nom et taille). POST { action: "verify", ids } : compare le contenu d'un groupe.
@@ -72,8 +71,7 @@ export async function POST(req: NextRequest) {
         const m = await getMeta(id);
         // Garde-fou : on ne supprime qu'une copie du fichier conservé, jamais le fichier conservé lui-même.
         if (!m || !sameFile(keep, m)) continue;
-        await deleteMeta(m.id);
-        await deleteChunks(m);
+        await trashDataroomFile(m, a.user.email);
         removed.push(m.id);
       }
       return Response.json({ removed });

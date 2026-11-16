@@ -7,6 +7,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   initializeFirestore,
   onSnapshot,
   persistentLocalCache,
@@ -118,6 +119,29 @@ export function subscribeSyncErrors(cb: () => void): () => void {
   };
 }
 
+// --- Corbeille ---
+
+/** Collections techniques supprimées sans passer par la corbeille (journaux, files d'attente, historiques). */
+const NO_TRASH = new Set(["automationLog", "emailQueue", "stockMovements", "socialSnapshots", "stock"]);
+
+/** Nom lisible d'un élément supprimé (affiché dans la corbeille). */
+export function trashLabel(x: Record<string, unknown>): string {
+  const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const person = [s(x.firstName), s(x.lastName)].filter(Boolean).join(" ");
+  return (
+    person || s(x.name) || s(x.title) || s(x.subject) || s(x.contactName) || s(x.text).slice(0, 80) || s(x.email) || String(x.id ?? "")
+  );
+}
+
+async function whoAmI(): Promise<string> {
+  try {
+    const { getRapportAuth } = await import("./rapport");
+    return getRapportAuth().currentUser?.email ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export function createCollectionStore<T extends { id: string }>(
   name: string,
 ): CollectionStore<T> {
@@ -209,7 +233,30 @@ export function createCollectionStore<T extends { id: string }>(
       await updateDoc(doc(db, name, id), sanitize(patch));
     },
     async remove(id) {
-      await deleteDoc(doc(db, name, id));
+      if (NO_TRASH.has(name)) {
+        await deleteDoc(doc(db, name, id));
+        return;
+      }
+      // Corbeille : copie de l'élément dans « trash » et suppression, en une seule opération (rien ne se perd).
+      const item = cache.find((x) => x.id === id) ?? ((await getDoc(doc(db, name, id))).data() as T | undefined);
+      if (!item) return;
+      const trashId = `${name}__${id}__${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+      const batch = writeBatch(db);
+      batch.set(
+        doc(db, "trash", trashId),
+        sanitize({
+          id: trashId,
+          kind: name,
+          collection: name,
+          docId: id,
+          label: trashLabel(item as unknown as Record<string, unknown>),
+          data: item,
+          deletedAt: new Date().toISOString(),
+          deletedBy: await whoAmI(),
+        }),
+      );
+      batch.delete(doc(db, name, id));
+      await batch.commit();
     },
   };
 }
