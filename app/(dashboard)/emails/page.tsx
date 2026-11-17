@@ -214,9 +214,12 @@ export default function EmailsPage() {
           </div>
           <div className="border-border border-t pt-4">
             <p className="text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wider">Aperçu (Jean Dupont)</p>
-            <div
-              className="text-foreground prose prose-sm max-w-none text-sm leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            {/* Aperçu isolé (sandbox sans script) : le HTML tapé dans le message ne peut rien exécuter dans le CRM. */}
+            <iframe
+              title="Aperçu de l'email"
+              sandbox=""
+              srcDoc={`<!doctype html><meta charset="utf-8"><style>body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1f2937;margin:0}</style>${previewHtml}`}
+              className="h-64 w-full rounded-md border-0 bg-white"
             />
             <div className="mt-4 border-t border-gray-100 pt-3">
               <p className="text-[11px] text-gray-400">
