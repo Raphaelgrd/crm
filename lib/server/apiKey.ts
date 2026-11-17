@@ -7,9 +7,18 @@ export function safeEqual(a: string, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
-/** Clé d'API (CRM_API_KEY, plusieurs valeurs séparées par des virgules) via Bearer, x-api-key ou ?key=. */
-export function apiKeyOk(req: NextRequest, opts: { allowBearer?: boolean; allowQuery?: boolean } = {}): boolean {
-  const expected = (process.env.CRM_API_KEY ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+/**
+ * Clé d'API via Bearer, x-api-key ou ?key=. Par défaut CRM_API_KEY (plusieurs valeurs séparées par des virgules) ;
+ * `envNames` permet d'accepter d'autres variables (ex. CHATGPT_API_KEY, réservée au serveur MCP).
+ */
+export function apiKeyOk(
+  req: NextRequest,
+  opts: { allowBearer?: boolean; allowQuery?: boolean; envNames?: string[] } = {},
+): boolean {
+  const expected = (opts.envNames ?? ["CRM_API_KEY"])
+    .flatMap((n) => (process.env[n] ?? "").split(","))
+    .map((k) => k.trim())
+    .filter(Boolean);
   if (!expected.length) return false;
   const auth = req.headers.get("authorization") ?? "";
   const given =

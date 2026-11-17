@@ -4,7 +4,7 @@ import { TOOLS, callTool } from "@/lib/server/mcpTools";
 
 // Serveur MCP (transport « Streamable HTTP », réponses JSON sans SSE) :
 // permet à Claude, ChatGPT ou tout client MCP de lire et modifier le CRM.
-// Clé : CRM_API_KEY (Vercel), passée en `Authorization: Bearer`, `x-api-key` ou `?key=`.
+// Clé : CRM_API_KEY ou CHATGPT_API_KEY (Vercel), passée en `Authorization: Bearer`, `x-api-key` ou `?key=`.
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,7 +60,8 @@ async function handle(msg: JsonRpc) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!apiKeyOk(req, { allowQuery: true })) {
+  // CRM_API_KEY (Claude, scripts) ou CHATGPT_API_KEY (connecteur ChatGPT, valable uniquement ici).
+  if (!apiKeyOk(req, { allowQuery: true, envNames: ["CRM_API_KEY", "CHATGPT_API_KEY"] })) {
     return Response.json(err(null, -32001, "Clé API invalide ou manquante"), { status: 401, headers: CORS });
   }
   let body: JsonRpc | JsonRpc[];
