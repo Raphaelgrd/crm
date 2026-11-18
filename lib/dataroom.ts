@@ -32,8 +32,11 @@ export interface FolderMeta {
   createdAt: string;
 }
 
-/** Taille maximale d'un fichier. */
+/** Taille maximale d'un fichier (donnée par le serveur : 500 Mo sur o2switch, 50 Mo sur Firebase). */
 export const MAX_FILE_SIZE = 50 * 1024 * 1024;
+let maxFileSize = MAX_FILE_SIZE;
+const mo = (n: number) => `${Math.round(n / 1024 / 1024)} Mo`;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const CHUNK = 900_000;
 
 
@@ -41,10 +44,15 @@ function makeId() {
   return `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Appel aux routes Data Room, avec 3 essais en cas de coupure réseau ou d'erreur serveur passagère. */
+/**
+ * Appel aux routes Data Room, avec nouvelles tentatives en cas de coupure réseau ou d'erreur serveur passagère.
+ * Si o2switch demande une pause (protection anti-surcharge), on patiente plus longtemps avant de réessayer.
+ */
 async function api(path: string, init: RequestInit = {}): Promise<Response> {
   let last = "";
-  for (let attempt = 0; attempt < 3; attempt++) {
+  let busyWaits = 0;
+  for (let attempt = 0; attempt < 3 + busyWaits; attempt++) {
+    let wait = 800 * (attempt + 1);
     try {
       const res = await authFetch(path, init);
       if (res.ok) return res;
@@ -52,20 +60,27 @@ async function api(path: string, init: RequestInit = {}): Promise<Response> {
       // Les erreurs « métier » (4xx) ne se corrigent pas en réessayant.
       if (res.status < 500) throw new Error(msg);
       last = msg;
+      if (/surchargé/.test(msg) && busyWaits < 5) {
+        busyWaits += 1;
+        wait = 20_000 * busyWaits;
+      }
     } catch (e) {
       if (e instanceof Error && !(e instanceof TypeError)) throw e;
       last = "Connexion perdue";
     }
-    await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+    await sleep(wait);
   }
   throw new Error(`${last}. Réessaie dans un instant.`);
 }
 
-async function uploadOne(meta: Omit<FileMeta, "chunks">, blob: Blob): Promise<FileMeta> {
+async function uploadOne(meta: Omit<FileMeta, "chunks">, blob: Blob, onBytes?: (sent: number) => void): Promise<FileMeta> {
   const chunks = Math.max(1, Math.ceil(blob.size / CHUNK));
   for (let i = 0; i < chunks; i++) {
     const part = blob.size ? blob.slice(i * CHUNK, (i + 1) * CHUNK) : new Blob([new Uint8Array(1)]);
+    // Gros fichiers : courte pause entre deux morceaux pour ne pas déclencher la protection anti-surcharge d'o2switch.
+    if (i > 0 && chunks > 20) await sleep(150);
     await api(`/api/dataroom/${meta.id}/chunks/${i}`, { method: "PUT", body: part, headers: { "Content-Type": "application/octet-stream" } });
+    onBytes?.(Math.min(blob.size, (i + 1) * CHUNK));
   }
   const res = await api("/api/dataroom", {
     method: "POST",
@@ -140,7 +155,7 @@ export function useDataRoom() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [localFiles, setLocalFiles] = useState<FileMeta[]>([]);
-  const [busy, setBusy] = useState<{ done: number; total: number } | null>(null);
+  const [busy, setBusy] = useState<{ done: number; total: number; pct?: number } | null>(null);
   const urlsRef = useRef<Record<string, string>>({});
   const { user, isAdmin } = useCrmUser();
   const userEmail = (user?.email ?? "").toLowerCase();
@@ -148,7 +163,8 @@ export function useDataRoom() {
   const refresh = useCallback(async () => {
     try {
       const res = await api("/api/dataroom");
-      const { files } = (await res.json()) as { files: FileMeta[] };
+      const { files, maxFileSize: max } = (await res.json()) as { files: FileMeta[]; maxFileSize?: number };
+      if (max) maxFileSize = max;
       setMetas(files.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
       setLoadError("");
     } catch (e) {
@@ -254,10 +270,12 @@ export function useDataRoom() {
       items: { file: Blob; name: string; mime: string; folder: string; createdAt?: string; id?: string }[],
       keepLocalOnFailure = true,
     ) => {
-      const tooBig = items.filter((x) => x.file.size > MAX_FILE_SIZE);
-      const ok = items.filter((x) => x.file.size <= MAX_FILE_SIZE);
+      const tooBig = items.filter((x) => x.file.size > maxFileSize);
+      const ok = items.filter((x) => x.file.size <= maxFileSize);
       const uploaded: FileMeta[] = [];
-      setBusy({ done: 0, total: ok.length });
+      const totalBytes = ok.reduce((t, x) => t + x.file.size, 0) || 1;
+      let doneBytes = 0;
+      setBusy({ done: 0, total: ok.length, pct: 0 });
       try {
         for (const x of ok) {
           const meta = await uploadOne(
@@ -270,10 +288,12 @@ export function useDataRoom() {
               createdAt: x.createdAt ?? new Date().toISOString(),
             },
             x.file,
+            (sent) => setBusy({ done: uploaded.length, total: ok.length, pct: Math.round(((doneBytes + sent) / totalBytes) * 100) }),
           );
+          doneBytes += x.file.size;
           blobCache.set(meta.id, x.file);
           uploaded.push(meta);
-          setBusy({ done: uploaded.length, total: ok.length });
+          setBusy({ done: uploaded.length, total: ok.length, pct: Math.round((doneBytes / totalBytes) * 100) });
         }
       } catch (e) {
         const reason = e instanceof Error ? e.message : "Envoi impossible.";
@@ -301,7 +321,7 @@ export function useDataRoom() {
         await refresh();
       }
       if (tooBig.length) {
-        alert(`Trop lourd (50 Mo max), non envoyé : ${tooBig.map((x) => x.name).join(", ")}`);
+        alert(`Trop lourd (${mo(maxFileSize)} max), non envoyé : ${tooBig.map((x) => x.name).join(", ")}`);
       }
       return uploaded;
     },

@@ -7,7 +7,7 @@ import { Download, FileIcon, Loader2, X } from "lucide-react";
 // PDF, Word (.docx), Excel (.xlsx), images, textes/CSV. Le contenu Word est affiché dans un cadre
 // isolé (sandbox sans script) ; les tableaux Excel sont rendus en texte (aucun HTML du fichier n'est exécuté).
 
-type Kind = "image" | "pdf" | "docx" | "xlsx" | "text" | "none";
+type Kind = "image" | "pdf" | "video" | "docx" | "xlsx" | "text" | "none";
 
 const ext = (name: string) => (name.split(".").pop() ?? "").toLowerCase();
 
@@ -15,6 +15,7 @@ export function previewKind(name: string, mime: string): Kind {
   const e = ext(name);
   if (mime.startsWith("image/") || ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(e)) return "image";
   if (mime === "application/pdf" || e === "pdf") return "pdf";
+  if (mime.startsWith("video/") || ["mp4", "m4v", "mov", "webm"].includes(e)) return "video";
   if (e === "docx") return "docx";
   if (e === "xlsx" || e === "xlsm") return "xlsx";
   if (["txt", "csv", "md", "json"].includes(e) || mime.startsWith("text/")) return "text";
@@ -74,9 +75,11 @@ export function FilePreview({
       try {
         const blob = await load();
         if (cancelled) return;
-        if (kind === "image" || kind === "pdf") {
-          // On force le bon type pour que le navigateur affiche le PDF même si le fichier a été enregistré sans type.
-          const typed = new Blob([blob], { type: kind === "pdf" ? "application/pdf" : blob.type || mime });
+        if (kind === "image" || kind === "pdf" || kind === "video") {
+          // On force le bon type pour que le navigateur lise le fichier même s'il a été enregistré sans type.
+          const videoType = ext(name) === "webm" ? "video/webm" : ext(name) === "mov" ? "video/quicktime" : "video/mp4";
+          const type = kind === "pdf" ? "application/pdf" : kind === "video" ? (mime.startsWith("video/") ? mime : videoType) : blob.type || mime;
+          const typed = new Blob([blob], { type });
           url = URL.createObjectURL(typed);
           setState({ s: "url", url });
         } else if (kind === "docx") {
@@ -164,6 +167,11 @@ export function FilePreview({
           <img src={state.url} alt={name} className="h-full w-full object-contain" />
         )}
         {state.s === "url" && kind === "pdf" && <iframe src={state.url} className="h-full w-full border-0 bg-white" title={name} />}
+        {state.s === "url" && kind === "video" && (
+          <video src={state.url} controls playsInline className="h-full w-full bg-black object-contain" aria-label={name}>
+            Ton navigateur ne peut pas lire cette vidéo : télécharge-la.
+          </video>
+        )}
 
         {state.s === "html" && (
           <iframe sandbox="" srcDoc={state.html} className="h-full w-full border-0 bg-white" title={name} />

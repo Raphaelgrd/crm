@@ -480,7 +480,8 @@ export default function DataRoomPage() {
         {busy && (
           <div className="mb-5 flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
             <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
-            Envoi en ligne : {busy.done} / {busy.total} fichier{busy.total > 1 ? "s" : ""}… ne ferme pas la page.
+            Envoi en ligne : {busy.done} / {busy.total} fichier{busy.total > 1 ? "s" : ""}
+            {busy.pct !== undefined ? ` (${busy.pct} %)` : ""}… ne ferme pas la page.
           </div>
         )}
         {isAtRoot && totalSize > 0 && (

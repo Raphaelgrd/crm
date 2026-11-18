@@ -2,8 +2,8 @@ import { NextRequest } from "next/server";
 import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 import {
   CHUNK_SIZE,
-  MAX_FILE_SIZE,
   currentStorage,
+  maxFileSize,
   folderAccess,
   hasChunk,
   listFiles,
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   if (!user) return unauthorized();
   try {
     const [files, canSee] = await Promise.all([listFiles(), folderAccess(user)]);
-    return Response.json({ files: files.filter((f) => canSee(f.folder)) });
+    return Response.json({ files: files.filter((f) => canSee(f.folder)), maxFileSize: maxFileSize() });
   } catch (e) {
     return storageError(e);
   }
@@ -39,7 +39,10 @@ export async function POST(req: NextRequest) {
   const folder = str(b.folder, 500);
   if (!validFileId(id)) return Response.json({ error: "Identifiant de fichier invalide." }, { status: 400 });
   if (!str(b.name, 255)) return Response.json({ error: "Nom de fichier manquant." }, { status: 400 });
-  if (!Number.isInteger(size) || size < 0 || size > MAX_FILE_SIZE) return Response.json({ error: "Fichier trop lourd (50 Mo max)." }, { status: 413 });
+  const max = maxFileSize();
+  if (!Number.isInteger(size) || size < 0 || size > max) {
+    return Response.json({ error: `Fichier trop lourd (${Math.round(max / 1024 / 1024)} Mo max).` }, { status: 413 });
+  }
   try {
     if (!(await folderAccess(user))(folder)) return Response.json({ error: "Dossier non autorisé." }, { status: 403 });
     const chunks = Math.max(1, Math.ceil(size / CHUNK_SIZE));

@@ -8,7 +8,9 @@ import { RemoteFilesError, remoteDelete, remoteFilesConfigured, remoteGet, remot
 // Accès à la base via lib/server/store (administrateur si possible). L'accès suit la visibilité du dossier.
 
 export const CHUNK_SIZE = 900_000;
-export const MAX_FILE_SIZE = 50 * 1024 * 1024;
+/** Taille maximale : 500 Mo sur o2switch, 50 Mo si les fichiers restent dans Firebase (documents limités). */
+export const MAX_FILE_SIZE = 500 * 1024 * 1024;
+export const MAX_FILE_SIZE_FIRESTORE = 50 * 1024 * 1024;
 
 export interface FileMeta {
   id: string;
@@ -25,6 +27,7 @@ export interface FileMeta {
 
 /** Emplacement des nouveaux fichiers : o2switch dès que FILES_URL et FILES_SECRET sont configurés. */
 export const currentStorage = (): "o2switch" | "firestore" => (remoteFilesConfigured() ? "o2switch" : "firestore");
+export const maxFileSize = () => (currentStorage() === "o2switch" ? MAX_FILE_SIZE : MAX_FILE_SIZE_FIRESTORE);
 
 interface FolderMeta {
   name: string;
