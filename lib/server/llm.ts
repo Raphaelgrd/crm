@@ -171,6 +171,9 @@ export async function chatCompletion(opts: {
         const text = await res.text();
         const wait = Number(/try again in ([\d.]+)s/i.exec(text)?.[1] ?? res.headers.get("retry-after") ?? NaN);
         if (res.status === 429 && Number.isFinite(wait)) shortestWait = Math.min(shortestWait, wait);
+        // Saturation passagère sans délai indiqué (Gemini « high demand », Mistral « rate limit ») : on réessaiera dans quelques secondes.
+        // « Request too large » ne se corrige pas en attendant.
+        else if ((res.status === 429 || res.status === 503) && !/too large/i.test(text)) shortestWait = Math.min(shortestWait, 4);
         errors.push(`${p.name} ${res.status}: ${text.slice(0, 160)}`);
         continue;
       }
