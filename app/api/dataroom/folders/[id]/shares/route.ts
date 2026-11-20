@@ -27,16 +27,18 @@ const publicShare = (s: ShareRecord) => ({
   activatedAt: s.activatedAt ?? null,
   lastOpenedAt: s.lastOpenedAt ?? null,
   opens: s.opens ?? 0,
+  status: s.revoked ? "revoked" : new Date(s.expiresAt).getTime() <= Date.now() ? "expired" : "active",
 });
 
-/** Invités de la Data Room (partages actifs, les plus récents d'abord). */
+/** Invités de la Data Room, les plus récents d'abord : accès actifs, ou tous (?all=1, expirés et retirés compris). */
 export async function GET(req: NextRequest, ctx: Ctx) {
   try {
     const r = await adminAndFolder(req, ctx);
     if ("res" in r) return r.res;
     const now = Date.now();
+    const all = req.nextUrl.searchParams.get("all") === "1";
     const shares = (await listShares())
-      .filter((s) => s.folderId === r.folder.id && !s.revoked && new Date(s.expiresAt).getTime() > now)
+      .filter((s) => s.folderId === r.folder.id && (all || (!s.revoked && new Date(s.expiresAt).getTime() > now)))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map(publicShare);
     return Response.json({ shares });

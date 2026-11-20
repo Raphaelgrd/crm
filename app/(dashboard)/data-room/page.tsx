@@ -24,6 +24,7 @@ import JSZip from "jszip";
 import { FolderMeta, StoredFile, formatSize, useDataRoom } from "@/lib/dataroom";
 import { GuestShareModal } from "@/components/dataroom/GuestShareModal";
 import { FilePreview } from "@/components/dataroom/FilePreview";
+import { AccessPanel } from "@/components/dataroom/AccessPanel";
 
 const ACCENT_GRADIENTS = [
   "from-red-400 to-rose-500",
@@ -182,6 +183,7 @@ export default function DataRoomPage() {
   const [editName, setEditName] = useState("");
   const [editFolder, setEditFolder] = useState("");
   const [guestShareFolder, setGuestShareFolder] = useState<FolderMeta | null>(null);
+  const [accessRefresh, setAccessRefresh] = useState(0);
   const [renameFolderTarget, setRenameFolderTarget] = useState<string | null>(null);
   const [renameFolderName, setRenameFolderName] = useState("");
 
@@ -583,9 +585,10 @@ export default function DataRoomPage() {
           )
         )}
 
-        {/* Inside a Data Room — subfolders + files */}
+        {/* Inside a Data Room — subfolders + files (+ panneau des accès pour les admins) */}
         {!isAtRoot && (
-          <div className="space-y-6">
+          <div className={isAdmin && currentRoomMeta ? "grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]" : ""}>
+          <div className="min-w-0 space-y-6">
             {/* Subfolders */}
             {subfolders.length > 0 && (
               <div>
@@ -668,6 +671,10 @@ export default function DataRoomPage() {
                 })}
               </div>
             ) : null}
+          </div>
+          {isAdmin && currentRoomMeta && (
+            <AccessPanel folder={currentRoomMeta} onAdd={() => setGuestShareFolder(currentRoomMeta)} refreshKey={accessRefresh} />
+          )}
           </div>
         )}
       </div>
@@ -754,7 +761,14 @@ export default function DataRoomPage() {
       )}
 
       {guestShareFolder && (
-        <GuestShareModal folderId={guestShareFolder.id} folderName={guestShareFolder.name} onClose={() => setGuestShareFolder(null)} />
+        <GuestShareModal
+          folderId={guestShareFolder.id}
+          folderName={guestShareFolder.name}
+          onClose={() => {
+            setGuestShareFolder(null);
+            setAccessRefresh((n) => n + 1);
+          }}
+        />
       )}
 
       {/* Lightbox image */}
