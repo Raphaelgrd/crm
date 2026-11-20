@@ -55,6 +55,7 @@ async function mutate(fn: (S: Any) => { tasks?: string[]; state?: boolean }) {
     if (t) await s.set("siegeTasks", id, JSON.parse(JSON.stringify({ ...t, _o: t._o ?? now() })));
   }
 }
+function chatLog(d: Any): Any[] { try { const l = d && d.log ? JSON.parse(String(d.log)) : []; return Array.isArray(l) ? l : []; } catch { return []; } }
 const TK = (S: Any, id: string) => { const t = S.tasks.find((x: Any) => x.id === id); if (!t) throw new SiegeError("Tâche inconnue : " + id); return t; };
 const PJ = (S: Any, id: string) => { const p = S.projects.find((x: Any) => x.id === id); if (!p) throw new SiegeError("Projet inconnu : " + id); return p; };
 const AGT = (id: string) => { const a = AG[id]; if (!a) throw new SiegeError("Agent inconnu : " + id + ". Ids : " + A.map((x) => x.id).join(", ")); return a; };
@@ -80,13 +81,14 @@ ${mem}
 Règles : tu prépares, Gérard décide ; rien n'est envoyé, signé, publié ni payé. Aucun chiffre inventé : cerveau, puis données du CRM et Drive, puis [À COMPLÉTER : …]. Français, phrases courtes, livrables courts et utilisables.`;
 }
 
-export const SIEGE_GUIDE = `SIÈGE IA : ${A.length} agents IA (un par poste de direction et d'équipe : DAF, CMO, juridique, relations investisseurs, SEO…) au service de Netforce, qui prépare son introduction en bourse. Les outils siege_* permettent de les faire travailler : tenir une réunion (siege_projet_creer), jouer un agent (siege_agent_fiche puis siege_livrable_enregistrer), noter un échange entre agents. L'équipe valide dans le CRM, page « Siège IA ». Commence par siege_guide.`;
+export const SIEGE_GUIDE = `SIÈGE IA : ${A.length} agents IA (un par poste de direction et d'équipe : DAF, CMO, juridique, relations investisseurs, SEO…) au service de Netforce, qui prépare son introduction en bourse. Les outils siege_* permettent de les faire travailler : tenir une réunion (siege_projet_creer), jouer un agent (siege_agent_fiche puis siege_livrable_enregistrer), noter un échange entre agents, répondre aux questions posées aux agents dans le CRM (siege_questions_attente). L'équipe valide dans le CRM, page « Siège IA ». Commence par siege_guide.`;
 
 const GUIDE = `${SIEGE_GUIDE}
 
 COMMENT FAIRE
 1. Nouveau sujet → réunion : lis siege_etat et siege_organigramme, choisis 2 à 6 agents utiles (ou les membres du comité demandé), donne l'avis court de chacun, puis siege_projet_creer avec une tâche concrète par agent.
 2. Faire travailler un agent : siege_agent_fiche (mission, fiches du cerveau, méthode, travail des collègues) et siege_tache_lire, puis joue ce rôle. Cherche les faits dans le cerveau, siege_memoire_chercher, les outils du CRM (contacts, pipeline, data room…) et tes autres connecteurs (Drive, Canva) et skills. Enregistre avec siege_livrable_enregistrer : la tâche passe « À valider ».
+2 bis. Questions de Gérard : siege_questions_attente liste ce qu'il a demandé aux agents dans le CRM (chat en mode « Ton Claude ») ; réponds dans le rôle de chaque agent puis siege_question_repondre. Quand Gérard dit « réponds au siège » ou « questions du siège », commence par là.
 3. Avis d'un autre poste : lis la fiche du collègue, réponds en son nom, note-le avec siege_echange_noter.
 4. Gérard valide plans, livrables et décisions dans le CRM. Ne passe une tâche à « fait » ou une décision à tranchée que s'il le demande.
 Règles de marque : jamais « taser », « pistolet électrique », « électrocuter », ni « arme » seul ; aucun concurrent cité ; pas d'emoji. Si siege_cerveau_lire indique des fiches non importées, propose à Gérard de les importer (siege_cerveau_importer).`;
@@ -180,6 +182,21 @@ export const SIEGE_TOOLS: ToolDef[] = [
       return { ok: true }; } },
   { name: "siege_decision_trancher", description: "Siège IA : marque une décision de projet comme tranchée, avec la note de Gérard. Seulement s'il a décidé.", inputSchema: OBJ({ projet_id: S_("string"), index: { type: "integer" }, note: S_("string") }, ["projet_id", "index"]),
     run: async (a) => { await mutate((S) => { const p = PJ(S, str(a.projet_id)); const d = p.decisions[Number(a.index)]; if (!d) throw new SiegeError("Décision introuvable."); d.ok = true; if (a.note) d.note = str(a.note); return { state: true }; }); return { ok: true }; } },
+  { name: "siege_questions_attente", description: "Siège IA : questions que Gérard a posées aux agents dans le CRM (mode « Ton Claude ») et qui attendent ta réponse. Pour chacune : l'agent, la question et la discussion récente.", inputSchema: OBJ({ agent: S_("string", "Filtrer sur un agent (facultatif)") }),
+    run: async (a) => { const s = await store(); const only = str(a.agent); const out: Any[] = [];
+      for (const d of await s.list("siegeChats")) { const ag = AG[String(d.id)]; if (!ag || (only && ag.id !== only)) continue; const lg = chatLog(d);
+        lg.forEach((m: Any, i: number) => { if (m.st !== "attente") return; out.push({ agent: ag.id, nom: ag.name, poste: ag.role, question_id: m.m, question: m.c, posee_le: m.at ? new Date(m.at).toISOString() : null, discussion_recente: lg.slice(Math.max(0, i - 8), i).filter((x: Any) => x.r !== "t").map((x: Any) => (x.r === "u" ? "Gérard : " : ag.name + " : ") + clip(String(x.c), 600)) }); }); }
+      out.sort((x, y) => String(x.posee_le).localeCompare(String(y.posee_le)));
+      return { nb: out.length, questions: out, consigne: out.length ? "Pour chaque question : lis siege_agent_fiche de l'agent, réponds dans son rôle (à la première personne, court, factuel, sans inventer) en t'appuyant sur le cerveau, le CRM, le Drive, Canva et tes skills, puis envoie la réponse avec siege_question_repondre. Si la question demande un travail, tu peux aussi créer la tâche (siege_tache_creer) et enregistrer le livrable. Rien n'est envoyé, publié, signé ni payé : Gérard décide." : "Aucune question en attente." }; } },
+  { name: "siege_question_repondre", description: "Siège IA : envoie ta réponse (au nom de l'agent) à une question posée dans le chat du CRM. Elle s'affiche dans la discussion de l'agent.", inputSchema: OBJ({ agent: AGENT, question_id: S_("string"), reponse: S_("string", "Réponse en markdown simple, écrite par l'agent à la première personne") }, ["agent", "question_id", "reponse"]),
+    run: async (a) => { const ag = AGT(str(a.agent)); const qid = str(a.question_id), rep = str(a.reponse); if (rep.length < 2) throw new SiegeError("Réponse vide.");
+      const s = await store(); const d = await s.get("siegeChats", ag.id); const lg = chatLog(d); const i = lg.findIndex((m: Any) => m.m === qid);
+      if (i < 0) throw new SiegeError("Question introuvable dans le chat de " + ag.name + ".");
+      if (lg[i].st !== "attente") return { ok: true, deja: "Cette question a déjà une réponse." };
+      lg[i].st = "repondu"; let j = i + 1; while (j < lg.length && lg[j].r !== "u") j++;
+      lg.splice(j, 0, { m: "m-" + uid(), r: "a", c: rep.slice(0, 12000), via: "claude", re: qid, at: now() });
+      await s.set("siegeChats", ag.id, { log: JSON.stringify(lg), attente: lg.filter((m: Any) => m.st === "attente").length, at: now() });
+      return { ok: true, affiche_dans: "CRM › Siège IA › " + ag.name + " › Discuter" }; } },
 ];
 
 export const isSiegeError = (e: unknown) => e instanceof SiegeError;

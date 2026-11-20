@@ -270,6 +270,9 @@ details.sec[open]>summary::before{transform:rotate(45deg)}
 .msg.u{justify-self:end;background:var(--navy);color:#FFF8EE;border-bottom-right-radius:4px}
 .msg.a{justify-self:start;background:var(--sunk);border:1px solid var(--line);border-bottom-left-radius:4px}
 .msg.t{justify-self:center;font-size:12.5px;color:var(--ink2);padding:2px}
+.msg .via{display:block;font-size:11.5px;opacity:.75;margin-top:6px}
+.mode{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:13px}
+.mode button[aria-pressed=true]{background:var(--navy);color:#FFF8EE;border-color:var(--navy)}
 .composer{border-top:1px solid var(--line);padding:12px 20px;display:grid;gap:8px;background:var(--card)}
 .composer textarea{flex:1;min-height:46px;max-height:160px}
 
@@ -619,6 +622,7 @@ T('t8','jur',"Préparer les pièces administratives","Formulaires de candidature
 
 
 let S={me:'mkt',projects:[],tasks:[]},running=false,busy=new Set(),planning=new Set();
+let askMode=(()=>{try{return localStorage.getItem('nf_askmode')||'claude'}catch(e){return'claude'}})(),chatSub=null;
 let view=null,agentTab='travail',chatBusy=false,teamF='all',R={r:'accueil',pid:null};
 try{teamF=localStorage.getItem('nf_team')||'all'}catch(e){}
 const chats={},ui={};
@@ -816,8 +820,9 @@ function nowSentence(a,n){const t=n.t,nm=esc(a.name);if(!t)return`${nm} est disp
 function relBox(a){const boss=a.parent?AG[a.parent]:null,team=kids(a.id),cs=commsOf(a.id);if(!boss&&!team.length&&!cs.length)return'';
  return`<div class="rel">${boss?`<div><span class="small">Rend compte à</span><button class="who" data-agent="${boss.id}">${face(lookOf(boss),28)}<span><b>${esc(boss.name)}</b><small>${esc(boss.role)}</small></span></button></div>`:''}${team.length?`<div><span class="small">Son équipe · ${team.length}</span><div class="faces">${team.map(m=>`<button data-agent="${m.id}" title="${esc(m.name+', '+m.role)}" aria-label="${esc(m.name+', '+m.role)}">${face(lookOf(m),30)}</button>`).join('')}</div></div>`:''}${cs.length?`<div><span class="small">Comités</span><div class="chips">${cs.map(c=>`<button class="chip" data-act="comm" data-c="${c.id}">${esc(c.s)}${c.m[0][0]===a.id?' · préside':''}</button>`).join('')}</div></div>`:''}</div>`}
 function trow(t){return`<button class="trow" data-task="${t.id}"><span><b>${esc(t.titre)}</b><small>${esc(projName(t))}</small></span>${taskBadge(t)}</button>`}
-function chatBody(a){return`<div class="db" id="chatbox"><div class="chat">${(chats[a.id]||[]).map(m=>`<div class="msg ${m.r}">${esc(m.c)}</div>`).join('')||`<p class="empty">Travaille avec ${esc(a.name)} comme avec un collègue : demande des idées, un brouillon ou un point d'avancement. ${esc(a.name)} peut créer ses tâches et enregistrer ses livrables pendant la discussion.</p>`}${chatBusy?`<div class="msg a pulse" id="typing">…</div>`:''}</div></div>
- <form class="composer" data-form="chat">${sample?'':'<p class="small">La discussion a besoin de Claude : ouvre cette page depuis claude.ai.</p>'}<div class="chips">${["On fait le point ?","Propose-moi 3 idées pour le projet en cours","Qu'est-ce qui te bloque ?"].map(x=>`<button type="button" class="chip" data-act="qp">${esc(x)}</button>`).join('')}</div><div class="addf"><textarea id="cm" name="m" rows="2" placeholder="Écris à ${esc(a.name)}…" aria-label="Message"${sample?'':' disabled'}></textarea><button class="btn primary"${sample&&!chatBusy?'':' disabled'}>Envoyer</button></div></form>`}
+function msgHtml(m){return`<div class="msg ${m.r}">${esc(m.c)}${m.st==='attente'?'<span class="via">En attente de ton Claude</span>':m.st==='repondu'?'<span class="via">Transmis à ton Claude</span>':m.via==='claude'?'<span class="via">Réponse de ton Claude</span>':''}</div>`}
+function chatBody(a){const cl=askMode==='claude',ok=cl?!!db:!!sample,wait=(chats[a.id]||[]).filter(m=>m.st==='attente').length;return`<div class="db" id="chatbox"><div class="chat">${(chats[a.id]||[]).map(msgHtml).join('')||`<p class="empty">Travaille avec ${esc(a.name)} comme avec un collègue : demande des idées, un brouillon ou un point d'avancement. ${esc(a.name)} peut créer ses tâches et enregistrer ses livrables pendant la discussion.</p>`}${chatBusy?`<div class="msg a pulse" id="typing">…</div>`:''}</div></div>
+ <form class="composer" data-form="chat"><div class="mode">Qui répond :<button type="button" class="chip" data-act="askmode" data-x="claude" aria-pressed="${cl}">Ton Claude</button><button type="button" class="chip" data-act="askmode" data-x="crm" aria-pressed="${!cl}">IA du CRM (immédiat)</button></div><p class="small">${cl?(db?`Ta question part dans la file de ton Claude, qui répond dans le rôle de ${esc(a.name)} avec ton Drive, ton CRM, Canva et ses skills. La réponse s'affiche ici dès qu'il a répondu.${wait?` ${wait} question${wait>1?'s':''} en attente.`:''}`:'La file de Claude a besoin de la base du CRM.'):(sample?`Réponse immédiate par l'IA du CRM, sans Drive ni Canva.`:'IA du CRM indisponible.')}</p><div class="chips">${["On fait le point ?","Propose-moi 3 idées pour le projet en cours","Qu'est-ce qui te bloque ?"].map(x=>`<button type="button" class="chip" data-act="qp">${esc(x)}</button>`).join('')}</div><div class="addf"><textarea id="cm" name="m" rows="2" placeholder="Écris à ${esc(a.name)}…" aria-label="Message"${ok?'':' disabled'}></textarea><button class="btn primary"${ok&&!chatBusy?'':' disabled'}>${cl?'Envoyer à Claude':'Envoyer'}</button></div></form>`}
 function renderAgent(){const a=AG[view.id];if(!a)return closeDrawer();const n=agentNow(a),ts=of(a.id).slice().sort((x,y)=>(open(y)-open(x))||PR[x.prio]-PR[y.prio]);
  const needsL=[],acts=[];ts.filter(t=>open(t)&&t.owner!=='moi').forEach(t=>{t.besoins.forEach((b,i)=>{if(!b.ok)needsL.push([t,i])});t.gerard.forEach((g,i)=>{if(!g.ok)acts.push({t,i,x:g})})});
  const body=agentTab==='travail'?`<div class="db">
@@ -883,9 +888,9 @@ function renderTask(){const t=TK(view.id);if(!t)return closeDrawer();const a=AG[
  <div class="row"><button class="btn sm" data-act="copy" data-t="${t.id}">Copier le brief pour Claude</button><button class="btn sm ghost danger" data-act="del" data-t="${t.id}">Supprimer la tâche</button></div></details>
  <section class="sec"><h3>Activité</h3><form class="addf" data-form="com" data-t="${t.id}"><input type="text" id="co-${t.id}" name="c" placeholder="Commenter : ${esc(a.name)} en tiendra compte" required aria-label="Commentaire"><button class="btn sm">Envoyer</button></form><ul class="log">${t.log.slice().reverse().map(l=>`<li>${l.who==='moi'?face(ME,28):AG[l.who]?face(lookOf(AG[l.who]),28):'<span></span>'}<div>${l.kind==='com'?`<b style="font-weight:600">${esc(l.txt)}</b>`:esc(l.txt)}<time>${l.who==='moi'?'Toi':esc(AG[l.who]?AG[l.who].name:'')} · ${fmt(l.at)}</time></div></li>`).join('')||'<li class="empty">Aucune activité pour l\'instant.</li>'}</ul></section></div>`)}
 function show(){$('#scrim').hidden=false;$('#drawer').hidden=false;renderDrawer();const db=$('#drawer .db');if(db&&!(view.k==='agent'&&agentTab==='chat'))db.scrollTop=0}
-function openAgent(id,tab){view={k:'agent',id};agentTab=tab||'travail';show();loadChat(id)}
+function openAgent(id,tab){view={k:'agent',id};agentTab=tab||'travail';show();loadChat(id);watchChat(id)}
 function openTask(id){const from=view?(view.k==='agent'?view.id:view.from||null):null;view={k:'task',id,from};show()}
-function closeDrawer(){view=null;$('#scrim').hidden=true;$('#drawer').hidden=true}
+function closeDrawer(){if(chatSub){try{chatSub()}catch(e){}chatSub=null}view=null;$('#scrim').hidden=true;$('#drawer').hidden=true}
 function renderDrawer(){if(!view)return;const db=$('#drawer .db'),scr=db?db.scrollTop:0;if(view.k==='task')renderTask();else if(view.k==='comm')renderComm();else renderAgent();if(!view)return;const nb=$('#drawer .db');if(nb)nb.scrollTop=view.k==='agent'&&agentTab==='chat'?nb.scrollHeight:scr}
 
 /* ---------- navigation ---------- */
@@ -1092,9 +1097,14 @@ async function work(id){const t=TK(id);if(!t||!sample||busy.has(id))return;const
 async function planQueue(list){for(const t of list.slice(0,6))await makePlan(t.id)}
 
 /* ---------- discussion ---------- */
+const mid=()=>'m-'+uid();
+function mergeLog(remote,local){const ids=new Set(remote.map(m=>m.m).filter(Boolean));const out=[...remote];local.forEach(m=>{if(!m.m||!ids.has(m.m))out.push(m)});return out}
+function trimLog(l){const keep=l.filter(m=>m.st==='attente');const rest=l.filter(m=>m.st!=='attente');const t=rest.slice(-40);return l.filter(m=>keep.includes(m)||t.includes(m))}
+function watchChat(id){if(chatSub){try{chatSub()}catch(e){}chatSub=null}if(!db)return;try{chatSub=db.doc('chat/'+id).onSnapshot(s=>{const d=unwrap(s);if(!d||!d.log||chatBusy)return;let r;try{r=JSON.parse(d.log)}catch(e){return}const before=JSON.stringify(chats[id]||[]);chats[id]=mergeLog(r,(chats[id]||[]).filter(m=>!m.m));if(JSON.stringify(chats[id])!==before&&view&&view.k==='agent'&&view.id===id)renderDrawer()})}catch(e){}}
+async function askClaude(txt){const a=view&&view.k==='agent'?AG[view.id]:null;if(!a||!db||!txt.trim())return;const id=a.id;chats[id]=chats[id]||[];chats[id].push({m:mid(),r:'u',c:txt.trim(),st:'attente',at:now()});renderDrawer();await saveChat(id);toast(`Question envoyée à ton Claude pour ${a.name}`)}
 async function loadChat(id){if(chats[id])return;chats[id]=[];if(db){try{const s=await db.doc('chat/'+id).get();const d=unwrap(s);if(d&&d.log)chats[id]=JSON.parse(d.log)}catch(e){}}else{try{chats[id]=JSON.parse(localStorage.getItem('nf_chat_'+id)||'[]')}catch(e){}}if(view&&view.k==='agent'&&view.id===id)renderDrawer()}
-function saveChat(id){const lg=JSON.stringify(chats[id].slice(-24));try{localStorage.setItem('nf_chat_'+id,lg)}catch(e){}if(db)db.doc('chat/'+id).set({log:lg}).catch(()=>{})}
-async function send(txt){const a=view&&view.k==='agent'?AG[view.id]:null;if(!a||!sample||chatBusy||!txt.trim())return;const id=a.id;chats[id]=chats[id]||[];chats[id].push({r:'u',c:txt.trim()});chatBusy=true;renderDrawer();
+async function saveChat(id){chats[id].forEach(m=>{if(!m.m)m.m=mid()});if(db){try{const d=unwrap(await db.doc('chat/'+id).get());if(d&&d.log)chats[id]=mergeLog(JSON.parse(d.log),chats[id])}catch(e){}}chats[id]=trimLog(chats[id]);const lg=JSON.stringify(chats[id]);try{localStorage.setItem('nf_chat_'+id,lg)}catch(e){}if(db){try{await db.doc('chat/'+id).set({log:lg,attente:chats[id].filter(m=>m.st==='attente').length,at:now()})}catch(e){}}}
+async function send(txt){if(askMode==='claude')return askClaude(txt);const a=view&&view.k==='agent'?AG[view.id]:null;if(!a||!sample||chatBusy||!txt.trim())return;const id=a.id;chats[id]=chats[id]||[];chats[id].push({r:'u',c:txt.trim()});chatBusy=true;renderDrawer();
  const hist=chats[id].filter(m=>m.r!=='t').slice(-14).map(m=>({role:m.r==='u'?'user':'assistant',content:m.c}));
  const msgs=[{role:'user',content:persona(a)+"\n\nTu discutes avec Gérard, en équipe. Réponds court (moins de 180 mots sauf s'il demande un brouillon). Utilise tes outils quand c'est utile : chercher dans le Drive ou le CRM avant de demander une info, créer une tâche quand vous décidez d'un travail, changer un statut, enregistrer un livrable. Annonce ce que tu as fait en une ligne."},{role:'assistant',content:'Compris, je suis prêt.'},...hist];
  const tools=[...dataTools(l=>{chats[id].push({r:'t',c:'Consulte '+l});renderAll()},id),{name:'creer_tache',description:"Crée une tâche pour toi (ou pour un collègue si Gérard le demande).",inputSchema:{type:'object',properties:{titre:{type:'string'},detail:{type:'string'},besoins:{type:'array',items:{type:'string'}},actions_gerard:{type:'array',items:{type:'string'}},agent:{type:'string',description:'id du collègue, sinon toi'},priorite:{type:'string',enum:['haute','moyenne','basse']}},required:['titre']},execute:i=>{const ag=AG[i.agent]?i.agent:id;const t=norm({id:'t-'+uid(),pid:null,agent:ag,titre:String(i.titre),detail:String(i.detail||''),besoins:(i.besoins||[]).map(x=>({t:String(x),ok:false})),gerard:(i.actions_gerard||[]).map(x=>({t:String(x),ok:false})),prio:PR.hasOwnProperty(i.priorite)?i.priorite:'moyenne',statut:'a_faire'});log(t,id,'Tâche créée en discussion avec Gérard');S.tasks.push(t);chats[id].push({r:'t',c:`Tâche créée pour ${AG[ag].name} : ${t.titre}`});save();return{ok:true,id:t.id}}},
@@ -1102,7 +1112,7 @@ async function send(txt){const a=view&&view.k==='agent'?AG[view.id]:null;if(!a||
  {name:'enregistrer_livrable',description:'Enregistre un brouillon comme nouvelle version du livrable d\'une tâche ; elle passe « À valider ».',inputSchema:{type:'object',properties:{task_id:{type:'string'},contenu:{type:'string'}},required:['task_id','contenu']},execute:i=>{const t=TK(i.task_id);if(!t)throw new Error('tâche inconnue');addVersion(t,String(i.contenu).slice(0,8000),id);t.statut='valider';log(t,id,`A livré la version ${t.versions.length} en discussion`);chats[id].push({r:'t',c:`Livrable enregistré pour « ${t.titre} »`});save();return{ok:true}}}];
  try{const r=await sample(msgs,{cache:false,modelTier:'default',tools,onText:({text})=>{const e=document.getElementById('typing');if(e){e.textContent=text;e.classList.remove('pulse');const b=$('#chatbox');if(b)b.scrollTop=b.scrollHeight}}});chats[id].push({r:'a',c:r.text||'…'})}
  catch(e){chats[id].push({r:'t',c:e&&e.code==='rate_limited'?'Claude est très sollicité, réessaie dans un moment.':`Message non traité (${e&&e.code||'erreur'}).`})}
- chatBusy=false;saveChat(id);renderAll()}
+ chatBusy=false;await saveChat(id);renderAll()}
 
 /* ---------- copie ---------- */
 function brief(t){const a=AG[t.agent],p=P(t.pid);return`Tu es ${a.name}, ${a.role} chez Netforce (${QN[a.q]}). Netforce prépare son introduction en bourse.
@@ -1130,6 +1140,7 @@ function act(el){const k=el.dataset.act,t=TK(el.dataset.t),i=+el.dataset.i;
  else if(k==='kbgo'){kbOpen=el.dataset.k;kbEdit=null}
  else if(k==='orgv'){orgView=el.dataset.v;try{localStorage.setItem('nf_orgv',orgView)}catch(x){}renderView()}
  else if(k==='toastbtn'){const f=toast.fn;toast.fn=null;$('#toast').hidden=true;if(f)f()}
+ else if(k==='askmode'){askMode=el.dataset.x;try{localStorage.setItem('nf_askmode',askMode)}catch(e){}renderDrawer()}
  else if(k==='tab'){agentTab=el.dataset.x;renderDrawer();if(agentTab==='chat'){const c=$('#cm');c&&c.focus()}}
  else if(k==='chat'){openAgent(el.dataset.a,'chat');const c=$('#cm');c&&c.focus()}
  else if(k==='assign'){openAgent(el.dataset.a);const c=$('#nt');c&&c.focus()}
