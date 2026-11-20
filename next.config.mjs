@@ -25,8 +25,10 @@ const nextConfig = {
   poweredByHeader: false,
   async headers() {
     return [
-      { source: "/((?!siege/).*)", headers: securityHeaders },
+      { source: "/((?!siege/|apercu-pptx).*)", headers: securityHeaders },
       { source: "/siege/:path*", headers: siegeHeaders },
+      // Lecteur PowerPoint isolé (cadre « bac à sable » de l'aperçu Data Room) : cadre de la même origine seulement.
+      { source: "/apercu-pptx", headers: siegeHeaders },
     ];
   },
 };

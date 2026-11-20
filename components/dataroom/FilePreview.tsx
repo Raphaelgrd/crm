@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileIcon, Loader2, X } from "lucide-react";
 
 // Aperçu d'un fichier de la Data Room avant téléchargement (équipe et invités) :
 // PDF, Word (.docx), Excel (.xlsx), images, textes/CSV. Le contenu Word est affiché dans un cadre
 // isolé (sandbox sans script) ; les tableaux Excel sont rendus en texte (aucun HTML du fichier n'est exécuté).
 
-type Kind = "image" | "pdf" | "video" | "docx" | "xlsx" | "text" | "none";
+type Kind = "image" | "pdf" | "video" | "docx" | "xlsx" | "pptx" | "text" | "none";
 
 const ext = (name: string) => (name.split(".").pop() ?? "").toLowerCase();
 
@@ -17,6 +17,7 @@ export function previewKind(name: string, mime: string): Kind {
   if (mime === "application/pdf" || e === "pdf") return "pdf";
   if (mime.startsWith("video/") || ["mp4", "m4v", "mov", "webm"].includes(e)) return "video";
   if (e === "docx") return "docx";
+  if (e === "pptx" || e === "ppsx") return "pptx";
   if (e === "xlsx" || e === "xlsm") return "xlsx";
   if (["txt", "csv", "md", "json"].includes(e) || mime.startsWith("text/")) return "text";
   return "none";
@@ -63,6 +64,7 @@ export function FilePreview({
     | { s: "html"; html: string }
     | { s: "sheets"; sheets: Sheet[] }
     | { s: "text"; text: string; truncated: boolean }
+    | { s: "pptx"; buffer: ArrayBuffer }
     | { s: "none" }
   >({ s: kind === "none" ? "none" : "loading" });
   const [sheet, setSheet] = useState(0);
@@ -95,6 +97,9 @@ export function FilePreview({
             return { name: s.sheet, rows, truncated };
           });
           if (!cancelled) setState({ s: "sheets", sheets });
+        } else if (kind === "pptx") {
+          const buffer = await blob.arrayBuffer();
+          if (!cancelled) setState({ s: "pptx", buffer });
         } else if (kind === "text") {
           const text = await blob.slice(0, 300_000).text();
           if (!cancelled) setState({ s: "text", text, truncated: blob.size > 300_000 });
@@ -173,6 +178,8 @@ export function FilePreview({
           </video>
         )}
 
+        {state.s === "pptx" && <PptxFrame name={name} buffer={state.buffer} />}
+
         {state.s === "html" && (
           <iframe sandbox="" srcDoc={state.html} className="h-full w-full border-0 bg-white" title={name} />
         )}
@@ -233,6 +240,34 @@ export function FilePreview({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * PowerPoint : rendu dans un cadre « bac à sable » sans origine (pas d'allow-same-origin) qui charge /apercu-pptx.
+ * Le contenu du fichier est envoyé par message ; le cadre n'a accès ni à la session ni aux données du CRM.
+ */
+function PptxFrame({ name, buffer }: { name: string; buffer: ArrayBuffer }) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const onMessage = (e: MessageEvent<{ type?: string; message?: string }>) => {
+      if (!frame.current || e.source !== frame.current.contentWindow) return;
+      if (e.data?.type === "pptx-ready") {
+        const copy = buffer.slice(0);
+        // Le cadre n'a pas d'origine (« null ») : « * » est la seule cible possible ; seul ce cadre reçoit le message.
+        frame.current.contentWindow?.postMessage({ type: "pptx", buffer: copy }, "*", [copy]);
+      }
+      if (e.data?.type === "pptx-error") setError(e.data.message || "fichier illisible");
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [buffer]);
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      {error && <p className="bg-amber-50 px-4 py-2 text-sm text-amber-900">Aperçu impossible ({error}) : télécharge le fichier pour l&apos;ouvrir.</p>}
+      <iframe ref={frame} src="/apercu-pptx" sandbox="allow-scripts" title={name} className="min-h-0 w-full flex-1 border-0 bg-gray-200" />
     </div>
   );
 }
