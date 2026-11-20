@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Siège Netforce</title>
+<script src="/siege/bridge.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: un outil de travail calme et chaleureux : on voit d'un coup d'œil qui fait quoi et ce qui t'attend.
+   IDEA: le registre d'une équipe tenu sur papier crème, chaque personne avec son visage, sa tâche et son statut.
+   PICTURE: le tableau « Qui fait quoi », avec les visages illustrés des agents, en tête de l'accueil.
+   COLOUR and TYPE: crème et papier, encre bleu nuit Netforce, statuts en pastels (bleu, ambre, rose, lavande, menthe). Inter.
+   LAYOUT: barre latérale, pages Accueil / Pour toi / Projets / Équipe / Plan, fiches agent et tâche en panneau latéral. */
+:root{color-scheme:light;--bg:#FAF6EF;--side:#F3EDE3;--card:#FFFDF9;--sunk:#F5F0E7;--hover:#F6F1E8;--line:#ECE4D7;--line2:#DDD3C2;--ink:#1F2A44;--ink2:#5B5F70;--ink3:#8B8A90;--navy:#1B2A4A;--blue:#2C6BC9;
+--work:#E2EDFB;--work-i:#1E5AA8;--work-d:#4C8EE6;--wait:#FBEACB;--wait-i:#7A4F0E;--wait-d:#E3A23B;--block:#F9DFDC;--block-i:#983A33;--block-d:#E06A5F;
+--todo:#ECE7F6;--todo-i:#54477F;--todo-d:#9183C9;--done:#DCF0E3;--done-i:#2B6745;--done-d:#5BB27F;--idle:#EFEBE4;--idle-i:#68675F;--idle-d:#B5B0A6}
+:root[data-theme=dark],:root[data-theme=light]{color-scheme:light}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip}
+h1,h2,h3,p{margin:0}
+h1{font-size:26px;line-height:1.15;font-weight:700;letter-spacing:-.02em;text-wrap:balance}
+h2{font-size:17px;line-height:1.3;font-weight:650;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:600}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0;text-align:inherit}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
+small,.small{font-size:13px;color:var(--ink2)}
+.mute{color:var(--ink2)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.stack{display:grid;gap:10px}
+
+/* coquille */
+.app{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh}
+.side{position:sticky;top:0;height:100vh;background:var(--side);border-right:1px solid var(--line);padding:22px 14px 18px;display:flex;flex-direction:column;gap:18px;overflow-y:auto;z-index:20}
+.logo{font-family:Rajdhani,Inter,sans-serif;font-weight:700;font-size:21px;letter-spacing:.16em;color:var(--navy);padding:0 8px;line-height:1}
+.logo:hover{text-decoration:none}
+.logo small{display:block;font-family:Inter,sans-serif;font-size:12.5px;letter-spacing:0;color:var(--ink2);font-weight:500;margin-top:6px}
+.nav{display:grid;gap:2px}
+.nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;color:var(--ink);font-weight:500;min-height:40px}
+.nav a:hover{background:var(--hover);text-decoration:none}
+.nav a[aria-current=page]{background:var(--card);box-shadow:0 1px 2px rgba(31,42,68,.08),0 0 0 1px var(--line);font-weight:600}
+.nav svg{width:18px;height:18px;flex:none;color:var(--ink2)}
+.count{margin-left:auto;font-size:12px;font-weight:600;padding:1px 8px;border-radius:10px;background:var(--line);color:var(--ink2)}
+.count.hot{background:var(--wait);color:var(--wait-i)}
+.count:empty{display:none}
+.foot{margin-top:auto;display:grid;gap:6px;padding:0 6px}
+.foot select{width:100%}
+.meline{display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:14px;border-top:1px solid var(--line)}
+main{padding:30px clamp(16px,3.2vw,44px) 72px;width:100%;max-width:1260px}
+
+/* titres de page */
+.ph{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:flex-end;justify-content:space-between;margin-bottom:22px}
+.ph .lead{color:var(--ink2);margin-top:6px;max-width:68ch;font-size:15.5px}
+.ph .lead b{color:var(--ink)}
+.date{font-size:13.5px;color:var(--ink2);margin-bottom:4px}
+.back{display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:var(--ink2);margin-bottom:14px;min-height:32px}
+.back:hover{color:var(--ink);text-decoration:none}
+
+/* blocs */
+.block{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 2px rgba(31,42,68,.04)}
+.bh{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.bh p{margin-top:2px}
+.n{font-size:13px;font-weight:600;color:var(--ink2);margin-left:6px}
+.empty{color:var(--ink2);font-size:14.5px;padding:8px 0}
+details.block>summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:baseline}
+details.block>summary::-webkit-details-marker{display:none}
+details.block>summary::after{content:"Afficher";margin-left:auto;font-size:13px;color:var(--blue);font-weight:600}
+details.block[open]>summary::after{content:"Masquer"}
+details.block[open]>summary{margin-bottom:12px}
+
+/* boutons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--line2);background:var(--card);font-weight:600;font-size:14px;color:var(--ink);white-space:nowrap}
+.btn:hover{background:var(--hover);text-decoration:none}
+.btn svg{width:16px;height:16px}
+.btn.primary{background:var(--navy);border-color:var(--navy);color:#FFF8EE}
+.btn.primary:hover{background:#2A3B60}
+.btn.amber{background:var(--wait);border-color:#EED29A;color:var(--wait-i)}
+.btn.amber:hover{background:#F8E0B0}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--ink2)}
+.btn.ghost:hover{background:var(--hover);color:var(--ink)}
+.btn.sm{min-height:32px;padding:0 11px;font-size:13px;border-radius:8px}
+.btn.danger{color:var(--block-i)}
+.btn:disabled{opacity:.55;cursor:default}
+.lnk{color:var(--ink);font-weight:600;text-align:left;line-height:1.35}
+.lnk:hover{color:var(--blue);text-decoration:underline}
+
+/* statuts */
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:3px 10px 3px 8px;border-radius:999px;white-space:nowrap;line-height:1.45}
+.badge i{width:7px;height:7px;border-radius:50%;flex:none}
+.b-work{background:var(--work);color:var(--work-i)}.b-work i{background:var(--work-d)}
+.b-wait{background:var(--wait);color:var(--wait-i)}.b-wait i{background:var(--wait-d)}
+.b-block{background:var(--block);color:var(--block-i)}.b-block i{background:var(--block-d)}
+.b-todo{background:var(--todo);color:var(--todo-i)}.b-todo i{background:var(--todo-d)}
+.b-done{background:var(--done);color:var(--done-i)}.b-done i{background:var(--done-d)}
+.b-idle{background:var(--idle);color:var(--idle-i)}.b-idle i{background:var(--idle-d)}
+.badge.live i{animation:pl 1.1s ease-in-out infinite}
+@keyframes pl{50%{transform:scale(1.6);opacity:.5}}
+.tag{font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;background:#E6ECF6;color:var(--navy);vertical-align:2px}
+.chip{display:inline-flex;align-items:center;font-size:12.5px;padding:3px 10px;border-radius:999px;background:var(--sunk);border:1px solid var(--line);color:var(--ink2)}
+.chip.new{border-style:dashed}
+button.chip{min-height:32px}button.chip:hover{background:var(--hover);color:var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+
+/* visages */
+.face{display:block;border-radius:50%;flex:none}
+.who{display:flex;align-items:center;gap:10px;text-align:left}
+.who b{display:block;font-weight:600;line-height:1.25}
+.who small{display:block;line-height:1.3}
+button.who:hover b{color:var(--blue);text-decoration:underline}
+.faces{display:flex;align-items:center}
+.faces>*{margin-left:-7px}.faces>*:first-child{margin-left:0}
+.faces .face{box-shadow:0 0 0 2px var(--card)}
+.faces .more{font-size:12px;font-weight:600;color:var(--ink2);margin-left:6px}
+
+/* qui fait quoi */
+.qt{width:100%;border-collapse:collapse}
+.qt th{font-size:12.5px;color:var(--ink3);font-weight:600;text-align:left;padding:4px 12px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.qt td{padding:12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.qt tbody tr:last-child td{border-bottom:0}
+.qt tr.r{cursor:pointer}
+.qt tr.r:hover td{background:var(--hover)}
+.qt td.task small{display:block;margin-top:2px}
+.qt td.next{font-size:14px;color:var(--ink2);max-width:280px}
+.qt td.next.hot{color:var(--wait-i)}
+.qt td.act{text-align:right;white-space:nowrap}
+.qt td.num{color:var(--ink3);font-weight:600;width:28px}
+.qt .who-c{width:1%;white-space:nowrap}
+@media(max-width:860px){
+ .qt thead{display:none}.qt,.qt tbody,.qt tr,.qt td{display:block}
+ .qt tr.r{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;padding:14px 2px;border-bottom:1px solid var(--line)}
+ .qt tbody tr:last-child{border-bottom:0}
+ .qt td{padding:0;border:0;max-width:none!important;white-space:normal}
+ .qt td.who-c{grid-column:1;width:auto}.qt td.st{grid-column:2;grid-row:1;justify-self:end}
+ .qt td.task,.qt td.next{grid-column:1/-1}.qt td.act{grid-column:1/-1;text-align:left}
+ .qt td.num{display:none}
+}
+.idle{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin-top:12px;padding:12px;border-radius:12px;background:var(--sunk)}
+
+/* à toi de jouer */
+.ilist{display:grid}
+.irow{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--line)}
+.irow:last-child{border-bottom:0}
+.kind{justify-self:start;font-size:12px;font-weight:600;padding:3px 9px;border-radius:7px;white-space:nowrap}
+.kind.liv,.kind.plan{background:var(--wait);color:var(--wait-i)}
+.kind.need{background:var(--todo);color:var(--todo-i)}
+.kind.dec{background:var(--work);color:var(--work-i)}
+.kind.act,.kind.mine{background:var(--idle);color:var(--idle-i)}
+.irow .t{font-weight:600;line-height:1.35}
+.irow .m{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2);margin-top:3px;flex-wrap:wrap}
+.iact{display:flex;gap:8px;justify-content:flex-end}
+.grouped .irow{grid-template-columns:minmax(0,1fr) auto}.grouped .kind{display:none}
+@media(max-width:640px){.irow,.grouped .irow{grid-template-columns:minmax(0,1fr)}.iact{justify-content:flex-start}}
+
+/* projets */
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
+.pcard{display:grid;gap:10px;align-content:start;text-align:left;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.pcard:hover{border-color:var(--line2);box-shadow:0 6px 20px rgba(31,42,68,.07)}
+.pcard>b{font-size:15.5px;line-height:1.3}
+.pcard .syn{font-size:13.5px;color:var(--ink2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.w{color:var(--wait-i);font-weight:600}
+.bar{height:8px;border-radius:8px;background:var(--sunk);overflow:hidden;display:flex;box-shadow:inset 0 0 0 1px var(--line)}
+.bar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--ink2);margin-top:10px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;vertical-align:0}
+
+/* équipe */
+.tsec{margin-bottom:26px}
+.tdot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:1px}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.acard{display:grid;gap:12px;align-content:start;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--card);cursor:pointer}
+.acard:hover{border-color:var(--line2);box-shadow:0 6px 20px rgba(31,42,68,.07)}
+.acard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.acard .on{font-size:13.5px;color:var(--ink2)}
+.fsel{display:flex;align-items:center;gap:8px}
+
+/* nouveau projet */
+.newgrid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px;align-items:start}
+@media(max-width:900px){.newgrid{grid-template-columns:minmax(0,1fr)}}
+.newgrid .block{margin:0}
+.how ol{margin:10px 0 0;padding-left:20px;display:grid;gap:10px;color:var(--ink2)}
+.how b{color:var(--ink)}
+.seg{display:inline-flex;gap:2px;background:var(--sunk);padding:3px;border-radius:10px;border:1px solid var(--line)}
+.seg label{padding:6px 12px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:var(--ink2)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(31,42,68,.1)}
+.seg label:has(input:focus-visible){outline:2px solid var(--blue)}
+.prog{display:grid;gap:12px;margin-top:18px}
+.mstep{display:flex;gap:12px;align-items:center;color:var(--ink3);font-weight:500}
+.mstep.cur{color:var(--ink)}.mstep.ok{color:var(--done-i)}
+.mstep .dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--line2)}
+.mstep .okc{width:16px;height:16px;border-radius:50%;background:var(--done-d);color:#fff;font-size:11px;display:grid;place-items:center}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid var(--line2);border-top-color:var(--navy);border-radius:50%;animation:sp .8s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* champs */
+input[type=text],textarea,select{background:#fff;border:1px solid var(--line2);border-radius:10px;padding:9px 12px;font-size:15px;width:100%;color:var(--ink)}
+select{width:auto;min-height:38px;padding:6px 10px;font-size:14px}
+textarea{resize:vertical;line-height:1.5}
+input::placeholder,textarea::placeholder{color:var(--ink3)}
+.addf{display:flex;gap:8px}
+.addrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:14px;border-top:1px dashed var(--line2)}
+.addrow input{flex:2 1 220px}.addrow select{flex:1 1 180px}
+label.lab{font-weight:600;font-size:14px}
+
+/* panneau latéral */
+.scrim{position:fixed;inset:0;background:rgba(31,42,68,.26);z-index:40}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(580px,100%);background:var(--card);z-index:41;display:flex;flex-direction:column;box-shadow:-14px 0 44px rgba(31,42,68,.16);border-left:1px solid var(--line)}
+.dh{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px 10px 20px;border-bottom:1px solid var(--line);min-height:56px}
+.db{overflow-y:auto;padding:20px;display:grid;gap:22px;align-content:start;flex:1}
+.x{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;font-size:22px;line-height:1;color:var(--ink2)}
+.x:hover{background:var(--hover);color:var(--ink)}
+.ahead{display:flex;gap:16px;align-items:center;padding:18px 20px 14px}
+.ahead h2{font-size:21px}
+.tabs{display:flex;gap:18px;padding:0 20px;border-bottom:1px solid var(--line)}
+.tabs button{padding:10px 0;font-weight:600;color:var(--ink2);border-bottom:2px solid transparent;min-height:44px}
+.tabs button[aria-selected=true]{color:var(--ink);border-color:var(--navy)}
+.sec{display:grid;gap:10px}
+.sec>h3,.sec>summary{display:flex;align-items:center;gap:8px}
+details.sec>summary{list-style:none;cursor:pointer;color:var(--ink)}
+details.sec>summary::-webkit-details-marker{display:none}
+details.sec>summary::before{content:"";width:7px;height:7px;border-right:2px solid var(--ink3);border-bottom:2px solid var(--ink3);transform:rotate(-45deg);margin-right:4px;transition:transform .15s}
+details.sec[open]>summary::before{transform:rotate(45deg)}
+.sec h3 .right,.sec summary .right{margin-left:auto}
+.ttl{display:grid;gap:8px}
+.ttl h2{font-size:21px;line-height:1.25}
+.ppl{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px;border-radius:12px;background:var(--sunk)}
+.ppl>div{display:grid;gap:6px}
+.nextbox{border-radius:14px;padding:16px;display:grid;gap:12px;background:var(--sunk);border:1px solid var(--line)}
+.nextbox .k{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:.01em}
+.nextbox.wait{background:#FFF6E3;border-color:#F0DBAA}.nextbox.wait .k{color:var(--wait-i)}
+.nextbox.block{background:#FDF0EE;border-color:#F2CFC9}.nextbox.block .k{color:var(--block-i)}
+.nextbox.work{background:#F0F6FE;border-color:#CFE0F7}.nextbox.work .k{color:var(--work-i)}
+.nextbox.todo{background:#F5F2FB;border-color:#DED6F0}.nextbox.todo .k{color:var(--todo-i)}
+.nextbox.done{background:#EEF8F2;border-color:#CDE9D7}.nextbox.done .k{color:var(--done-i)}
+.liv{white-space:pre-wrap;background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;font-size:14px;max-height:380px;overflow:auto;line-height:1.55}
+.vers{display:flex;gap:6px;flex-wrap:wrap}
+.vers button{min-height:30px;font-size:13px;padding:0 10px;border-radius:8px;border:1px solid var(--line2);background:#fff;font-weight:600;color:var(--ink2)}
+.vers button[aria-pressed=true]{border-color:var(--navy);color:var(--navy);box-shadow:inset 0 0 0 1px var(--navy)}
+.steps{margin:0;padding-left:20px;display:grid;gap:6px}
+.chk{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.chk label{display:flex;gap:10px;align-items:flex-start;padding:7px 8px;border-radius:8px;cursor:pointer}
+.chk label:hover{background:var(--hover)}
+.chk input{width:18px;height:18px;margin-top:2px;accent-color:var(--navy);flex:none}
+.chk small{display:block}
+.struck{text-decoration:line-through;color:var(--ink3)}
+.note{padding:10px 12px;border-radius:10px;background:#FFF6E3;color:var(--wait-i);font-size:14px}
+.meta2{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px 16px;font-size:14px;align-items:center;margin:0}
+.meta2 dt{color:var(--ink2)}.meta2 dd{margin:0}.meta2 select{width:100%}
+.log{list-style:none;padding:0;margin:0;display:grid;gap:12px}
+.log li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;font-size:14px;align-items:start}
+.log time{display:block;color:var(--ink3);font-size:12.5px}
+.trow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.trow:hover{border-color:var(--line2);background:var(--hover)}
+.trow b{display:block;font-weight:600;line-height:1.35}
+.tlist{display:grid;gap:6px}
+.mission{color:var(--ink2)}
+.nowbox{padding:14px;border-radius:12px;background:var(--sunk);display:grid;gap:10px}
+.nowbox .k{font-size:12.5px;font-weight:700;color:var(--ink2)}
+.tour{display:grid;gap:14px}
+.tour>div{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:start}
+.tour p{margin-top:2px;color:var(--ink2)}
+.ul{margin:8px 0 0;padding-left:20px;display:grid;gap:4px}
+/* discussion */
+.chat{display:grid;gap:10px}
+.msg{padding:10px 13px;border-radius:14px;max-width:86%;white-space:pre-wrap;font-size:14.5px}
+.msg.u{justify-self:end;background:var(--navy);color:#FFF8EE;border-bottom-right-radius:4px}
+.msg.a{justify-self:start;background:var(--sunk);border:1px solid var(--line);border-bottom-left-radius:4px}
+.msg.t{justify-self:center;font-size:12.5px;color:var(--ink2);padding:2px}
+.composer{border-top:1px solid var(--line);padding:12px 20px;display:grid;gap:8px;background:var(--card)}
+.composer textarea{flex:1;min-height:46px;max-height:160px}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--navy);color:#FFF8EE;padding:10px 10px 10px 16px;border-radius:12px;z-index:60;display:flex;gap:12px;align-items:center;box-shadow:0 12px 32px rgba(31,42,68,.28);max-width:92vw;font-size:14.5px}
+.toast .tbtn{color:#F6D58E;font-weight:700;padding:6px 8px;border-radius:8px}
+.toast .tbtn:hover{background:rgba(255,255,255,.08)}
+
+.pulse{animation:pu 1.4s ease-in-out infinite}@keyframes pu{50%{opacity:.45}}
+@media(prefers-reduced-motion:reduce){.badge.live i,.pulse,.spin{animation:none}}
+
+/* organigramme */
+.orgbar{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;margin-bottom:18px}
+.sw{display:inline-flex;align-items:center;gap:10px;font-size:14px;font-weight:500;cursor:pointer}
+.sw input{width:18px;height:18px;accent-color:var(--navy)}
+.seg button{padding:6px 12px;border-radius:8px;font-size:14px;font-weight:600;color:var(--ink2);min-height:34px}
+.seg button[aria-selected=true]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(31,42,68,.1)}
+.o-lbl{display:block;font-size:12.5px;font-weight:700;color:var(--ink2);margin-bottom:8px}
+.o-gov{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:12px 24px;max-width:1000px;width:100%;margin:0 auto;box-shadow:0 1px 2px rgba(31,42,68,.04)}
+.o-gov>.o-lbl{grid-column:1/-1;margin:0}
+.o-board{display:grid;gap:10px;align-content:start}
+.o-bt b{display:block}.o-bt small{display:block}
+.o-people{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}
+.o-comms{display:grid;gap:8px;align-content:start}
+.cc-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cc{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;text-align:left;min-height:50px;width:100%}
+.cc:hover{border-color:var(--line2);box-shadow:0 4px 14px rgba(31,42,68,.07)}
+.cc b{display:block;font-size:14px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cc small{display:block;white-space:nowrap}
+.cc>span:first-child{min-width:0}.cc .faces{flex:none}
+@media(max-width:1180px){.o-gov{grid-template-columns:minmax(0,1fr)}}
+.vl{width:2px;height:30px;background:var(--line2);margin:0 auto}
+.o-ceo-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,290px) minmax(0,1fr);align-items:center}
+.o-ceo{display:flex;flex-direction:column;align-items:stretch;align-self:stretch}
+.o-ceo::before,.o-ceo::after{content:"";flex:1 1 0;width:2px;background:var(--line2);align-self:center}
+.nw{white-space:nowrap}
+.o-left{justify-self:end;width:min(100%,240px);margin-right:28px;display:grid;gap:8px}
+.o-right{position:relative;padding-left:28px}
+.o-right::before{content:"";position:absolute;left:0;top:50%;width:28px;border-top:2px dashed var(--line2)}
+.o-staff{border:1.5px dashed var(--line2);border-radius:14px;padding:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:2px 6px;max-width:480px;background:rgba(255,253,249,.7)}
+.o-staff>.o-lbl{grid-column:1/-1}
+.oc{display:flex;gap:12px;align-items:center;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;width:100%}
+.oc:hover,.mr:hover{border-color:var(--line2);background:var(--hover)}
+.oc.sm{padding:5px 6px;border-color:transparent;background:transparent;gap:10px}
+.oc.sm:hover{border-color:var(--line);background:#fff}
+.oc.xl{padding:16px 18px;border:2px solid var(--navy);box-shadow:0 10px 28px rgba(31,42,68,.12)}
+.oc.xl .oc-n b{font-size:19px}
+.oc-t{display:grid;gap:1px;min-width:0}
+.oc-n{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.oc-t small{line-height:1.3}
+.oc.sm .oc-t small{font-size:12.5px}
+.abbr{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--navy);color:#FFF8EE;letter-spacing:.02em;line-height:1.5;vertical-align:2px}
+.now{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);margin-top:3px;min-width:0}
+.now span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+.o-comex{display:flex;align-items:center;gap:10px}
+.o-comex::before,.o-comex::after{content:"";flex:1;height:2px;background:var(--line2)}
+.o-pill{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:14px;padding:5px 6px 5px 16px;border-radius:999px;background:var(--navy);color:#FFF8EE;white-space:nowrap}
+.pill-a{color:#FFF8EE;font-weight:700}.pill-a:hover{text-decoration:underline}
+.pill-btn{background:rgba(255,248,238,.16);color:#FFF8EE;font-weight:600;font-size:13px;padding:5px 12px;border-radius:999px}
+.pill-btn:hover{background:rgba(255,248,238,.28)}
+.dgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:16px;align-items:start}
+@media(max-width:1180px){.dgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.dgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.dgrid{grid-template-columns:minmax(0,1fr)}}
+.dc{background:var(--card);border:1px solid var(--line);border-top:4px solid var(--tc);border-radius:14px;padding:12px;display:grid;gap:10px;align-content:start;box-shadow:0 1px 2px rgba(31,42,68,.04)}
+.dc-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dq{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700}
+.dq i{width:9px;height:9px;border-radius:3px;background:var(--tc)}
+.dc-lead{display:flex;gap:12px;align-items:center;text-align:left;padding:10px;border-radius:12px;border:1px solid transparent;background:var(--tb)}
+.dc-lead:hover{border-color:var(--tc)}
+.dc-now{display:grid;gap:4px;justify-items:start}
+.dc-t{font-weight:500;font-size:13px;color:var(--ink2)}
+.dc-team{list-style:none;margin:0;padding:8px 0 0;border-top:1px solid var(--line);display:grid;gap:1px}
+.mr{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;text-align:left;padding:6px;border-radius:10px;border:1px solid transparent}
+.mr-t{display:grid;min-width:0}.mr-t b{font-size:14px;line-height:1.25}.mr-t small{line-height:1.25}
+.mr-task{font-size:12.5px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.mr-task::before{content:"→ ";color:var(--ink3)}
+.org.ipo .oc:not(.key),.org.ipo .mr:not(.key),.org.ipo .dc-lead:not(.key){opacity:.3}
+.org.ipo .oc.key,.org.ipo .mr.key,.org.ipo .dc-lead.key{border-color:#E3A23B;background:#FFF6E3}
+.rel{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;padding:14px;border-radius:12px;background:var(--sunk)}
+.rel>div{display:grid;gap:6px;align-content:start}
+.ipo-note{padding:10px 12px;border-radius:10px;background:#EAF0FA;color:var(--navy);font-size:14px}
+.mhint{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mhint:empty{display:none}
+@media(max-width:900px){.o-gov{grid-template-columns:minmax(0,1fr)}.o-ceo-row{grid-template-columns:minmax(0,1fr);gap:12px}.o-left{justify-self:stretch;width:auto;margin:0;order:2}.o-ceo{order:1}.o-right{order:3;padding-left:0}.o-right::before{display:none}.o-staff{max-width:none}.cc-row{grid-template-columns:1fr}}
+/* mobile */
+@media(max-width:900px){
+ .app{grid-template-columns:minmax(0,1fr)}
+ .side{position:sticky;top:0;height:auto;flex-direction:row;align-items:center;padding:10px 12px;gap:12px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}
+ .logo{font-size:18px;padding:0 4px;flex:none}.logo small{display:none}
+ .nav{display:flex;gap:2px;flex:none}.nav a{white-space:nowrap;min-height:38px;padding:6px 10px}.nav a .lt{display:none}
+ .nav a[data-r=accueil] .lt,.nav a[data-r=pour-toi] .lt,.nav a[data-r=organigramme] .lt{display:inline}
+ .newbtn{order:5;flex:none}.foot{display:none}
+ main{padding-top:20px}
+ .ppl{grid-template-columns:1fr}
+}
+/* ajouts : besoins, markdown, mobile */
+.app{background:linear-gradient(90deg,var(--side) 0 240px,transparent 240px)}
+.foot select{font-size:13px}
+.irow .m{flex-wrap:nowrap;align-items:flex-start}.irow .m .face{margin-top:1px}
+.ifull{grid-column:1/-1}
+.needf{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.needf input{flex:1 1 220px}
+.needs{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.needs li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.needs li.ok{background:#F3FAF5;border-color:#D3EBDC}
+.needs li.later{background:var(--sunk)}
+.nst{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff;margin-top:1px}
+.needs li.ok .nst{background:var(--done-d);border-color:var(--done-d)}
+.nval{font-size:13.5px;color:var(--ink2);white-space:pre-wrap;margin-top:4px;padding-left:10px;border-left:2px solid #CDE9D7}
+.nb small{display:block}
+.liv.md{white-space:normal}
+.liv.md p{margin:0 0 8px}.liv.md p:last-child{margin-bottom:0}
+.liv.md .mh{font-weight:700;margin-top:10px;color:var(--ink)}.liv.md .mh:first-child{margin-top:0}
+.liv.md ul,.liv.md ol{margin:0 0 8px;padding-left:20px}
+.liv mark,.nval mark{background:var(--wait);color:var(--wait-i);border-radius:4px;padding:0 3px}
+.acard .on .lnk{display:inline}
+.later-block>summary::after{content:"Afficher"}
+.mob{display:none}
+@media(max-width:900px){.app{background:none}.mob{display:inline-flex}}
+[hidden]{display:none!important}
+
+.tree{overflow-x:auto;padding:4px 2px 32px}
+.tree-in{min-width:1060px}
+.trow3{display:grid;grid-template-columns:minmax(0,1fr) 280px minmax(0,1fr);align-items:center}
+.trow3>.nb{position:relative}
+.cwrap{display:flex;flex-direction:column;align-self:stretch;align-items:center}.cwrap::before,.cwrap::after{content:"";flex:1 1 0;min-height:14px;border-left:1.5px solid var(--line2)}
+.tsd{display:flex;align-items:center}
+.tsd.r{justify-content:flex-start}.tsd.l{justify-content:flex-end}
+.tsd.r::before,.tsd.l::after{content:"";width:28px;border-top:1.5px solid var(--line2);flex:none}
+.nb{display:flex;flex-direction:column;gap:3px;width:100%;background:#fff;border:1px solid var(--line2);border-top:3px solid var(--line2);border-radius:8px;padding:10px 12px;text-align:center;font:inherit;color:var(--ink);cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.nb:hover{box-shadow:0 2px 10px rgba(31,42,68,.08);border-color:var(--ink3,#9aa)}
+.nb b{font-size:13.5px;font-weight:600;line-height:1.3}
+.nb span{font-size:12.5px;color:var(--mute,#6b7280)}
+.nb.top,.nb.ceo{border-top-color:var(--ink);padding:12px 14px}
+.nb.ceo b{font-size:15px}
+.nb.top b{font-size:14px;margin-bottom:4px}
+.nb.top .nl{text-align:center}
+.nb.sub{text-align:left;border-top-width:1px;padding:8px 10px}
+.nb.sub b{font-size:12.5px;font-weight:500}.nb.sub span{font-size:12px}
+.nbox{background:#fff;border:1px dashed var(--line2);border-radius:8px;padding:8px 6px;min-width:200px;max-width:300px}
+.nbox-t{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mute,#6b7280);padding:0 6px 4px}
+.nl{display:block;width:100%;background:none;border:0;border-radius:6px;padding:4px 6px;text-align:left;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
+.nl:hover{background:var(--bg2,#f4efe6)}
+.nl small{display:block;font-size:11.5px;color:var(--mute,#6b7280)}
+.lvl{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px;align-items:start}
+.col{position:relative;padding-top:22px}
+.col::before{content:"";position:absolute;top:0;left:50%;height:22px;border-left:1.5px solid var(--line2)}
+.col::after{content:"";position:absolute;top:0;left:-6px;right:-6px;border-top:1.5px solid var(--line2)}
+.col:first-child::after{left:50%}.col:last-child::after{right:50%}
+.team{list-style:none;margin:0 0 0 12px;padding:0}
+.team li{position:relative;padding:8px 0 0 14px}
+.team li::before{content:"";position:absolute;left:0;top:0;bottom:0;border-left:1.5px solid var(--line2)}
+.team li:last-child::before{bottom:auto;height:calc(50% + 4px)}
+.team li::after{content:"";position:absolute;left:0;top:calc(50% + 4px);width:14px;border-top:1.5px solid var(--line2)}
+.kbg{display:grid;gap:10px}
+.kbc{background:var(--card);border:1px solid var(--line);border-radius:12px}
+.kbc.open{border-color:var(--line2)}
+.kbh{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:none;border:0;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
+.kbh b{display:block;font-size:15px}.kbh small{color:var(--ink3);font-size:12.5px}
+.kbh .chev{font-size:20px;color:var(--ink3);width:20px;text-align:center}
+.kbc .kbx,.kbc .kbf,.kbc>.small,.kbc>.row{margin:0 16px 12px}
+.kbx{font-size:13.5px;line-height:1.6;color:var(--ink)}
+.kbx.sm{font-size:12.5px;max-height:260px;overflow:auto;margin:8px 0 10px}
+.kbf textarea{width:100%;font:inherit;font-size:13.5px;line-height:1.55;padding:10px;border:1px solid var(--line2);border-radius:10px;background:#fff}
+.kbc .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.toile{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+@media(max-width:1100px){.toile{grid-template-columns:1fr}}
+.tw{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px}
+.tw svg{width:100%;height:auto;display:block}
+.ek{stroke:var(--line2);stroke-width:.8;opacity:.55}.ek.on{stroke-width:1.8;opacity:1}.ek.dim{opacity:.12}
+.ec{stroke:#1E7ED9;stroke-width:1.4;opacity:.35}
+.ep{fill:none;stroke:var(--ink3);stroke-width:1;stroke-dasharray:3 4;opacity:.6}
+.ex{fill:none;stroke:#1E7ED9;opacity:.75}.ex.dim{opacity:.1}
+.fc{fill:#1B2A4A}.tc{fill:#fff;font-size:15px;font-weight:700}.tc.s{font-weight:500;font-size:11px;fill:#C3CCEA}
+.fk{fill:#EAF2FC;stroke:#1E7ED9;stroke-width:1.5}.fk.core{fill:#1E7ED9;stroke:#1B2A4A}
+.tf{font-size:12.5px;fill:var(--ink2);font-weight:600}.ta{font-size:13.5px;fill:var(--ink);font-weight:500}
+.fa{stroke-width:2}
+.nd{cursor:pointer}.nd.dim{opacity:.18}.nd.sel circle{stroke-width:3.5}.nd:focus{outline:none}.nd:focus circle{stroke:#1E7ED9;stroke-width:3}
+.tside{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;position:sticky;top:16px}
+.tside h3{font-size:16px;margin-bottom:2px}.tside .k{font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 6px}
+.tl{list-style:none;padding:0;margin:0 0 6px;display:grid;gap:6px}
+.lnk{background:none;border:0;padding:0;font:inherit;color:var(--ink);text-decoration:underline;text-decoration-color:var(--line2);cursor:pointer;text-align:left}
+.lg{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}.lg.core{background:#1E7ED9}.lg.ag{background:#F7DDE4;border:2px solid #E39AB0}.lg.ex{background:none;border-top:3px solid #1E7ED9;border-radius:0;height:0;width:14px}
+.tside .btn{margin-top:12px}
+</style>
+</head>
+<body>
+<div class="app">
+ <nav class="side" aria-label="Navigation principale">
+  <a class="logo" href="#accueil">NETFORCE<small>Siège virtuel</small></a>
+  <a class="btn primary newbtn" href="#nouveau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Nouveau projet</a>
+  <div class="nav">
+   <a href="#accueil" data-r="accueil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.5 12 3.5l8.5 7V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z"/></svg><span class="lt">Accueil</span></a>
+   <a href="#pour-toi" data-r="pour-toi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13h5l1.5 2.5h5L16 13h5"/><path d="M5.5 5h13l2.5 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"/></svg><span class="lt">Pour toi</span><span class="count" id="c-inbox"></span></a>
+   <a href="#projets" data-r="projets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg><span class="lt">Projets</span><span class="count" id="c-proj"></span></a>
+   <a href="#organigramme" data-r="organigramme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1.2"/><rect x="2.5" y="16" width="6" height="5" rx="1.2"/><rect x="9" y="16" width="6" height="5" rx="1.2"/><rect x="15.5" y="16" width="6" height="5" rx="1.2"/><path d="M12 8v4M5.5 16v-2a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v2M12 12v4"/></svg><span class="lt">Organigramme</span></a>
+   <a href="#cerveau" data-r="cerveau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/><path d="M9 8h7M9 11.5h5"/></svg>Cerveau Netforce</a>
+   <a href="#toile" data-r="toile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.6"/><circle cx="4.5" cy="5.5" r="1.8"/><circle cx="19.5" cy="5.5" r="1.8"/><circle cx="4.5" cy="18.5" r="1.8"/><circle cx="19.5" cy="18.5" r="1.8"/><path d="M6 7l4 3.3M18 7l-4 3.3M6 17l4-3.3M18 17l-4-3.3"/></svg>La toile</a>
+  </div>
+  <div class="foot">
+   <label class="small" for="me">Ton poste</label>
+   <select id="me"></select>
+   <div class="meline" id="meline"></div>
+  </div>
+ </nav>
+ <main>
+  <div id="view"></div>
+  <section id="v-nouveau" hidden>
+   <header class="ph"><div><h1>Nouveau projet</h1><p class="lead">Décris ton projet en quelques phrases. Victor, le chef d'orchestre, réunit les agents utiles, recueille leur avis et répartit le travail.</p></div></header>
+   <div class="newgrid">
+    <form class="block stack" id="meetform">
+     <label class="lab" for="brief">Ton projet</label>
+     <textarea id="brief" rows="7" placeholder="Ex. : préparer l'introduction en bourse : chantiers, calendrier et responsables."></textarea>
+     <div class="chips" id="presets" aria-label="Exemples"></div>
+     <div class="row" style="justify-content:space-between;margin-top:4px;align-items:flex-end">
+      <label class="fsel"><span class="small">Qui réunir</span><select id="mwho" aria-label="Qui réunir"></select></label>
+      <button class="btn primary" id="go">Réunir l'équipe</button>
+     </div>
+     <div id="mhint" class="mhint"></div>
+     <p class="small" id="mmode"></p>
+     <div id="mprog"></div>
+    </form>
+    <div class="block how">
+     <h2>Comment ça se passe</h2>
+     <ol>
+      <li><b>Tu décris le projet.</b> Pas besoin d'être précis, Victor posera le cadre.</li>
+      <li><b>Tour de table.</b> Chaque agent concerné, ou chaque membre du comité choisi, donne son avis en une phrase.</li>
+      <li><b>Répartition.</b> Chaque agent reçoit ses tâches, avec ce qu'il lui faut et ce qui reste à toi.</li>
+      <li><b>Au fil de l'eau.</b> Tu valides les plans et les livrables depuis « Pour toi ».</li>
+     </ol>
+    </div>
+   </div>
+  </section>
+ </main>
+</div>
+<div class="scrim" id="scrim" hidden data-act="close"></div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Fiche" hidden></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+{
+const Q=[
+ {id:'gouv',n:'Gouvernance'},{id:'dg',n:'Direction générale'},{id:'fin',n:'Finance'},{id:'ops',n:'Opérations'},{id:'tech',n:'Technique et innovation'},
+ {id:'com',n:'Commercial'},{id:'mkt',n:'Marketing et communication'},{id:'rh',n:'Ressources humaines'},{id:'jur',n:'Juridique et conformité'}];
+const QN=Object.fromEntries(Q.map(q=>[q.id,q.n]));
+// [id, direction, prénom, poste, mission, skills, skills à créer, applis, besoins habituels, mots-clés, contribution type, rend compte à, sigle, rôle dans l'IPO]
+const RAW=[
+['pdt','gouv','Bertrand',"Président du conseil d'administration","Anime le conseil d'administration, veille à la bonne gouvernance et prépare la composition du conseil pour la cotation.",['apply-mental-models'],['gouvernance-ipo'],['Google Drive'],["Ordre du jour du conseil","Rapports des comités"],['conseil','gouvernance','administrateur','ipo','bourse','introduction','actionnaire'],["Préparer la gouvernance du conseil pour la cotation",["Composition actuelle du conseil"],["Valider la composition cible du conseil"]],null,'PCA',"Compose un conseil crédible pour le marché, avec des administrateurs indépendants."],
+['adm','gouv','Claire',"Administratrice indépendante","Apporte un regard indépendant au conseil et préside le comité d'audit et le comité des rémunérations.",['runway-and-unit-economics'],[],['Google Drive'],["Comptes et rapports financiers","Rapport d'audit interne"],['audit','indépendant','contrôle','comptes','rémunération'],["Revoir l'information financière et les risques",["Comptes et rapports financiers"],[]],'pdt','',"Garantit un regard indépendant sur les comptes, les risques et la rémunération des dirigeants."],
+['dg','dg','Hélène',"Directrice générale","Porte la vision et l'equity story de Netforce, préside le comité exécutif, arbitre les priorités et pilote la préparation de l'introduction en bourse.",['apply-mental-models','pivot-decision','founder-coach','pitch-deck'],[],['Google Drive'],["Objectifs de l'année","Chiffres clés du mois"],['stratégie','décision','priorité','pivot','ipo','bourse','vision'],["Trancher l'objectif et le niveau d'ambition",["Objectifs de l'année"],["Confirmer la priorité du projet"]],'pdt','CEO',"Porte l'equity story devant les investisseurs et pilote le projet d'introduction en bourse."],
+['chef','dg','Victor',"Chief of Staff, chef d'orchestre","Reçoit les projets, les découpe, répartit le travail entre les directions, suit l'avancement et prépare les comités.",['chef-orchestre','start-here','north-star-metrics'],[],['Notion','Google Agenda'],["Le brief du projet","Une date limite","Le budget disponible"],['projet','planning','organiser','comité'],["Poser le planning à rebours et les jalons",["Date limite"],["Valider le planning"]],'dg','',''],
+['assist','dg','Inès',"Assistante de direction","Trie la boîte mail, tient l'agenda, prépare le brief du matin et les comptes rendus.",['email-triage','morning','netforce-drive'],[],['Gmail','Google Agenda','Google Drive'],["Accès Gmail et Agenda"],['mail','agenda','rendez-vous','compte rendu'],["Bloquer les créneaux et préparer les comptes rendus",[],[]],'dg','',''],
+['strat','dg','Olivier',"Directeur de la stratégie et du développement","Construit le plan stratégique à trois ou cinq ans, l'equity story et les options de croissance externe : acquisitions et partenariats.",['deep-research','apply-mental-models','pitch-deck'],[],['Google Drive'],["Plan d'affaires","Données de marché"],['stratégie','plan','croissance','acquisition','marché','equity','partenariat','ipo','bourse'],["Formaliser l'equity story et le plan à trois ans",["Plan d'affaires"],["Valider les hypothèses de croissance"]],'dg','',"Formalise le plan d'affaires et les relais de croissance présentés au marché."],
+['pa','dg','Mathilde',"Directrice des affaires publiques","Entretient les relations avec les ministères, les collectivités et les forces de sécurité, et suit les évolutions réglementaires du non-létal.",['deep-research'],['affaires-publiques'],['Google Drive'],["Interlocuteurs institutionnels clés"],['ministère','institution','collectivité','réglementation','élus','public'],["Cartographier les acteurs institutionnels clés",[],[]],'dg','',''],
+['rse','dg','Agathe',"Directrice RSE","Définit la politique RSE et éthique, dont l'usage responsable du G.I.E, et prépare le reporting extra-financier.",['deep-research'],['reporting-esg'],['Google Drive'],["Données sociales et environnementales"],['rse','esg','éthique','environnement','responsable','durable'],["Établir les indicateurs RSE prioritaires",["Données sociales et environnementales"],[]],'dg','',"Prépare les informations extra-financières attendues par les investisseurs."],
+['audit','dg','Damien',"Responsable audit et contrôle interne","Cartographie les risques, teste le contrôle interne et rend compte au comité d'audit.",[],['controle-interne'],['Google Drive'],["Procédures existantes"],['risque','contrôle','audit','procédure','fraude'],["Cartographier les risques principaux",["Procédures existantes"],[]],'dg','',"Démontre la maîtrise des risques et du contrôle interne."],
+['daf','fin','Marc',"Directeur administratif et financier","Pilote la trésorerie, le budget, le financement et la mise à niveau financière pour la cotation : comptes audités, prévisions, normes comptables.",['runway-and-unit-economics','pricing-strategy','fundraise-flow','investor-pipeline','pitch-deck','xlsx'],[],['Sheets','Google Drive'],["Coûts de revient à jour","Trésorerie actuelle","Grille tarifaire"],['prix','budget','marge','coût','levée','investisseur','trésorerie','ipo','bourse','financement'],["Chiffrer le budget et l'impact sur la marge",["Coûts de revient à jour"],["Valider le budget"]],'dg','CFO',"Fiabilise les comptes et les prévisions, et coordonne auditeurs et banques."],
+['ctrl','fin','Sarah',"Contrôleuse de gestion","Construit le budget, les prévisions et le reporting mensuel ; suit les marges par client et par produit.",['runway-and-unit-economics','xlsx','dataviz'],[],['Sheets'],["Exports comptables","Budget de l'année"],['budget','prévision','marge','reporting','rentabilité'],["Construire le budget et les prévisions",["Exports comptables"],[]],'daf','',"Rend les prévisions défendables devant les analystes."],
+['compta','fin','Romain',"Responsable comptabilité et consolidation","Tient la comptabilité, prépare les comptes annuels et semestriels et leur passage aux normes exigées par le marché visé.",['xlsx'],['normes-comptables'],['Sheets'],["Balance comptable","Calendrier de clôture"],['comptabilité','comptes','clôture','normes','consolidation','ifrs'],["Préparer le calendrier de clôture des comptes",["Balance comptable"],[]],'daf','',"Produit des comptes auditables, dans les délais et selon les normes exigées."],
+['ir','fin','Juliette',"Directrice des relations investisseurs","Prépare la communication financière, le dossier investisseurs et les rencontres avec les analystes et les fonds.",['pitch-deck','investor-pipeline','fundraise-flow'],[],['Google Drive','Netforce CRM'],["Chiffres clés validés","Equity story"],['investisseur','analyste','fonds','communication financière','roadshow','ipo','bourse','actionnaire'],["Préparer le dossier de présentation investisseurs",["Chiffres clés validés"],["Valider les messages clés"]],'daf','IR',"Construit la relation avec les investisseurs, avant et après la cotation."],
+['data','fin','Rémi',"Analyste data et reporting","Indicateurs, tableaux de bord et rapports hebdomadaires pour la direction.",['dataviz','north-star-metrics','xlsx'],[],['Netforce CRM'],["Accès au CRM"],['chiffres','indicateur','rapport','kpi','statistiques'],["Définir les indicateurs de réussite du projet",[],[]],'daf','',''],
+['coo','ops','Philippe',"Directeur des opérations","Garantit la capacité à produire, livrer et servir les clients à grande échelle : production, achats, qualité, service client et formation.",[],['production-achats'],['Netforce CRM (stock)'],["Prévisions de ventes","Capacité de production"],['opérations','production','livraison','capacité','industrialisation','usine'],["Évaluer la capacité de production et de livraison",["Prévisions de ventes"],[]],'dg','COO',"Prouve que la croissance annoncée est tenable en production et en livraison."],
+['supply','ops','Bruno',"Responsable production et achats","Fournisseurs, stocks, coûts et délais de fabrication.",[],['production-achats'],['Netforce CRM (stock)'],["Niveau de stock","Délais fournisseurs"],['stock','production','fournisseur','livraison','quantité'],["Vérifier stocks et délais de livraison",["Niveau de stock"],[]],'coo','',''],
+['qual','ops','Aïcha',"Responsable qualité et certification","Essais, homologations, dossier technique, traçabilité.",[],['qualite-certification'],['Google Drive'],["Rapports d'essais","Dossier technique"],['qualité','certification','essai','norme','homologation'],["Rassembler les preuves techniques nécessaires",["Rapports d'essais"],[]],'coo','',''],
+['sav','ops','Chloé',"Service client et SAV","Questions clients, garanties, retours et remontées terrain.",['email-triage'],[],['Gmail','Netforce CRM'],["Conditions de garantie"],['sav','client','garantie','retour','support'],["Préparer la FAQ et les réponses types",[],[]],'coo','',''],
+['form','ops','Yannick',"Formateur","Formation des agents à l'usage du G.I.E, supports et attestations.",[],['formation-agents'],['Google Docs'],["Public visé","Durée souhaitée"],['formation','agents','former','usage'],["Proposer un module de formation adapté",["Public visé"],[]],'coo','',''],
+['cto','tech','Nicolas',"Directeur technique et innovation","Pilote la feuille de route produit du G.I.E, la propriété intellectuelle technique et les systèmes d'information.",['scope-mvp','consumer-product-testing'],[],['Google Drive'],["Feuille de route produit","Retours terrain"],['technique','produit','innovation','brevet','r&d','technologie'],["Mettre à jour la feuille de route produit",["Retours terrain"],[]],'dg','CTO',"Défend l'avance technologique et les brevets du G.I.E auprès des investisseurs."],
+['rd','tech','Élodie',"Responsable R&D produit","Évolutions du G.I.E, tests, retours terrain.",['consumer-product-testing','customer-interviews','scope-mvp'],[],['Google Drive'],["Retours terrain","Cahier des charges"],['produit','test','prototype','amélioration','r&d'],["Vérifier ce que le produit doit prouver ou montrer",["Retours terrain"],[]],'cto','',''],
+['dsi','tech','Samir',"DSI et cybersécurité","Site, outils, accès et sécurité des systèmes.",['revue-securite-app'],[],['Shopify'],["Accès au site"],['site','sécurité','outil','informatique','web','cyber'],["Préparer les outils et la page web nécessaires",[],[]],'cto','',''],
+['dircom','com','Antoine',"Directeur commercial","Stratégie de vente, pipeline, prévisions et objectifs de l'équipe commerciale.",['find-first-customers','positioning-and-gtm','customer-proxy'],[],['Netforce CRM'],["Objectif de chiffre d'affaires","Liste des clients actuels"],['vente','client','chiffre','pipeline','commercial'],["Fixer l'objectif commercial et les cibles",["Objectif de chiffre d'affaires"],["Valider les cibles"]],'dg','CSO',"Rend le carnet de commandes et le pipeline lisibles et crédibles."],
+['ao','com','Laura',"Chargée d'appels d'offres","Veille BOAMP et TED, analyse des dossiers, mémoire technique, calendrier de réponse.",['veille-marches-publics'],['reponse-appel-offres'],['Google Drive','Netforce CRM'],["Dossier de consultation complet","Références clients","Attestations à jour"],["appel d'offres",'marché','boamp','consultation','mairie','commune'],["Repérer les marchés publics liés et leurs échéances",[],[]],'dircom','',''],
+['prospect','com','Julien',"Commercial collectivités","Prospection des polices municipales et de la sécurité, démonstrations.",['find-first-customers','netforce-copywriting','sequences-relance'],[],['Netforce CRM','Gmail','Google Agenda'],["Zone géographique","Créneaux de démo"],['police','municipale','démo','prospect','collectivité','sécurité'],["Lister les cibles et préparer les messages d'approche",["Zone géographique"],["Relire et envoyer les messages"]],'dircom','',''],
+['km','com','Nadia',"Chargée de comptes","Relances, devis, suivi et fidélisation des clients.",['sequences-relance'],[],['Netforce CRM','Gmail'],["Devis envoyés","Historique client"],['relance','devis','fidélisation','suivi'],["Préparer les relances des contacts concernés",[],["Envoyer les relances"]],'dircom','',''],
+['export','com','Thomas',"Business developer international","Distributeurs étrangers, salons internationaux, ouverture de pays.",['positioning-and-gtm','deep-research'],[],['Netforce CRM'],["Pays prioritaires","Conditions distributeurs"],['international','distributeur','salon','milipol','eurosatory','export'],["Identifier les distributeurs et salons pertinents",["Pays prioritaires"],[]],'dircom','',''],
+['cmo','mkt','Camille',"Directrice marketing et communication","Positionnement, marque, plan de communication, lancements, salons et communication corporate.",['positioning-and-gtm','brand-and-naming','launch-plan','landing-page-copy'],[],['Notion','Metricool'],["Objectif de la campagne","Budget marketing"],['marketing','campagne','lancement','marque','communication','salon'],["Définir le message clé et le plan de communication",["Objectif de la campagne"],["Valider le message clé"]],'dg','CMO',"Accompagne la notoriété de la marque autour de l'opération."],
+['redac','mkt','Paul',"Rédacteur","Posts, communiqués, fiches produit, emails, scripts : tout le texte Netforce.",['netforce-copywriting'],[],['Google Docs'],["Message clé validé","Faits et chiffres sourcés"],['texte','article','communiqué','post','email','rédiger'],["Rédiger les textes du projet",["Message clé validé"],["Relire et valider les textes"]],'cmo','',''],
+['cm','mkt','Léa',"Community manager","LinkedIn, calendrier éditorial, programmation et statistiques.",['netforce-copywriting'],[],['Metricool','Notion'],["Calendrier éditorial","Visuels validés"],['linkedin','réseaux','post','communauté','calendrier'],["Planifier la diffusion sur les réseaux",["Visuels validés"],["Autoriser la publication"]],'cmo','',''],
+['video','mkt','Hugo',"Créateur vidéo","Vidéos produit, démos, compte Sur plan, voix et montage.",['sur-plan-videos','video-making'],[],['Higgsfield','vidIQ'],["Script validé","Images du produit"],['vidéo','tiktok','reel','démo','film'],["Proposer un concept vidéo et son script",["Images du produit"],["Valider le concept"]],'cmo','',''],
+['design','mkt','Manon',"Designer graphique","Visuels, plaquettes, présentations, pages web, stands de salon.",['frontend-design','html-inspector','dataviz'],[],['Figma','Canva','Shopify'],["Textes validés","Logos et photos HD"],['visuel','design','plaquette','site','deck','stand'],["Concevoir les visuels aux couleurs Netforce",["Textes validés"],["Valider les visuels"]],'cmo','',''],
+['seo','mkt','Maxime',"Responsable SEO","Rendre Netforce visible sur Google et dans les réponses des IA : audit du site, contenus, mots-clés.",['seo-audit'],[],['Google Search Console','Site Netforce'],["Accès à la Search Console","Liste des pages du site"],['seo','référencement','google','site','mots-clés','visibilité','ia'],["Auditer le référencement du site",["Accès à la Search Console"],["Valider les priorités SEO"]],'cmo','',''],
+['rh','rh','Isabelle',"Directrice des ressources humaines","Recrutements clés, rémunération des dirigeants, plans d'actionnariat salarié et culture d'entreprise.",['first-hire'],[],['Google Drive'],["Budget de recrutement","Organigramme cible"],['recrutement','embauche','équipe','rh','poste','rémunération','actionnariat'],["Évaluer les besoins en renfort",[],["Valider les recrutements"]],'dg','DRH',"Organise la rémunération des dirigeants et l'actionnariat salarié."],
+['jur','jur','Sophie',"Directrice juridique et secrétaire générale","Contrats, propriété intellectuelle, secrétariat du conseil, conformité aux règles de marché et documentation de l'introduction en bourse.",['legal-and-incorporation','cofounder-and-equity','docx'],[],['Jotform Sign','Google Drive'],["Contrats en cours","Kbis et attestations"],['contrat','juridique','brevet','cgv','partenariat','statuts','ipo','bourse'],["Lister les contrats et pièces à préparer",["Contrats en cours"],["Signer les documents finaux"]],'dg','GC',"Prépare la documentation juridique et la conformité aux règles de marché."],
+['conf','jur','Karim',"Responsable conformité et export","Classement réglementaire du G.I.E, autorisations de vente, règles d'export défense et normes.",[],['conformite-reglementaire'],['Recherche web'],["Fiche technique du G.I.E","Pays ou clients visés"],['réglementation','conformité','export','norme','autorisation','étranger'],["Vérifier les contraintes réglementaires du projet",["Fiche technique du G.I.E"],[]],'jur','',"Sécurise la conformité export, point d'attention des investisseurs sur un produit de sécurité."],
+['memo','jur','Odile',"Responsable data room et documentation","Tient la base documentaire et la data room que consulteront banques, auditeurs et investisseurs ; note les leçons de chaque projet.",['netforce-drive','capture-learning'],[],['Google Drive'],[],['document','archive','leçon','data room'],["Ranger les documents et noter les leçons",[],[]],'jur','',"Organise la data room consultée pendant les audits préalables."]];
+const METH={
+pdt:{s:'alirezarezvani/claude-skills · board-meeting',m:"Tu conduis les délibérations du conseil en 6 temps : 1) contexte et question posée ; 2) avis de chaque dirigeant recueillis séparément, sans qu'ils se lisent ; 3) un contradicteur attaque les avis ; 4) synthèse : points d'accord, désaccord réel, actions ; 5) Gérard tranche ; 6) décision consignée (qui, quoi, quand, critère de révision). Tu évites la pensée de groupe et tu notes l'avis minoritaire."},
+adm:{s:'alirezarezvani/claude-skills · board-deck-builder',m:"Tu exiges un dossier de conseil dans cet ordre : synthèse de la direction générale, indicateurs clés, point financier, chiffre d'affaires et pipeline, produit, marketing, technique, équipe, risques, perspectives, annexes. Les mauvaises nouvelles sont dites tôt, chiffrées, avec la cause et le plan. Tu joues l'administratrice indépendante : tu poses les questions qui gênent sur la gouvernance, les conflits d'intérêts et le respect du code Middlenext."},
+dg:{s:'alirezarezvani/claude-skills · ceo-advisor',m:"Tu raisonnes en arbre de décision : plusieurs options, conséquences de chacune, puis choix argumenté. Tes 5 chantiers : vision et stratégie, allocation du capital et de la trésorerie, parties prenantes, culture, conseil et investisseurs. Tu suis un tableau de bord dirigeant (trésorerie en mois, croissance, marge, pipeline, recrutements clés) et tu signales les signaux d'alerte avant qu'on te les demande. Pour l'IPO, tu portes l'equity story."},
+chef:{s:'alirezarezvani/claude-skills · chief-of-staff + agency-agents · chief-of-staff',m:"Tu filtres ce qui arrive à Gérard : seul ce qui demande sa décision remonte. Tu notes chaque demande selon sa complexité et tu l'orientes vers le bon dirigeant ; si plusieurs directions sont touchées, tu réunis un comité. Ta synthèse suit toujours : ce sur quoi on est d'accord, le désaccord, les actions recommandées, la décision attendue de Gérard. Tu tiens un registre des décisions et tu ne fais jamais trancher deux fois la même question."},
+assist:{s:'anthropics/knowledge-work-plugins · productivity',m:"Tu tiens la liste des tâches de la direction en 4 colonnes : en cours, en attente de quelqu'un, plus tard, fait. Tu relèves les tâches cachées dans les comptes rendus et les mails, tu signales celles qui traînent, et tu gardes une mémoire des personnes, sigles et projets pour comprendre les demandes abrégées. Tu prépares les réunions : ordre du jour, documents, décisions attendues."},
+strat:{s:'alirezarezvani/claude-skills · strategic-alignment + agency-agents · business-strategist + anthropics/financial-services · competitive-analysis',m:"Tu testes d'abord si la stratégie s'énonce en une phrase, puis tu vérifies qu'elle descend jusqu'aux objectifs de chaque direction (objectifs orphelins, silos). Pour une analyse concurrentielle : indicateurs qui font le secteur, contexte de marché, économie du secteur, profil de Netforce, cartographie et fiches des concurrents (taser, bombes lacrymogènes, bâtons, autres gants), comparaison, synthèse. Tu utilises SWOT, scénarios et business case, et tu sources chaque chiffre."},
+pa:{s:'coreyhaines31/marketingskills · public-relations',m:"Tu travailles l'angle avant le communiqué : pourquoi c'est une info maintenant, pour qui. Tu construis une liste de journalistes et d'élus par sujet (sécurité, police municipale, défense, industrie française), tu prépares les pitchs courts, le dossier de presse et la page presse. Tu anticipes les crises (incident lors d'une intervention, polémique sur l'arme électrique) avec un message de réponse prêt. Côté affaires publiques : veille des textes sur l'armement des polices municipales et des positions des associations d'élus."},
+rse:{s:'msitarzewski/agency-agents · esg-sustainability-officer',m:"Tu pilotes l'analyse de double matérialité alignée CSRD, l'inventaire carbone (scopes 1, 2, 3 selon le GHG Protocol), une trajectoire de réduction, et le volet social (effectifs, sécurité, droits humains dans la chaîne d'achat). Tu prépares un reporting lisible par des investisseurs (indicateurs ESG, sources, méthode). Pour un produit non létal, tu documentes l'impact sociétal : réduction de la violence, formation, éthique d'usage."},
+audit:{s:'anthropics/knowledge-work-plugins · finance (sox-testing, audit-support)',m:"Tu fais le travail de contrôle interne qu'exige une société cotée : tu identifies les comptes et processus significatifs (ventes, achats, stocks, paie, clôture, informatique), tu testes la conception puis l'efficacité des contrôles sur échantillon, tu documentes chaque test (objectif, échantillon, preuve, conclusion) et tu classes les défaillances : simple, significative, majeure. Chaque défaillance a un responsable et une date de correction."},
+daf:{s:'alirezarezvani/claude-skills · cfo-advisor + agency-agents · chief-financial-officer',m:"Tu poses d'abord les questions qui comptent : trésorerie disponible, consommation mensuelle, mois de visibilité, marge par gant vendu, coût d'acquisition d'un client public. Tu raisonnes étape par étape et tu montres tes calculs. Tes livrables : budget annuel, plan de trésorerie, structure du capital et dilution, dossier mensuel de gestion, ordre du jour du comité d'audit, cadre des relations investisseurs. Pour l'IPO : comptes en normes adaptées, prévisions défendables, besoins de financement."},
+ctrl:{s:'anthropics/knowledge-work-plugins · variance-analysis + agency-agents · fpa-analyst',m:"Tu décomposes chaque écart en causes : prix et volume, mix produit, effectifs, catégories de dépenses. Tu fixes des seuils de matérialité et tu n'expliques que ce qui les dépasse. Chaque écart a un récit court : ce qui s'est passé, pourquoi, impact, ce qu'on fait. Tu compares réel, budget et prévision, tu construis des ponts (waterfall) et une revue mensuelle de l'activité."},
+compta:{s:'anthropics/knowledge-work-plugins · finance (close-management, financial-statements) + agency-agents · bookkeeper-controller',m:"Tu organises la clôture mensuelle en 5 jours avec l'ordre des tâches et le chemin critique : pré-clôture, écritures, rapprochements, états financiers, revue. Tu produis compte de résultat, bilan et tableau de flux avec comparaison sur période et analyse des écarts. Tu prépares la bascule vers les exigences d'une société cotée (comptes consolidés, normes IFRS si marché réglementé, annexe) en signalant ce qui manque."},
+ir:{s:'anthropics/financial-services · teaser, cim-builder, equity-research',m:"Tu bâtis les documents investisseurs : un teaser d'une page (thèse, chiffres clés, marché), un mémorandum complet (activité, marché, concurrence, produit, équipe, historique financier, prévisions, risques) et une note façon analyste (thèse d'investissement, estimations, valorisation par comparables). Chaque chiffre est sourcé, chaque affirmation tenable devant l'AMF. Tu prépares aussi la liste des questions que poseront les investisseurs, avec les réponses."},
+data:{s:'anthropics/financial-services · datapack-builder + anthropics/knowledge-work-plugins · data',m:"Zéro tolérance aux erreurs de chiffres. Tu extrais, normalises et rassembles les données dans un classeur standard : synthèse, compte de résultat, bilan, flux, indicateurs opérationnels, marché, points forts. Avant de partager, tu valides : méthode, contrôles de cohérence, calculs refaits, biais possibles, niveau de confiance. Tu choisis le bon graphique pour chaque message et tu construis des tableaux de bord lisibles."},
+coo:{s:'alirezarezvani/claude-skills · coo-advisor',m:"Tu transformes la stratégie en exécution : objectifs trimestriels avec résultats clés, rituels (point hebdo, revue mensuelle), processus documentés, goulots d'étranglement repérés et traités. Tu raisonnes pas à pas et tu mesures : délais de production et de livraison, taux de service, coûts, qualité. Tu coordonnes production, qualité, SAV et formation et tu prépares la montée en cadence qu'exige la croissance post-IPO."},
+supply:{s:'msitarzewski/agency-agents · supply-chain-strategist',m:"Tu gères les fournisseurs (sélection, évaluation, double source sur les composants critiques), la stratégie d'achat, le contrôle qualité à réception et les délais. Tu choisis un modèle de stock adapté, tu calcules le coût total de possession et tu proposes des économies à court, moyen et long terme. Tu signales les risques de rupture et la dépendance à un fournisseur unique."},
+qual:{s:'anthropics/knowledge-work-plugins · operations',m:"Tu documentes chaque processus (finalité, périmètre, matrice RACI, étapes, exceptions, indicateurs), tu tiens un registre des risques (gravité × probabilité) et un suivi de conformité avec calendrier d'audit et preuves. Pour le G.I.E : certifications, essais, traçabilité des lots, fiches de non-conformité et actions correctives. Tu évalues les fournisseurs sur coût, risque et performance."},
+sav:{s:'anthropics/knowledge-work-plugins · customer-support + agency-agents · customer-service',m:"Tu tries chaque demande (catégorie, priorité P1 à P4, doublon ou problème connu, qui traite), tu rédiges des réponses claires adaptées à la relation, et tu escalades avec un dossier complet quand un défaut touche plusieurs clients : impact, description, ce qui a été tenté, reproduction, besoin. Tu transformes chaque problème résolu en fiche de la base de connaissances. Les retours terrain remontent à la R&D."},
+form:{s:'msitarzewski/agency-agents · corporate-training-designer',m:"Tu pars d'une analyse des besoins (qui, quel niveau, quel usage), tu conçois un parcours mêlant théorie, démonstration et mise en situation, tu formes des formateurs internes chez les clients, et tu évalues à chaud et à froid. Pour le G.I.E : module d'usage, cadre légal de la riposte, sécurité, attestation. Tu respectes les principes d'apprentissage adulte et les exigences de traçabilité des formations."},
+cto:{s:'alirezarezvani/claude-skills · cto-advisor',m:"Tu raisonnes puis tu agis : évaluation de la dette technique, fiches de décision d'architecture (contexte, options, choix, conséquences), analyse faire ou acheter. Tu pilotes la feuille de route technique du G.I.E, les choix de composants et de partenaires, la propriété intellectuelle (brevets) et la gestion de crise technique. Tu suis des indicateurs de fiabilité et tu prépares le volet technologique du dossier d'introduction."},
+rd:{s:'alirezarezvani/claude-skills · cpo-advisor + anthropics/knowledge-work-plugins · product-management',m:"Tu mesures l'adéquation produit-marché, tu priorises avec RICE ou MoSCoW et tu tiens une feuille de route maintenant / ensuite / plus tard. Tu rédiges des spécifications (problème, objectifs, hors périmètre, exigences, critères de succès), tu fais des fiches concurrentes produit et tu synthétises les retours terrain (entretiens, SAV) en thèmes et opportunités."},
+dsi:{s:'alirezarezvani/claude-skills · ciso-advisor',m:"Tu quantifies les risques cyber en euros, tu bâtis une feuille de route de conformité (ISO 27001, RGPD, exigences des clients publics), tu prépares la réponse à incident et tu évalues la sécurité des fournisseurs. Tu justifies chaque budget par le risque évité et tu fournis un point sécurité clair pour le conseil et le dossier d'introduction."},
+dircom:{s:'alirezarezvani/claude-skills · cro-advisor + anthropics/knowledge-work-plugins · sales',m:"Tu pilotes le chiffre d'affaires : revue du pipeline étape par étape (couverture, ancienneté, conversion, affaires à risque), prévision en trois niveaux (engagé, probable, pipeline) avec ce qui a changé depuis la dernière fois, rétention et réachat des clients. Tu raisonnes chiffres à l'appui et tu signales les écarts tôt. Pour l'IPO, tu rends le carnet de commandes et le pipeline crédibles et vérifiables."},
+ao:{s:'msitarzewski/agency-agents · sales-proposal-strategist',m:"Avant d'écrire, tu analyses l'opportunité (critères de notation, pièces, concurrents probables) et tu définis 3 thèmes gagnants centrés sur l'acheteur. Le mémoire suit un récit en trois actes : le problème de la commune, notre réponse, la preuve. Tu soignes la synthèse, tu croises une grille de conformité avec les thèmes, et tu respectes le code de la commande publique."},
+prospect:{s:'msitarzewski/agency-agents · sales-outbound-strategist + anthropics/knowledge-work-plugins · sales',m:"Tu prospectes sur signaux, pas au volume : création ou extension d'une police municipale, budget voté, incident médiatisé, nouvel élu, marché publié. Tu définis le profil cible et des niveaux de comptes, tu rédiges des séquences multicanales personnalisées, et avant chaque rendez-vous tu prépares une fiche : interlocuteurs, historique, questions de découverte."},
+km:{s:'msitarzewski/agency-agents · sales-account-strategist + anthropics/knowledge-work-plugins · sales',m:"Tu fais grandir les comptes existants : carte des interlocuteurs (décideur, utilisateurs, achats, élus), plan de compte (situation, objectifs, opportunités, risques, actions), santé du compte (relation, usage, signaux de risque) et revues périodiques avec le client. Tu repères les signaux d'extension (nouvelles recrues, communes voisines, renouvellement)."},
+export:{s:'alirezarezvani/claude-skills · intl-expansion',m:"Tu choisis les pays avec une grille notée (taille du marché, réglementation des armes non létales, accès, concurrence, coût d'entrée), puis le mode d'entrée (distributeur, agent, filiale). Tu prépares la localisation (produit, documents, formation, certifications) et tu vérifies le contrôle des exportations avec la conformité avant tout contact."},
+cmo:{s:'alirezarezvani/claude-skills · cmo-advisor + coreyhaines31/marketingskills · marketing-plan, product-marketing',m:"Tu réponds aux 4 questions du CMO : à qui on parle, ce qu'on dit, par quels canaux, avec quel budget. Tu tiens à jour un document de contexte produit (cibles, problèmes, concurrence, différenciation, objections, langage client, ton, preuves) que toute l'équipe utilise. Ton plan marketing suit l'entonnoir acquisition, activation, rétention, recommandation, revenu, avec budget et indicateurs. Pour l'IPO : notoriété et image de marque auprès des investisseurs."},
+redac:{s:'coreyhaines31/marketingskills · copywriting, copy-editing',m:"Avant d'écrire : but de la page, lecteur, offre, contexte. Principes : clarté plutôt qu'astuce, bénéfices plutôt que caractéristiques, précision, mots du client, une idée par section, chaque affirmation prouvable. Tu relis en 7 passes : clarté, ton, « et alors ? », preuve, précision, émotion, risque zéro pour le lecteur. Tu supprimes toutes les tournures qui sentent l'IA."},
+cm:{s:'coreyhaines31/marketingskills · social + agency-agents · linkedin, tiktok',m:"Tu définis 3 à 5 piliers de contenu, tu écris des accroches (curiosité, histoire, valeur, contre-pied) et tu recycles chaque contenu sur plusieurs formats. LinkedIn : leadership d'opinion de la direction, preuves terrain, coulisses de l'industrie. TikTok : tendances adaptées à la marque, sans jamais montrer d'usage violent. Calendrier éditorial et lecture des statistiques chaque semaine."},
+video:{s:'coreyhaines31/marketingskills · video + agency-agents · short-video-editing-coach',m:"Tu choisis l'approche selon l'objectif : tournage, démo produit, motion design, avatar ou génération IA. Montage : squelette narratif d'abord, puis finitions, étalonnage, son et sous-titres ; le son compte autant que l'image. Tu exportes pour chaque plateforme (format, durée, sous-titres incrustés) et tu respectes les droits sur la musique et les images."},
+design:{s:'anthropics/knowledge-work-plugins · design + coreyhaines31/marketingskills · ad-creative',m:"Tu critiques chaque visuel sur la première impression, l'usabilité, la hiérarchie, la cohérence et l'accessibilité (contrastes). Tu tiens le système graphique Netforce (couleurs, typographies, composants). Pour les publicités, tu travailles par angles et tu déclines des variantes par plateforme en respectant leurs formats."},
+rh:{s:'alirezarezvani/claude-skills · chro-advisor + wshobson/agents · hr-pro + anthropics/knowledge-work-plugins · human-resources',m:"Tu demandes toujours le contexte (poste, convention collective, situation) avant de conseiller, en droit du travail français. Tes chantiers : plan de recrutement, grilles de rémunération et intéressement des salariés à l'IPO, organisation, entretiens structurés avec grilles d'évaluation, intégration à 30-60-90 jours, revues de performance, rapports RH (effectifs, départs). Tu signales ce qui doit être validé par un avocat."},
+jur:{s:'alirezarezvani/claude-skills · general-counsel-advisor + anthropics/knowledge-work-plugins · legal',m:"Tu revois les contrats clause par clause par rapport aux positions de Netforce, avec un code vert, jaune, rouge et des propositions de modification. Tu évalues chaque risque sur une grille gravité × probabilité (score de 1 à 25) et tu proposes des mesures. Tu sécurises la propriété intellectuelle, la gouvernance et le secrétariat juridique de la future société cotée. Tu rappelles que tes analyses doivent être validées par un avocat."},
+conf:{s:'anthropics/knowledge-work-plugins · legal (compliance-check) + agency-agents · data-privacy-officer',m:"Pour chaque initiative, tu listes les règles applicables, les exigences, les zones de risque, les validations nécessaires. Ton périmètre : catégorisation et réglementation des armes, contrôle des exportations, normes produit, RGPD (registre des traitements, analyse d'impact, droits des personnes, violations de données, sous-traitants)."},
+memo:{s:'anthropics/financial-services · dd-checklist, datapack-builder',m:"Tu tiens la data room comme une due diligence : une liste de pièces par chantier (juridique, financier, fiscal, social, propriété intellectuelle, commercial, technique, ESG), avec le statut de chaque pièce, le responsable et les points rouges. Tu nommes et classes les documents de façon cohérente et tu tiens un index à jour. Aucun document n'est sorti sans validation."},
+seo:{s:'AgriciDaniel/claude-seo + coreyhaines31/marketingskills · ai-seo',m:"Tu audites le site netforce en 4 axes : technique (exploration, indexation, vitesse, mobile, données structurées), contenu (expérience, expertise, autorité, fiabilité), visibilité dans les réponses des IA (ChatGPT, Perplexity, aperçus Google : contenu facile à citer, mentions de la marque, fichier llms.txt) et SEO local. Tu rends un score sur 100 et une liste priorisée : à corriger tout de suite, sous une semaine, sous un mois. Mots-clés cibles : gant électrique, arme non létale, équipement police municipale."}
+};
+const A=RAW.map(r=>({id:r[0],q:r[1],name:r[2],role:r[3],mission:r[4],skills:r[5],todo:r[6],apps:r[7],needs:r[8],kw:r[9],tpl:r[10],parent:r[11],x:r[12]||'',w:r[13]||''}));
+const AG=Object.fromEntries(A.map(a=>[a.id,a]));
+const COMEX=['daf','coo','cto','dircom','cmo','rh','jur'];
+const COMM=[
+ {id:'comex',n:'Comité exécutif',s:'COMEX',lvl:'dg',purpose:"Réunit les directeurs autour de la directrice générale pour piloter l'activité et arbitrer les priorités.",ipo:"Montre aux investisseurs une équipe de direction complète, aux rôles clairs.",m:[['dg','Préside'],['daf'],['coo'],['cto'],['dircom'],['cmo'],['rh'],['jur']]},
+ {id:'ipo',n:"Comité de pilotage de l'introduction en bourse",s:'Pilotage IPO',lvl:'dg',purpose:"Pilote le projet d'introduction en bourse : calendrier, conseils, documentation et data room.",ipo:"Coordonne tous les chantiers jusqu'au premier jour de cotation.",m:[['dg','Préside'],['daf'],['ir'],['jur'],['strat'],['memo'],['cmo'],['chef']]},
+ {id:'cstrat',n:'Comité stratégique',s:'Stratégique',lvl:'gouv',purpose:"Éclaire le conseil sur les grandes orientations : plan à trois ou cinq ans, croissance externe, international.",ipo:"Valide l'equity story et le plan d'affaires présentés aux investisseurs.",m:[['pdt','Préside'],['adm'],['dg'],['strat'],['daf'],['cto']]},
+ {id:'caudit',n:"Comité d'audit",s:'Audit',lvl:'gouv',purpose:"Suit l'élaboration de l'information financière, le contrôle interne, la gestion des risques et le travail des commissaires aux comptes.",ipo:"Rassure le marché sur la fiabilité des comptes publiés.",m:[['adm','Préside'],['pdt'],['daf','Invité'],['audit','Invité']]},
+ {id:'cremu',n:'Comité des rémunérations et des nominations',s:'Rémunérations',lvl:'gouv',purpose:"Propose la composition du conseil, la rémunération des dirigeants et les plans d'actionnariat salarié.",ipo:"Aligne les intérêts des dirigeants et des salariés sur ceux des futurs actionnaires.",m:[['adm','Préside'],['pdt'],['rh','Invitée']]},
+ {id:'crse',n:'Comité RSE',s:'RSE',lvl:'gouv',purpose:"Suit la politique RSE et éthique, notamment l'usage responsable du G.I.E.",ipo:"Répond aux attentes extra-financières des investisseurs.",m:[['pdt','Préside'],['rse'],['dg'],['conf']]}];
+const CM=Object.fromEntries(COMM.map(c=>[c.id,c]));
+const ST={a_faire:'À faire',en_cours:'En cours',valider:'À valider',fait:'Terminé'};
+const PRESETS=["Préparer l'introduction en bourse : chantiers, calendrier et responsables","Monter la data room pour les investisseurs","Rédiger l'equity story du G.I.E","Répondre à un appel d'offres d'une police municipale","Être présents à Milipol avec un stand et des démos"];
+const SEED=(()=>{const p='p_ex';const T=(id,ag,ti,de,b,g,pr,st,dep)=>({id,pid:p,agent:ag,titre:ti,detail:de,besoins:b.map(t=>({t,ok:false})),gerard:g.map(t=>({t,ok:false})),prio:pr,statut:st,dep:dep||[],livrable:''});
+return{me:'mkt',projects:[{id:p,titre:"Appel d'offres : police municipale (exemple)",brief:"Exemple : une commune lance un marché pour équiper sa police municipale en moyens de défense non-létaux. On répond avec le G.I.E et un module de formation.",synthese:"Réponse faisable en trois semaines si le dossier de consultation et les coûts de revient arrivent cette semaine. Point critique : vérifier que le G.I.E entre dans la catégorie d'équipement demandée.",tour:[['chef',"Je pose un planning à rebours depuis la date limite et je fais le point chaque lundi."],['ao',"Il me faut le dossier complet pour repérer les critères de notation et les pièces obligatoires."],['conf',"Je vérifie la catégorie d'équipement demandée avant qu'on y passe du temps."],['daf',"Je chiffre l'offre, mais j'ai besoin des coûts de revient à jour pour tenir la marge."],['form',"Une formation des agents incluse peut faire la différence sur la note technique."],['cmo',"Je veux que le mémoire raconte la même histoire que notre com : protéger sans blesser."]].map(([agent,avis])=>({agent,avis})),decisions:[{t:"Répondre seul ou en groupement avec un distributeur ?",ok:false},{t:"Fixer la marge minimale acceptable",ok:false}],risques:["Date limite courte","Exigence réglementaire pas encore vérifiée"],date:Date.now(),source:'exemple'}],
+tasks:[T('t1','chef',"Poser le planning de réponse à rebours","Jalons hebdo jusqu'à la date limite.",[],[],'moyenne','fait'),
+T('t2','ao',"Analyser le dossier de consultation","Critères de notation, pièces obligatoires, questions à poser à l'acheteur.",["Dossier de consultation complet"],["M'envoyer le dossier de consultation"],'haute','en_cours'),
+T('t3','conf',"Vérifier la conformité du G.I.E au cahier des charges","Catégorie d'équipement, exigences d'usage et de formation.",["Fiche technique du G.I.E"],[],'haute','a_faire'),
+T('t4','daf',"Chiffrer l'offre","Prix unitaire, formation, garantie, livraison.",["Coûts de revient à jour"],["Valider la marge minimale"],'haute','a_faire'),
+T('t5','form',"Proposer un module de formation des agents","Durée, contenu, attestation.",["Nombre d'agents à former"],[],'moyenne','a_faire'),
+T('t6','redac',"Rédiger le mémoire technique","Structure calée sur les critères de notation.",["Analyse du dossier","Message clé validé"],["Relire le mémoire"],'haute','a_faire',['t2','t3']),
+T('t7','design',"Mettre en page le mémoire et une plaquette","Aux couleurs Netforce.",["Textes validés","Photos HD du G.I.E"],["Fournir les photos HD"],'moyenne','a_faire',['t6']),
+T('t8','jur',"Préparer les pièces administratives","Formulaires de candidature et attestations.",["Kbis","Attestations URSSAF et fiscales"],["Signer les formulaires"],'haute','en_cours')]}})();
+
+
+let S={me:'mkt',projects:[],tasks:[]},running=false,busy=new Set(),planning=new Set();
+let view=null,agentTab='travail',chatBusy=false,teamF='all',R={r:'accueil',pid:null};
+try{teamF=localStorage.getItem('nf_team')||'all'}catch(e){}
+const chats={},ui={};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+const now=()=>Date.now();
+const fmt=t=>new Date(t).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const P=id=>S.projects.find(p=>p.id===id);
+const TK=id=>S.tasks.find(t=>t.id===id);
+const of=id=>S.tasks.filter(t=>t.agent===id);
+const open=t=>t.statut!=='fait';
+const pslug=p=>p.id.replace(/[^A-Za-z0-9-]/g,'-');
+const projName=t=>{const p=P(t.pid);return p?p.titre:'Hors projet'};
+const PR={haute:0,moyenne:1,basse:2};
+function norm(t){t.besoins=t.besoins||[];t.gerard=t.gerard||[];t.dep=t.dep||[];t.log=t.log||[];t.livrable=t.livrable||'';t.versions=t.versions||(t.livrable?[{at:now(),by:t.agent,txt:t.livrable}]:[]);t.owner=t.owner||'agent';if(t.plan===undefined)t.plan=null;if(!PR.hasOwnProperty(t.prio))t.prio='moyenne';return t}
+function normAll(){S.tasks=(S.tasks||[]).map(norm);S.projects=S.projects||[];S.projects.forEach(p=>{p.decisions=p.decisions||[];p.tour=p.tour||[];p.risques=p.risques||[]});if(!S.me||!QN[S.me])S.me='mkt'}
+function log(t,who,txt,kind){t.log.push({at:now(),who,txt,kind:kind||'evt'});if(t.log.length>40)t.log=t.log.slice(-40)}
+function addVersion(t,txt,by){t.livrable=txt;t.versions.push({at:now(),by,txt});if(t.versions.length>5)t.versions=t.versions.slice(-5);delete ui['ver-'+t.id]}
+function blockerOf(t){for(const d of t.dep||[]){const x=TK(d);if(x&&x.statut!=='fait')return x}return null}
+const blocked=t=>!!blockerOf(t);
+function participants(p){if(!p)return new Set();return new Set([...(p.tour||[]).map(x=>x.agent),...S.tasks.filter(t=>t.pid===p.id&&t.owner!=='moi').map(t=>t.agent)])}
+function toast(m,opt){const el=$('#toast');el.innerHTML=`<span>${esc(m)}</span>${opt?`<button class="tbtn" data-act="toastbtn">${esc(opt.label)}</button>`:''}`;toast.fn=opt?opt.fn:null;el.hidden=false;clearTimeout(toast.k);toast.k=setTimeout(()=>{el.hidden=true;toast.fn=null},opt?7000:3600)}
+function keep(el,html){const vals={},act=document.activeElement,aid=act&&el.contains(act)&&act.id?act.id:null;let sel=null;try{if(aid&&act.selectionStart!=null)sel=[act.selectionStart,act.selectionEnd]}catch(e){}
+ el.querySelectorAll('input[id],textarea[id]').forEach(f=>{if(f.type!=='checkbox'&&f.type!=='radio'&&f.value)vals[f.id]=f.value});
+ el.innerHTML=html;
+ for(const id in vals){const f=document.getElementById(id);if(f&&el.contains(f)&&!f.value)f.value=vals[id]}
+ if(aid){const f=document.getElementById(aid);if(f&&el.contains(f)){f.focus({preventScroll:true});if(sel)try{f.setSelectionRange(sel[0],sel[1])}catch(e){}}}}
+
+/* ---------- visages ---------- */
+const TEAM={gouv:{bg:'#ECE6D8',d:'#BBAE90',shirt:'#6E6450'},dg:{bg:'#E7E1F4',d:'#A795D6',shirt:'#6C5BA8'},fin:{bg:'#DDE8F4',d:'#86A8D3',shirt:'#3F6C9C'},ops:{bg:'#F3E6CF',d:'#D7B377',shirt:'#9C7330'},tech:{bg:'#DCEEF0',d:'#7FBCC4',shirt:'#2F7480'},com:{bg:'#D7EEE7',d:'#7BC2AE',shirt:'#2F7A68'},mkt:{bg:'#F7DDE4',d:'#E39AB0',shirt:'#B05673'},rh:{bg:'#F8E0CF',d:'#E7A57E',shirt:'#B4683D'},jur:{bg:'#E3E6EC',d:'#A8B0BE',shirt:'#5A6577'}};
+const SK=['#F1D2B3','#D9AE88','#B98260','#8A5A3C','#F4DCC7','#A3704F'],HC=['#2A1C14','#5B3A22','#B48A55','#18181C','#7E4526','#CFC6B8'];
+const ME={skin:'#E8C4A0',hair:'#3B2A1E',style:0,shirt:'#1B2A4A',bg:'#F6EBC9'};
+function hsh(s){let h=7;for(const c of s)h=(h*31+c.charCodeAt(0))>>>0;return h}
+function lookOf(a){const i=hsh(a.id),T=TEAM[a.q]||TEAM.dg;return{skin:SK[i%6],hair:HC[(i>>3)%6],style:(i>>6)%4,shirt:T.shirt,bg:T.bg}}
+function face(L,s){const top=`<path d="M11.2 17.4a8.8 8.8 0 0 1 17.6 0c-4.2-2.9-13.4-2.9-17.6 0z" fill="${L.hair}"/>`;
+ const back=L.style===1?`<rect x="10.8" y="14" width="18.4" height="15" rx="6" fill="${L.hair}"/>`:'';
+ const extra=L.style===2?`<circle cx="20" cy="8.4" r="3.6" fill="${L.hair}"/>`:L.style===3?`<path d="M11.2 17.4c0-5 3.5-8.7 8.6-9c-2.5 2.7-3.6 6-3.1 9z" fill="${L.hair}"/>`:'';
+ return`<svg class="face" viewBox="0 0 40 40" width="${s}" height="${s}" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="${L.bg}"/>${back}<path d="M7.6 35.6C8.6 30.2 13.4 27.6 20 27.6s11.4 2.6 12.4 8A20 20 0 0 1 7.6 35.6z" fill="${L.shirt}"/><rect x="17.6" y="23" width="4.8" height="5.4" rx="1.5" fill="${L.skin}"/><circle cx="20" cy="18.2" r="8.4" fill="${L.skin}"/>${top}${extra}<circle cx="17" cy="19.2" r="1.05" fill="#2A2A33"/><circle cx="23" cy="19.2" r="1.05" fill="#2A2A33"/><path d="M17.8 22.3q2.2 1.4 4.4 0" fill="none" stroke="#9A5A4A" stroke-width=".9" stroke-linecap="round"/></svg>`}
+const whoBtn=(a,s=36)=>`<button class="who" data-agent="${a.id}">${face(lookOf(a),s)}<span><b>${esc(a.name)}</b><small>${esc(a.role)}</small></span></button>`;
+const meWho=(s=36)=>`<span class="who">${face(ME,s)}<span><b>Toi</b><small>Gérard</small></span></span>`;
+const mini=a=>face(lookOf(a),20);
+
+/* ---------- statuts ---------- */
+const badge=(k,l,live)=>`<span class="badge b-${k}${live?' live':''}"><i></i>${esc(l)}</span>`;
+function taskBadge(t){if(!open(t))return badge('done','Terminé');if(t.owner==='moi')return badge('wait','Repris par toi');if(busy.has(t.id))return badge('work','En rédaction',1);if(planning.has(t.id))return badge('work','Prépare son plan',1);
+ if(t.statut==='valider')return badge('wait','À valider par toi');if(t.plan&&t.plan.statut==='propose')return badge('wait','Plan à valider');if(blocked(t))return badge('block','Bloqué');if(t.feedback&&t.statut==='a_faire'&&t.versions.length)return badge('todo','À corriger');if(t.statut==='en_cours')return badge('work','En cours');return badge('todo','À faire')}
+function taskNext(t){if(!t||!open(t))return'';const nm=AG[t.agent].name;if(t.owner==='moi')return'Tu t\'en occupes';
+ if(busy.has(t.id))return nm+' rédige le livrable';if(planning.has(t.id))return nm+' prépare son plan';
+ if(t.statut==='valider')return'Relis et valide le livrable';if(t.plan&&t.plan.statut==='propose')return'Valide le plan pour lancer le travail';
+ const b=blockerOf(t);if(b)return`Attend ${AG[b.agent].name} : ${b.titre}`;
+ if(t.feedback&&t.statut==='a_faire'&&t.versions.length)return`Correction demandée : ${t.feedback}`;
+ const m=t.besoins.filter(x=>!x.ok);if(m.length)return`Il lui manque : ${m[0].t}${m.length>1?` (+${m.length-1})`:''}`;
+ if(t.statut==='en_cours')return'Avance sans attente';return'Prête à démarrer'}
+function agentNow(a){const ts=of(a.id).filter(t=>open(t)&&t.owner!=='moi').sort((x,y)=>PR[x.prio]-PR[y.prio]),n=ts.length;let t;
+ if(t=ts.find(x=>busy.has(x.id)||planning.has(x.id)))return{k:'work',label:busy.has(t.id)?'Rédige':'Prépare son plan',t,n,live:1};
+ if(t=ts.find(x=>x.statut==='valider'))return{k:'wait',label:'À valider par toi',t,n};
+ if(t=ts.find(x=>x.plan&&x.plan.statut==='propose'))return{k:'wait',label:'Plan à valider',t,n};
+ if(t=ts.find(x=>x.statut==='en_cours'&&!blocked(x)))return{k:'work',label:'En cours',t,n};
+ if(t=ts.find(x=>!blocked(x)))return{k:'todo',label:t.feedback&&t.versions.length?'À corriger':'À faire',t,n};
+ if(t=ts[0])return{k:'block',label:'Bloqué',t,n};
+ return{k:'idle',label:'Disponible',t:null,n:0}}
+const ORD={wait:0,block:1,work:2,todo:3,idle:4};
+const readyToStart=t=>open(t)&&t.statut==='a_faire'&&!blocked(t)&&!t.plan&&t.owner!=='moi'&&!busy.has(t.id)&&!planning.has(t.id);
+
+/* ---------- ce qui t'attend ---------- */
+const INPUTV=/^(m'envoyer|m’envoyer|envoyer|fournir|transmettre|partager|donner|indiquer|préciser)/i;
+function inbox(){const L=[];for(const t of S.tasks){if(!AG[t.agent])continue;const o=open(t),bl=blocked(t);
+  if(t.statut==='valider'&&t.owner!=='moi')L.push({k:'liv',t,u:1});
+  if(t.plan&&t.plan.statut==='propose'&&o&&t.owner!=='moi')L.push({k:'plan',t,u:1});
+  if(t.owner==='moi'&&o)L.push({k:'mine',t,u:1});
+  if(o)t.gerard.forEach((g,i)=>{if(!g.ok)L.push({k:'act',t,i,u:t.statut==='valider'||(!bl&&INPUTV.test(g.t))?1:0})});
+  if(o&&t.owner!=='moi')t.besoins.forEach((b,i)=>{if(!b.ok)L.push({k:'need',t,i,u:bl?0:1})})}
+ S.projects.forEach(p=>p.decisions.forEach((d,i)=>{if(!d.ok)L.push({k:'dec',p,i,u:1})}));
+ const o={liv:0,plan:1,need:2,dec:3,act:4,mine:5};return L.sort((a,b)=>(b.u-a.u)||(o[a.k]-o[b.k])||((a.t?PR[a.t.prio]:1)-(b.t?PR[b.t.prio]:1)))}
+const urgent=()=>inbox().filter(x=>x.u);
+const KIND={liv:'Livrable à relire',plan:'Plan à valider',need:'Info à fournir',dec:'Décision',act:'Action',mine:'Repris par toi'};
+function needForm(t,i){const b=t.besoins[i];return`<form class="needf" data-form="need" data-t="${t.id}" data-i="${i}"><input type="text" id="nv-${t.id}-${i}" name="v" placeholder="Colle l'information, un chiffre ou un lien" aria-label="${esc(b.t)}"><button class="btn sm primary">Envoyer à ${esc(AG[t.agent].name)}</button><button type="button" class="btn sm ghost" data-act="need-ok" data-t="${t.id}" data-i="${i}">Déjà donnée</button><button type="button" class="btn sm ghost" data-act="need-open" data-t="${t.id}" data-i="${i}">Annuler</button></form>`}
+function irow(x){const t=x.t,a=t?AG[t.agent]:null;let title,meta,btns,extra='';
+ if(x.k==='liv'){title=t.titre;meta=`${mini(a)}<span>${esc(a.name)} a livré la version ${t.versions.length} · ${esc(projName(t))}</span>`;btns=`<button class="btn sm primary" data-task="${t.id}">Relire</button>`}
+ else if(x.k==='plan'){title=t.titre;meta=`${mini(a)}<span>${esc(a.name)} propose ${t.plan.etapes.length} étapes · ${esc(projName(t))}</span>`;btns=`<button class="btn sm primary" data-task="${t.id}">Voir le plan</button>`}
+ else if(x.k==='need'){const key='nf-'+t.id+'-'+x.i;title=t.besoins[x.i].t;meta=`${mini(a)}<span>${x.u?'Pour':'Plus tard, pour'} ${esc(a.name)} · ${esc(t.titre)}</span>`;btns=ui[key]?'':`<button class="btn sm" data-act="need-open" data-t="${t.id}" data-i="${x.i}">Fournir</button>`;if(ui[key])extra=needForm(t,x.i)}
+ else if(x.k==='act'){title=t.gerard[x.i].t;meta=`${mini(a)}<span>Pour ${esc(a.name)} · ${esc(t.titre)}</span>`;btns=`<button class="btn sm" data-act="act-ok" data-t="${t.id}" data-i="${x.i}">Fait</button>`}
+ else if(x.k==='dec'){title=x.p.decisions[x.i].t;meta=`<span>Projet · ${esc(x.p.titre)}</span>`;btns=`<button class="btn sm" data-act="dec-ok" data-p="${x.p.id}" data-i="${x.i}">Décidé</button>`}
+ else{title=t.titre;meta=`<span>${esc(projName(t))}</span>`;btns=`<button class="btn sm" data-act="mine-done" data-t="${t.id}">Terminé</button>`}
+ return`<div class="irow"><span class="kind ${x.k}">${KIND[x.k]}</span><div><div class="t">${t?`<button class="lnk" data-task="${t.id}">${esc(title)}</button>`:esc(title)}</div><div class="m">${meta}</div></div><div class="iact">${btns}${t&&(x.k==='need'||x.k==='act')&&!extra?`<button class="btn sm ghost" data-task="${t.id}">Ouvrir</button>`:''}</div>${extra?`<div class="ifull">${extra}</div>`:''}</div>`}
+const emptyBox=h=>`<p class="empty">${h}</p>`;
+
+/* ---------- accueil ---------- */
+const teamOk=a=>teamF==='all'||(teamF==='mine'?a.q===S.me:a.q===teamF);
+function quick(n){const t=n.t;if(!t)return'';
+ if(t.statut==='valider')return`<button class="btn sm amber" data-task="${t.id}">Relire</button>`;
+ if(t.plan&&t.plan.statut==='propose')return`<button class="btn sm amber" data-task="${t.id}">Voir le plan</button>`;
+ if(n.k==='block'){const b=blockerOf(t);return b?`<button class="btn sm" data-task="${b.id}">Voir ${esc(AG[b.agent].name)}</button>`:''}
+ if(n.k==='todo'&&sample&&readyToStart(t))return`<button class="btn sm" data-act="go" data-t="${t.id}">Lancer</button>`;
+ return`<button class="btn sm ghost" data-task="${t.id}">Ouvrir</button>`}
+function qtable(rows){return`<table class="qt"><thead><tr><th>Agent</th><th>Travaille sur</th><th>Statut</th><th>Prochaine étape</th><th><span class="sr">Action</span></th></tr></thead><tbody>${rows.map(({a,n})=>{const t=n.t,nx=taskNext(t),hot=n.k==='wait'||nx.startsWith('Il lui manque');
+ return`<tr class="r" data-agent="${a.id}"><td class="who-c">${whoBtn(a)}</td><td class="task">${t?`<button class="lnk" data-task="${t.id}">${esc(t.titre)}</button><small>${esc(projName(t))}${n.n>1?` · +${n.n-1} autre${n.n>2?'s':''} tâche${n.n>2?'s':''}`:''}</small>`:''}</td><td class="st">${badge(n.k,n.label,n.live)}</td><td class="next${hot?' hot':''}">${esc(nx)}</td><td class="act">${quick(n)}</td></tr>`}).join('')}</tbody></table>`}
+function teamSelect(id){return`<label class="fsel"><span class="small">Afficher</span><select id="${id}" aria-label="Filtrer par quartier"><option value="all"${teamF==='all'?' selected':''}>Toute l'équipe</option><option value="mine"${teamF==='mine'?' selected':''}>Mon quartier</option>${Q.map(q=>`<option value="${q.id}"${teamF===q.id?' selected':''}>${esc(q.n)}</option>`).join('')}</select></label>`}
+function pstats(p){const ts=S.tasks.filter(t=>t.pid===p.id),f=k=>ts.filter(k).length;
+ return{ts,n:ts.length,done:f(t=>!open(t)),val:f(t=>open(t)&&(t.statut==='valider'||(t.plan&&t.plan.statut==='propose'))),work:f(t=>open(t)&&t.statut!=='valider'&&!(t.plan&&t.plan.statut==='propose')&&(t.statut==='en_cours'||busy.has(t.id)||planning.has(t.id))),block:f(t=>open(t)&&t.statut==='a_faire'&&blocked(t))}}
+function pbar(s){if(!s.n)return'<div class="bar"></div>';const w=x=>(x/s.n*100).toFixed(1)+'%';return`<div class="bar" role="img" aria-label="${s.done} tâches terminées sur ${s.n}"><i style="width:${w(s.done)};background:var(--done-d)"></i><i style="width:${w(s.val)};background:var(--wait-d)"></i><i style="width:${w(s.work)};background:var(--work-d)"></i></div>`}
+function pcard(p,big){const s=pstats(p),ppl=[...participants(p)].filter(id=>AG[id]);
+ return`<button class="pcard" data-proj="${pslug(p)}"><b>${esc(p.titre)}</b>${big&&p.synthese?`<span class="syn">${esc(p.synthese)}</span>`:''}${pbar(s)}<span class="small">${s.done} sur ${s.n} terminée${s.done>1?'s':''}${s.val?` · <span class="w">${s.val} à valider</span>`:''}${s.block?` · ${s.block} bloquée${s.block>1?'s':''}`:''}</span><span class="row" style="justify-content:space-between"><span class="faces">${ppl.slice(0,7).map(id=>face(lookOf(AG[id]),26)).join('')}${ppl.length>7?`<span class="more">+${ppl.length-7}</span>`:''}</span>${big?`<span class="small">${new Date(p.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</span>`:''}</span></button>`}
+function vHome(){const all=inbox(),L=all.filter(x=>x.u),later=all.length-L.length,rows=A.map(a=>({a,n:agentNow(a)})),c={work:0,wait:0,block:0,todo:0,idle:0};rows.forEach(r=>c[r.n.k]++);
+ const d=cap(new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}));
+ const sum=[L.length?`<b>${L.length} ${L.length>1?'points demandent':'point demande'} ton attention</b>`:'Rien d\'urgent pour toi',later?`${later} à prévoir`:'',`${c.work} ${c.work>1?'agents au travail':'agent au travail'}`,c.block?`${c.block} ${c.block>1?'agents bloqués':'agent bloqué'}`:''].filter(Boolean).join(' · ');
+ const vis=rows.filter(r=>r.n.k!=='idle'&&teamOk(r.a)).sort((x,y)=>ORD[x.n.k]-ORD[y.n.k]||PR[x.n.t.prio]-PR[y.n.t.prio]),idle=rows.filter(r=>r.n.k==='idle'&&teamOk(r.a));
+ const projs=S.projects.filter(p=>S.tasks.some(t=>t.pid===p.id&&open(t))).slice().reverse();
+ const noData=!S.tasks.length;
+ return`<header class="ph"><div><p class="date">${d}</p><h1>Bonjour Gérard</h1><p class="lead">${sum}</p></div><a class="btn primary mob" href="#nouveau">Nouveau projet</a></header>
+ <section class="block"><div class="bh"><div><h2>À toi de jouer</h2><p class="small">Ce qui bloque ou attend un agent en ce moment.</p></div>${all.length>5?`<a href="#pour-toi">Tout voir (${all.length})</a>`:''}</div>${L.length?`<div class="ilist">${L.slice(0,5).map(irow).join('')}</div>`:emptyBox(`Rien d'urgent. ${later?`<a href="#pour-toi">${later} ${later>1?'points':'point'} à prévoir</a> plus tard.`:'Quand un agent aura besoin de toi, ça apparaîtra ici.'}`)}</section>
+ <section class="block"><div class="bh"><div><h2>Qui fait quoi</h2><p class="small">Les agents qui ont du travail, ceux qui t'attendent en premier.</p></div>${teamSelect('teamf')}</div>
+ ${vis.length?qtable(vis):noData?emptyBox(`Personne n'a de tâche pour l'instant. <a href="#nouveau">Présente un projet</a> ou <button class="lnk" data-act="seed">charge l'exemple</button>.`):emptyBox('Aucun agent de ce quartier n\'a de tâche en cours.')}
+ ${idle.length?`<div class="idle"><div class="faces">${idle.slice(0,12).map(r=>`<button data-agent="${r.a.id}" title="${esc(r.a.name+', '+r.a.role)}" aria-label="${esc(r.a.name+', '+r.a.role)}">${face(lookOf(r.a),30)}</button>`).join('')}${idle.length>12?`<span class="more">+${idle.length-12}</span>`:''}</div><span class="small">${idle.length} ${idle.length>1?'agents disponibles':'agent disponible'} pour de nouvelles tâches</span><a class="small" href="#organigramme" style="margin-left:auto">Voir l'organigramme</a></div>`:''}</section>
+ <section class="block"><div class="bh"><h2>Projets en cours</h2><a href="#projets">Tous les projets</a></div>${projs.length?`<div class="pgrid">${projs.map(p=>pcard(p)).join('')}</div>`:emptyBox('Aucun projet en cours. <a href="#nouveau">Présente un projet</a> pour que l\'équipe s\'en empare.')}</section>`}
+
+/* ---------- pour toi ---------- */
+function vInbox(){const all=inbox(),L=all.filter(x=>x.u),LT=all.filter(x=>!x.u),G=['liv','plan','need','dec','act','mine'];
+ const H={liv:'Livrables à relire',plan:'Plans à valider',need:'Informations à fournir',dec:'Décisions à prendre',act:'Tes actions',mine:'Tâches que tu as reprises'};
+ const D={liv:'Les agents ont terminé. Valide, ou demande une correction.',plan:'Les agents attendent ton feu vert avant de rédiger.',need:'Sans ces éléments, les agents travaillent avec des trous.',dec:'Les choix que toi seul peux faire.',act:'Ce que tu dois faire toi-même : envoyer, signer, valider.',mine:'Tu as repris ces tâches à ton compte.'};
+ return`<header class="ph"><div><h1>Pour toi</h1><p class="lead">${L.length?`<b>${L.length} ${L.length>1?'points demandent':'point demande'} ton attention maintenant</b>${LT.length?`, ${LT.length} autres sont à prévoir plus tard`:''}.`:LT.length?`Rien d'urgent. ${LT.length} ${LT.length>1?'points sont':'point est'} à prévoir plus tard.`:'Tout est à jour.'}</p></div></header>
+ ${L.length?G.map(k=>{const it=L.filter(x=>x.k===k);return it.length?`<section class="block grouped"><div class="bh"><div><h2>${H[k]}<span class="n">${it.length}</span></h2><p class="small">${D[k]}</p></div></div><div class="ilist">${it.map(irow).join('')}</div></section>`:''}).join(''):''}
+ ${LT.length?`<details class="block grouped later-block"><summary><h2>À prévoir plus tard</h2><span class="small">${LT.length} ${LT.length>1?'points':'point'} : tâches pas encore démarrées ou validations de fin</span></summary><div class="ilist">${LT.map(irow).join('')}</div></details>`:''}
+ ${!all.length?`<div class="block">${emptyBox('Rien ne t\'attend. Quand un agent aura besoin de toi, ça apparaîtra ici.')}</div>`:''}`}
+
+/* ---------- projets ---------- */
+function vProjects(){const ps=S.projects.slice().reverse();
+ return`<header class="ph"><div><h1>Projets</h1><p class="lead">Chaque projet présenté en salle du conseil, avec qui fait quoi et où il en est.</p></div><a class="btn primary" href="#nouveau">Nouveau projet</a></header>
+ ${ps.length?`<div class="pgrid">${ps.map(p=>pcard(p,1)).join('')}</div>`:`<div class="block">${emptyBox('Aucun projet pour l\'instant.')}<div class="row" style="margin-top:12px"><a class="btn primary" href="#nouveau">Présenter un projet</a><button class="btn" data-act="seed">Charger l'exemple</button></div></div>`}`}
+function topo(ts){const ids=new Set(ts.map(t=>t.id)),done=new Set(),out=[];let g=0;while(out.length<ts.length&&g++<=ts.length){for(const t of ts){if(done.has(t.id))continue;if(t.dep.every(d=>!ids.has(d)||done.has(d))){out.push(t);done.add(t.id)}}}ts.forEach(t=>{if(!done.has(t.id))out.push(t)});return out}
+function vProject(){const p=S.projects.find(x=>pslug(x)===R.pid);if(!p)return`<a class="back" href="#projets">← Projets</a><div class="block">${emptyBox('Ce projet n\'existe plus.')}</div>`;
+ const s=pstats(p),ord=topo(s.ts),ppl=[...participants(p)].filter(id=>AG[id]),dOpen=p.decisions.filter(d=>!d.ok).length;
+ return`<a class="back" href="#projets">← Projets</a>
+ <header class="ph"><div><h1>${esc(p.titre)}</h1>${p.synthese?`<p class="lead">${esc(p.synthese)}</p>`:''}<p class="small" style="margin-top:8px">Présenté le ${new Date(p.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long'})} · ${ppl.length} agents${p.comm&&CM[p.comm]?' · réunion : '+esc(CM[p.comm].n):''}${p.source==='exemple'?' · projet d\'exemple':''}</p></div><button class="btn ghost danger" data-act="delproj" data-p="${p.id}">Supprimer le projet</button></header>
+ <section class="block"><div class="bh"><h2>Avancement</h2><span class="small">${s.done} sur ${s.n} tâches terminées</span></div>${pbar(s)}<div class="legend"><span><i style="background:var(--done-d)"></i>Terminées ${s.done}</span><span><i style="background:var(--wait-d)"></i>À valider ${s.val}</span><span><i style="background:var(--work-d)"></i>En cours ${s.work}</span><span><i style="background:var(--sunk);box-shadow:inset 0 0 0 1px var(--line2)"></i>À faire ${s.n-s.done-s.val-s.work}</span></div></section>
+ ${p.decisions.length?`<section class="block"><div class="bh"><h2>Tes décisions</h2><span class="small">${dOpen?`${dOpen} à prendre`:'Toutes prises'}</span></div><ul class="chk">${p.decisions.map((d,i)=>`<li><label><input type="checkbox" data-act="dok" data-p="${p.id}" data-i="${i}"${d.ok?' checked':''}><span class="${d.ok?'struck':''}">${esc(d.t)}</span></label></li>`).join('')}</ul></section>`:''}
+ <section class="block"><div class="bh"><div><h2>Qui fait quoi</h2><p class="small">Dans l'ordre où le travail s'enchaîne.</p></div></div>
+ ${ord.length?`<table class="qt"><thead><tr><th>#</th><th>Tâche</th><th>Qui</th><th>Statut</th><th>Prochaine étape</th></tr></thead><tbody>${ord.map((t,i)=>{const nx=taskNext(t);return`<tr class="r" data-task="${t.id}"><td class="num">${i+1}</td><td class="task"><button class="lnk" data-task="${t.id}">${esc(t.titre)}</button>${t.detail?`<small>${esc(t.detail)}</small>`:''}</td><td class="who-c">${t.owner==='moi'?meWho():whoBtn(AG[t.agent])}</td><td class="st">${taskBadge(t)}</td><td class="next${t.statut==='valider'||nx.startsWith('Il lui manque')?' hot':''}">${esc(nx)}</td></tr>`}).join('')}</tbody></table>`:emptyBox('Aucune tâche dans ce projet.')}
+ <form class="addrow" data-form="ptask" data-p="${p.id}"><input type="text" id="pt-${pslug(p)}" name="x" placeholder="Ajouter une tâche à ce projet" required aria-label="Nouvelle tâche"><select name="a" aria-label="Confier à">${Q.map(q=>`<optgroup label="${esc(q.n)}">${A.filter(a=>a.q===q.id).map(a=>`<option value="${a.id}"${a.id==='chef'?' selected':''}>${esc(a.name)}, ${esc(a.role)}</option>`).join('')}</optgroup>`).join('')}</select><button class="btn">Ajouter</button></form></section>
+ ${p.tour.length?`<details class="block"><summary><h2>Tour de table</h2><span class="small">${p.tour.length} avis</span></summary><div class="tour">${p.tour.filter(x=>AG[x.agent]).map(x=>`<div>${face(lookOf(AG[x.agent]),34)}<div><b>${esc(AG[x.agent].name)}</b> <span class="small">${esc(AG[x.agent].role)}</span><p>${esc(x.avis)}</p></div></div>`).join('')}</div></details>`:''}
+ ${p.risques.length?`<section class="block"><h2>Points de vigilance</h2><ul class="ul">${p.risques.map(r=>`<li>${esc(r)}</li>`).join('')}</ul></section>`:''}`}
+
+/* ---------- équipe ---------- */
+function acard(a){const n=agentNow(a),t=n.t;return`<div class="acard" data-agent="${a.id}"><div class="top">${whoBtn(a,44)}${badge(n.k,n.label,n.live)}</div><p class="on">${t?`Sur <button class="lnk" data-task="${t.id}">${esc(t.titre)}</button>${n.n>1?` <span class="small">+${n.n-1}</span>`:''}`:'Aucune tâche en cours'}</p><div class="row"><button class="btn sm" data-act="chat" data-a="${a.id}">Discuter</button><button class="btn sm ghost" data-act="assign" data-a="${a.id}">Confier une tâche</button></div></div>`}
+function vTeamBody(){const qs=Q.slice().sort((x,y)=>(y.id===S.me)-(x.id===S.me)).filter(q=>teamF==='all'||(teamF==='mine'?q.id===S.me:q.id===teamF));
+ return`<div class="row" style="justify-content:flex-end;margin-bottom:14px">${teamSelect('teamf2')}</div>${qs.map(q=>{const ag=A.filter(a=>a.q===q.id);return`<section class="tsec"><div class="bh"><h2><span class="tdot" style="background:${TEAM[q.id].d}"></span>${esc(q.n)}${q.id===S.me?' <span class="tag">Ton poste</span>':''}</h2><span class="small">${ag.length} poste${ag.length>1?'s':''}</span></div><div class="tgrid">${ag.map(acard).join('')}</div></section>`}).join('')}`}
+
+/* ---------- organigramme ---------- */
+let orgView='chart',orgIPO=false,meetPreset=null;
+try{orgView=localStorage.getItem('nf_orgv')||'chart'}catch(e){}
+const SDOT={work:'#4C8EE6',wait:'#E3A23B',block:'#E06A5F',todo:'#9183C9',idle:'#B5B0A6'};
+const kids=id=>A.filter(a=>a.parent===id);
+const commsOf=id=>COMM.filter(c=>c.m.some(x=>x[0]===id));
+const sdot=n=>`<i class="sd" style="background:${SDOT[n.k]}" aria-hidden="true"></i>`;
+function nowLine(a){const n=agentNow(a);return n.t?`<span class="now">${sdot(n)}<span>${esc(n.label)} · ${esc(n.t.titre)}</span></span>`:`<span class="now">${sdot(n)}<span>Disponible</span></span>`}
+function ocard(a,cls=''){return`<button class="oc ${cls}${a.w?' key':''}" data-agent="${a.id}">${face(lookOf(a),cls==='xl'?62:cls==='sm'?34:40)}<span class="oc-t"><span class="oc-n"><b>${esc(a.name)}</b>${a.x?`<span class="abbr">${esc(a.x)}</span>`:''}</span><small>${esc(a.role)}</small>${agentNow(a).t?nowLine(a):''}</span></button>`}
+function mrow(a){const n=agentNow(a);return`<li><button class="mr${a.w?' key':''}" data-agent="${a.id}">${face(lookOf(a),30)}<span class="mr-t"><b>${esc(a.name)}</b><small>${esc(a.role)}</small>${n.t?`<span class="mr-task">${esc(n.t.titre)}</span>`:''}</span><span title="${esc(n.label)}">${sdot(n)}<span class="sr">${esc(n.label)}</span></span></button></li>`}
+function dcard(d){const team=kids(d.id),T=TEAM[d.q],n=agentNow(d),nt=[d,...team].reduce((s,a)=>s+of(a.id).filter(open).length,0);
+ return`<article class="dc" style="--tc:${T.d};--tb:${T.bg}"><div class="dc-h"><span class="dq"><i></i>${esc(QN[d.q])}</span>${nt?`<span class="small nw">${nt} tâche${nt>1?'s':''}</span>`:''}</div>
+ <button class="dc-lead${d.w?' key':''}" data-agent="${d.id}">${face(lookOf(d),46)}<span class="oc-t"><span class="oc-n"><b>${esc(d.name)}</b>${d.x?`<span class="abbr">${esc(d.x)}</span>`:''}</span><small>${esc(d.role)}</small></span></button>
+ <div class="dc-now">${badge(n.k,n.label,n.live)}${n.t?`<button class="lnk dc-t" data-task="${n.t.id}">${esc(n.t.titre)}</button>`:''}</div>
+ ${team.length?`<ul class="dc-team">${team.map(mrow).join('')}</ul>`:''}</article>`}
+function cchip(c){return`<button class="cc" data-act="comm" data-c="${c.id}"><span><b>${esc(c.s)}</b><small>${c.m.length} membres</small></span><span class="faces">${c.m.slice(0,5).map(([id])=>face(lookOf(AG[id]),22)).join('')}</span></button>`}
+function nb(a,c=''){return`<button class="nb ${c}" data-agent="${a.id}"${c==='dir'?` style="border-top-color:${TEAM[a.q].d}"`:''}><b>${esc(a.role)}</b><span>${esc(a.name)}${a.x?` · ${esc(a.x)}`:''}</span></button>`}
+function nlist(t,items){return`<div class="nbox"><div class="nbox-t">${t}</div>${items}</div>`}
+function vOrg(){const gov=A.filter(a=>a.q==='gouv'),ceo=AG.dg,staff=kids('dg').filter(a=>!COMEX.includes(a.id)),dirs=COMEX.map(id=>AG[id]);
+ const head=`<header class="ph"><div><h1>Organigramme</h1><p class="lead">${A.length} postes. Clique sur un poste pour voir son travail, sur un comité pour le réunir.</p></div><div class="seg" role="tablist" aria-label="Affichage"><button role="tab" data-act="orgv" data-v="chart" aria-selected="${orgView!=='list'}">Organigramme</button><button role="tab" data-act="orgv" data-v="list" aria-selected="${orgView==='list'}">Annuaire</button></div></header>`;
+ if(orgView==='list')return head+vTeamBody();
+ const cl=c=>`<button class="nl" data-act="comm" data-c="${c.id}">${esc(c.s)}</button>`;
+ return head+`<div class="tree"><div class="tree-in">
+  <div class="trow3"><div></div><div class="nb top"><b>Conseil d'administration</b>${gov.map(a=>`<button class="nl" data-agent="${a.id}">${esc(a.name)} · ${esc(a.role)}</button>`).join('')}</div>
+   <div class="tsd r">${nlist('Comités du conseil',COMM.filter(c=>c.lvl==='gouv').map(cl).join(''))}</div></div>
+  <div class="vl"></div>
+  <div class="trow3"><div class="tsd l">${nlist('Comités de direction',COMM.filter(c=>c.lvl==='dg').map(cl).join(''))}</div><div class="cwrap">${nb(ceo,'ceo')}</div>
+   <div class="tsd r">${nlist('Rattachés à la direction générale',staff.map(a=>`<button class="nl" data-agent="${a.id}">${esc(a.role)}<small>${esc(a.name)}</small></button>`).join(''))}</div></div>
+  <div class="vl"></div>
+  <div class="lvl">${dirs.map(d=>`<div class="col">${nb(d,'dir')}${kids(d.id).length?`<ul class="team">${kids(d.id).map(a=>`<li>${nb(a,'sub')}</li>`).join('')}</ul>`:''}</div>`).join('')}</div>
+ </div></div>`}
+function renderComm(){const c=CM[view.id];if(!c)return closeDrawer();const chair=AG[c.m[0][0]];
+ keep($('#drawer'),`<div class="dh"><span class="small">${c.lvl==='gouv'?'Comité du conseil d\'administration':'Comité de direction'}</span><button class="x" data-act="close" aria-label="Fermer">×</button></div><div class="db">
+ <div class="ttl"><h2>${esc(c.n)}</h2><p class="mute">${esc(c.purpose)}</p></div>
+ <div class="nextbox todo"><div class="k">Rôle dans la préparation de l'introduction en bourse</div><p>${esc(c.ipo)}</p></div>
+ <section class="sec"><h3>Membres<span class="n">${c.m.length}</span></h3><div class="tlist">${c.m.map(([id,r])=>{const a=AG[id],n=agentNow(a);return`<button class="trow" data-agent="${id}"><span class="who">${face(lookOf(a),32)}<span><b>${esc(a.name)}${r?` <span class="chip">${esc(r)}</span>`:''}</b><small>${esc(a.role)}</small></span></span>${badge(n.k,n.label,n.live)}</button>`}).join('')}</div></section>
+ <section class="sec"><h3>Réunir ce comité</h3><p class="small">Présente un sujet : ${esc(chair.name)} et les membres donnent leur avis, puis Victor répartit le travail entre eux.</p><div class="row"><button class="btn primary" data-act="convene" data-c="${c.id}">Réunir ce comité</button></div></section></div>`)}
+function openComm(id){view={k:'comm',id};show()}
+
+/* ---------- panneau : agent ---------- */
+function nowSentence(a,n){const t=n.t,nm=esc(a.name);if(!t)return`${nm} est disponible. Confie-lui une tâche ou discute avec ${nm}.`;const ti=`« ${esc(t.titre)} »`;
+ if(busy.has(t.id))return`${nm} rédige ${ti}.`;if(planning.has(t.id))return`${nm} prépare son plan pour ${ti}.`;
+ if(n.k==='wait'&&t.statut==='valider')return`${nm} a terminé ${ti} et attend que tu relises.`;if(n.k==='wait')return`${nm} propose un plan pour ${ti} et attend ton feu vert.`;
+ if(n.k==='block'){const b=blockerOf(t);return`${ti} attend que ${esc(AG[b.agent].name)} termine « ${esc(b.titre)} ».`}
+ const nx=taskNext(t);return`${n.k==='work'?'Avance sur':'Prochaine tâche :'} ${ti}. ${esc(nx==='Prête à démarrer'?'Elle peut démarrer.':nx==='Avance sans attente'?'':nx+'.')}`}
+function relBox(a){const boss=a.parent?AG[a.parent]:null,team=kids(a.id),cs=commsOf(a.id);if(!boss&&!team.length&&!cs.length)return'';
+ return`<div class="rel">${boss?`<div><span class="small">Rend compte à</span><button class="who" data-agent="${boss.id}">${face(lookOf(boss),28)}<span><b>${esc(boss.name)}</b><small>${esc(boss.role)}</small></span></button></div>`:''}${team.length?`<div><span class="small">Son équipe · ${team.length}</span><div class="faces">${team.map(m=>`<button data-agent="${m.id}" title="${esc(m.name+', '+m.role)}" aria-label="${esc(m.name+', '+m.role)}">${face(lookOf(m),30)}</button>`).join('')}</div></div>`:''}${cs.length?`<div><span class="small">Comités</span><div class="chips">${cs.map(c=>`<button class="chip" data-act="comm" data-c="${c.id}">${esc(c.s)}${c.m[0][0]===a.id?' · préside':''}</button>`).join('')}</div></div>`:''}</div>`}
+function trow(t){return`<button class="trow" data-task="${t.id}"><span><b>${esc(t.titre)}</b><small>${esc(projName(t))}</small></span>${taskBadge(t)}</button>`}
+function chatBody(a){return`<div class="db" id="chatbox"><div class="chat">${(chats[a.id]||[]).map(m=>`<div class="msg ${m.r}">${esc(m.c)}</div>`).join('')||`<p class="empty">Travaille avec ${esc(a.name)} comme avec un collègue : demande des idées, un brouillon ou un point d'avancement. ${esc(a.name)} peut créer ses tâches et enregistrer ses livrables pendant la discussion.</p>`}${chatBusy?`<div class="msg a pulse" id="typing">…</div>`:''}</div></div>
+ <form class="composer" data-form="chat">${sample?'':'<p class="small">La discussion a besoin de Claude : ouvre cette page depuis claude.ai.</p>'}<div class="chips">${["On fait le point ?","Propose-moi 3 idées pour le projet en cours","Qu'est-ce qui te bloque ?"].map(x=>`<button type="button" class="chip" data-act="qp">${esc(x)}</button>`).join('')}</div><div class="addf"><textarea id="cm" name="m" rows="2" placeholder="Écris à ${esc(a.name)}…" aria-label="Message"${sample?'':' disabled'}></textarea><button class="btn primary"${sample&&!chatBusy?'':' disabled'}>Envoyer</button></div></form>`}
+function renderAgent(){const a=AG[view.id];if(!a)return closeDrawer();const n=agentNow(a),ts=of(a.id).slice().sort((x,y)=>(open(y)-open(x))||PR[x.prio]-PR[y.prio]);
+ const needsL=[],acts=[];ts.filter(t=>open(t)&&t.owner!=='moi').forEach(t=>{t.besoins.forEach((b,i)=>{if(!b.ok)needsL.push([t,i])});t.gerard.forEach((g,i)=>{if(!g.ok)acts.push({t,i,x:g})})});
+ const body=agentTab==='travail'?`<div class="db">
+ <p class="mission">${esc(a.mission)}</p>
+ ${relBox(a)}${a.w?`<p class="ipo-note"><b>Pour l'introduction en bourse :</b> ${esc(a.w)}</p>`:''}
+ <div class="nowbox"><span class="k">En ce moment</span><p>${nowSentence(a,n)}</p>${n.t?`<div class="row">${quick(n)}</div>`:''}</div>
+ <section class="sec"><h3>Ses tâches<span class="n">${ts.filter(open).length} ouverte${ts.filter(open).length>1?'s':''}</span>${sample&&ts.some(readyToStart)?`<button class="btn sm right" data-act="runall">Lancer les tâches prêtes</button>`:''}</h3>${ts.length?`<div class="tlist">${ts.map(trow).join('')}</div>`:emptyBox('Aucune tâche pour l\'instant.')}</section>
+ <section class="sec"><h3>Ce que ${esc(a.name)} attend de toi</h3>${needsL.length?`<ul class="needs">${needsL.map(([t,i])=>needItem(t,i,1)).join('')}</ul>`:''}${acts.length?`<ul class="chk">${acts.map(p=>`<li><label><input type="checkbox" data-act="gok" data-t="${p.t.id}" data-i="${p.i}"><span><span>${esc(p.x.t)}</span><small>Ton action · ${esc(p.t.titre)}</small></span></label></li>`).join('')}</ul>`:''}${!needsL.length&&!acts.length?emptyBox('Rien pour le moment.'):''}</section>
+ <section class="sec"><h3>Lui confier une tâche</h3><form class="addf" data-form="add"><input type="text" id="nt" name="x" placeholder="Ex. : préparer 3 accroches pour Milipol" required aria-label="Nouvelle tâche"><button class="btn primary">Confier</button></form></section>
+ ${METH[a.id]?`<details class="sec"><summary><h3>Sa méthode</h3></summary><p class="small" style="line-height:1.55">${esc(METH[a.id].m)}</p><p class="small mute">Source : ${esc(METH[a.id].s)} (GitHub)</p></details>`:''}
+ <details class="sec"><summary><h3>Compétences et outils</h3></summary><div class="chips">${a.skills.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}${a.todo.map(x=>`<span class="chip new" title="Compétence encore à créer">${esc(x)} · à créer</span>`).join('')}${a.apps.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div></details>
+ <p class="small">${esc(a.name)} prépare tout en brouillon. Envoyer, signer, publier ou payer reste toujours ta décision.</p></div>`:chatBody(a);
+ keep($('#drawer'),`<div class="dh"><span class="small"><span class="tdot" style="background:${TEAM[a.q].d}"></span>${esc(QN[a.q])}</span><button class="x" data-act="close" aria-label="Fermer">×</button></div>
+ <div class="ahead">${face(lookOf(a),60)}<div><h2>${esc(a.name)}${a.x?` <span class="abbr">${esc(a.x)}</span>`:''}</h2><p class="small">${esc(a.role)}</p><div style="margin-top:6px">${badge(n.k,n.label,n.live)}</div></div></div>
+ <div class="tabs" role="tablist"><button role="tab" data-act="tab" data-x="travail" aria-selected="${agentTab==='travail'}">Travail</button><button role="tab" data-act="tab" data-x="chat" aria-selected="${agentTab==='chat'}">Discuter avec ${esc(a.name)}</button></div>${body}`)}
+
+/* ---------- panneau : tâche ---------- */
+function md(s){const L=esc(s).split('\n');let o='',lt='';const inl=x=>x.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\[À COMPLÉTER[^\]]*\]/g,'<mark>$&</mark>');
+ const close=()=>{if(lt){o+=`</${lt}>`;lt=''}};
+ for(const raw of L){const l=raw.trim(),hd=l.match(/^#{1,4}\s+(.*)$/),li=l.match(/^[-*•]\s+(.*)$/),ol=l.match(/^\d+[.)]\s+(.*)$/);
+  if(li||ol){const want=li?'ul':'ol';if(lt!==want){close();o+=`<${want}>`;lt=want}o+=`<li>${inl((li||ol)[1])}</li>`;continue}
+  close();if(!l)continue;if(hd){o+=`<p class="mh">${inl(hd[1])}</p>`;continue}o+=`<p>${inl(l)}</p>`}
+ close();return o}
+const nbox=(k,title,body,btns,live)=>`<div class="nextbox ${k}"><div class="k">${live?'<span class="spin"></span>':''}${title}</div>${body}${btns?`<div class="row">${btns}</div>`:''}</div>`;
+function livBlock(t){const nv=t.versions.length;if(!nv)return'';const vi=Math.min(ui['ver-'+t.id]??nv-1,nv-1),v=t.versions[vi];
+ if(ui['editliv-'+t.id])return`<form data-form="liv" data-t="${t.id}" class="stack"><textarea id="lv-${t.id}" name="x" rows="12" aria-label="Livrable">${esc(v.txt)}</textarea><div class="row"><button class="btn sm primary">Enregistrer comme nouvelle version</button><button type="button" class="btn sm ghost" data-act="editliv" data-t="${t.id}">Annuler</button></div></form>`;
+ return`${nv>1?`<div class="vers">${t.versions.map((x,i)=>`<button data-act="ver" data-t="${t.id}" data-i="${i}" aria-pressed="${i===vi}">v${i+1}</button>`).join('')}</div>`:''}<div class="liv md">${md(v.txt)}</div><p class="small">Version ${vi+1}${nv>1?' sur '+nv:''} · ${v.by==='moi'?'modifiée par toi':'par '+esc(AG[v.by]?AG[v.by].name:'')} · ${fmt(v.at)}</p>`}
+function planSteps(t){const p=t.plan,ed=ui['editplan-'+t.id];
+ if(ed)return`<form data-form="plan" data-t="${t.id}" class="stack"><textarea id="pl-${t.id}" name="s" rows="5" aria-label="Étapes du plan">${esc(p.etapes.join('\n'))}</textarea><span class="small">Une étape par ligne.</span><div class="row"><button class="btn sm primary">Enregistrer</button><button type="button" class="btn sm ghost" data-act="editplan" data-t="${t.id}">Annuler</button></div></form>`;
+ return`<ol class="steps">${p.etapes.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>${p.question&&!p.reponse?`<div class="stack" style="gap:6px"><b style="font-size:14px">${esc(p.question.texte)}</b><div class="chips">${p.question.options.map((o,i)=>`<button class="chip" data-act="answer" data-t="${t.id}" data-i="${i}">${esc(o)}</button>`).join('')}</div></div>`:''}${p.reponse?`<p class="small">Ta réponse : ${esc(p.reponse)}</p>`:''}`}
+function nextBox(t){const a=AG[t.agent],nm=esc(a.name),b=blockerOf(t);
+ if(!open(t))return nbox('done','Terminée',`<p>Cette tâche est terminée${t.versions.length?', livrable validé':''}.</p>`,`<button class="btn sm" data-act="reopen" data-t="${t.id}">Rouvrir</button>`);
+ if(t.owner==='moi')return nbox('wait','Tu t\'en occupes',`<p>Tu as repris cette tâche : ${nm} ne travaille pas dessus.</p>`,`<button class="btn sm primary" data-act="mine-done" data-t="${t.id}">Marquer comme terminée</button><button class="btn sm" data-act="giveback" data-t="${t.id}">La rendre à ${nm}</button>`);
+ if(busy.has(t.id))return nbox('work',`${nm} rédige`,`<div class="liv" id="liv-live-${t.id}">Rédaction en cours…</div>`,'',1);
+ if(planning.has(t.id))return nbox('work',`${nm} prépare son plan`,`<p class="small">Quelques secondes…</p>`,'',1);
+ if(t.statut==='valider'){const rf=ui['refuse-'+t.id];return nbox('wait','À toi : relire et valider',`<p>${nm} a livré la version ${t.versions.length}. Valide-la, ou demande une correction en disant quoi changer.</p>${livBlock(t)}${rf?`<form data-form="refuse" data-t="${t.id}" class="stack"><textarea id="rf-${t.id}" name="r" rows="3" placeholder="Ce que ${nm} doit corriger" required aria-label="Correction demandée"></textarea><div class="row"><button class="btn sm primary">Renvoyer à ${nm}</button><button type="button" class="btn sm ghost" data-act="refuse" data-t="${t.id}">Annuler</button></div></form>`:''}`,rf||ui['editliv-'+t.id]?'':`<button class="btn sm primary" data-act="ok" data-t="${t.id}">Valider</button><button class="btn sm" data-act="refuse" data-t="${t.id}">Demander une correction</button><button class="btn sm ghost" data-act="editliv" data-t="${t.id}">Modifier moi-même</button>`)}
+ if(t.plan&&t.plan.statut==='propose')return nbox('wait','À toi : valider le plan',`<p>${nm} propose de procéder ainsi.</p>${planSteps(t)}`,ui['editplan-'+t.id]?'':`<button class="btn sm primary" data-act="launch" data-t="${t.id}">Lancer ce plan</button><button class="btn sm" data-act="editplan" data-t="${t.id}">Modifier les étapes</button><button class="btn sm ghost" data-act="mine" data-t="${t.id}">Je m'en occupe</button>`);
+ if(b)return nbox('block','Bloquée',`<p>Cette tâche attend que ${esc(AG[b.agent].name)} termine « ${esc(b.titre)} ».</p>`,`<button class="btn sm" data-task="${b.id}">Voir cette tâche</button>`);
+ if(!sample)return nbox('todo','Prochaine étape',`<p>Pour que ${nm} travaille, ouvre cette page depuis claude.ai. Tu peux aussi copier son brief et le coller dans une conversation Claude.</p>`,`<button class="btn sm" data-act="copy" data-t="${t.id}">Copier le brief</button>`);
+ if(t.plan&&t.plan.statut==='valide')return nbox('todo','Plan validé',`<p>Le plan est validé mais la rédaction n'a pas abouti. Relance ${nm}.</p>`,`<button class="btn sm primary" data-act="work" data-t="${t.id}">Relancer ${nm}</button>`);
+ const miss=t.besoins.filter(x=>!x.ok);
+ if(t.statut==='en_cours'&&!t.livrable)return nbox('work','En cours',`<p>${nm} a commencé cette tâche. Fais-la avancer : ${nm} te proposera un plan, puis un livrable à relire.${miss.length?` Il manque encore ${miss.length>1?miss.length+' informations':'une information'} (voir plus bas).`:''}</p>`,`<button class="btn sm primary" data-act="go" data-t="${t.id}">Faire avancer ${nm}</button><button class="btn sm ghost" data-act="mine" data-t="${t.id}">Je m'en occupe</button>`);
+ return nbox('todo',miss.length?'Prête, mais il manque des informations':'Prête à démarrer',miss.length?`<p>${nm} peut commencer, mais il manque ${miss.length>1?miss.length+' éléments':'un élément'} (voir plus bas). Sinon, ${nm} signalera ce qui manque dans le livrable.</p>`:`<p>${nm} te proposera d'abord un plan, que tu valideras avant la rédaction.</p>`,`<button class="btn sm primary" data-act="go" data-t="${t.id}">${t.livrable?`Faire retravailler ${nm}`:`Lancer ${nm}`}</button>${t.livrable?'':`<button class="btn sm ghost" data-act="mine" data-t="${t.id}">Je m'en occupe</button>`}`)}
+function needItem(t,i,showTask){const b=t.besoins[i],key='nf-'+t.id+'-'+i,later=!b.ok&&blocked(t);
+ return`<li class="${b.ok?'ok':later?'later':''}"><span class="nst">${b.ok?'✓':''}</span><div class="nb"><span class="${b.ok?'':''}">${esc(b.t)}</span>${showTask?`<small>${later?'Plus tard · ':''}${esc(t.titre)}</small>`:later?'<small>Utile quand la tâche démarrera</small>':''}${b.ok?(b.val?`<div class="nval">${esc(b.val)}</div>`:'<small>Donnée par ailleurs</small>'):''}${!b.ok&&ui[key]?needForm(t,i):''}</div><div>${!open(t)?'':b.ok?`<button class="btn sm ghost" data-act="need-undo" data-t="${t.id}" data-i="${i}">Retirer</button>`:ui[key]?'':`<button class="btn sm" data-act="need-open" data-t="${t.id}" data-i="${i}">Fournir</button>`}</div></li>`}
+const checklist=(k,t,arr)=>arr.length?`<ul class="chk">${arr.map((x,i)=>`<li><label><input type="checkbox" data-act="${k}" data-t="${t.id}" data-i="${i}"${x.ok?' checked':''}><span class="${x.ok?'struck':''}">${esc(x.t)}</span></label></li>`).join('')}</ul>`:'';
+function renderTask(){const t=TK(view.id);if(!t)return closeDrawer();const a=AG[t.agent],p=P(t.pid),deps=t.dep.map(TK).filter(Boolean),blk=S.tasks.filter(x=>x.dep.includes(t.id)),miss=t.besoins.filter(x=>!x.ok).length;
+ const back=view.from&&AG[view.from]?`<button class="back" style="margin:0" data-agent="${view.from}">← ${esc(AG[view.from].name)}</button>`:`<span class="small">Tâche</span>`;
+ const link=d=>`<button class="trow" data-task="${d.id}"><span><b>${esc(d.titre)}</b><small>${esc(AG[d.agent].name)}</small></span>${taskBadge(d)}</button>`;
+ keep($('#drawer'),`<div class="dh">${back}<button class="x" data-act="close" aria-label="Fermer">×</button></div><div class="db">
+ <div class="ttl">${p?`<a class="small" href="#projet-${pslug(p)}" data-act="close-nav">${esc(p.titre)}</a>`:'<span class="small">Hors projet</span>'}<h2>${esc(t.titre)}</h2>${t.detail?`<p class="mute">${esc(t.detail)}</p>`:''}<div class="row">${taskBadge(t)}${t.prio==='haute'?'<span class="chip">Priorité haute</span>':''}</div></div>
+ <div class="ppl"><div><span class="small">Fait par</span>${t.owner==='moi'?meWho(32):whoBtn(a,32)}</div><div><span class="small">Responsable</span>${meWho(32)}</div></div>
+ ${nextBox(t)}
+ ${t.feedback&&open(t)&&t.statut!=='valider'?`<p class="note">Ta demande de correction : ${esc(t.feedback)}</p>`:''}
+ ${t.plan&&t.plan.statut!=='propose'?`<details class="sec"><summary><h3>Plan suivi</h3></summary><ol class="steps">${t.plan.etapes.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>${t.plan.reponse?`<p class="small">Ta réponse : ${esc(t.plan.reponse)}</p>`:''}</details>`:''}
+ ${t.statut!=='valider'&&t.versions.length&&!busy.has(t.id)?`<section class="sec"><h3>Livrable</h3>${livBlock(t)}${open(t)&&!ui['editliv-'+t.id]?`<div class="row"><button class="btn sm ghost" data-act="editliv" data-t="${t.id}">Modifier moi-même</button></div>`:''}</section>`:''}
+ ${open(t)||t.besoins.length?`<section class="sec"><h3>Ce qu'il lui faut${t.besoins.length&&open(t)?`<span class="n">${miss?miss+' manquant'+(miss>1?'s':''):'tout est fourni'}</span>`:''}</h3>${t.besoins.length?`<ul class="needs">${t.besoins.map((b,i)=>needItem(t,i)).join('')}</ul>`:''}${open(t)?`<form class="addf" data-form="addb" data-t="${t.id}"><input type="text" id="ab-${t.id}" name="x" placeholder="Ajouter une information nécessaire" required aria-label="Ajouter un besoin"><button class="btn sm">Ajouter</button></form>`:''}</section>`:''}
+ ${open(t)||t.gerard.length?`<section class="sec"><h3>Tes actions</h3>${checklist('gok',t,t.gerard)}${open(t)?`<form class="addf" data-form="addg" data-t="${t.id}"><input type="text" id="ag-${t.id}" name="x" placeholder="Ajouter une action pour toi" required aria-label="Ajouter une action"><button class="btn sm">Ajouter</button></form>`:''}</section>`:''}
+ ${deps.length?`<section class="sec"><h3>Attend</h3><div class="tlist">${deps.map(link).join('')}</div></section>`:''}${blk.length?`<section class="sec"><h3>Débloquera</h3><div class="tlist">${blk.map(link).join('')}</div></section>`:''}
+ <details class="sec"><summary><h3>Réglages</h3></summary><dl class="meta2"><dt><label for="dl-${t.id}">Confiée à</label></dt><dd><select id="dl-${t.id}" data-act="deleg" data-t="${t.id}"><option value="moi"${t.owner==='moi'?' selected':''}>Personne, je m'en occupe</option>${Q.map(q=>`<optgroup label="${esc(q.n)}">${A.filter(x=>x.q===q.id).map(x=>`<option value="${x.id}"${t.owner!=='moi'&&x.id===t.agent?' selected':''}>${esc(x.name)}, ${esc(x.role)}</option>`).join('')}</optgroup>`).join('')}</select></dd>
+ <dt><label for="st-${t.id}">Statut</label></dt><dd><select id="st-${t.id}" data-act="st" data-t="${t.id}">${Object.keys(ST).map(s=>`<option value="${s}"${t.statut===s?' selected':''}>${ST[s]}</option>`).join('')}</select></dd>
+ <dt><label for="pr-${t.id}">Priorité</label></dt><dd><select id="pr-${t.id}" data-act="prio" data-t="${t.id}">${['haute','moyenne','basse'].map(s=>`<option${t.prio===s?' selected':''}>${s}</option>`).join('')}</select></dd></dl>
+ <div class="row"><button class="btn sm" data-act="copy" data-t="${t.id}">Copier le brief pour Claude</button><button class="btn sm ghost danger" data-act="del" data-t="${t.id}">Supprimer la tâche</button></div></details>
+ <section class="sec"><h3>Activité</h3><form class="addf" data-form="com" data-t="${t.id}"><input type="text" id="co-${t.id}" name="c" placeholder="Commenter : ${esc(a.name)} en tiendra compte" required aria-label="Commentaire"><button class="btn sm">Envoyer</button></form><ul class="log">${t.log.slice().reverse().map(l=>`<li>${l.who==='moi'?face(ME,28):AG[l.who]?face(lookOf(AG[l.who]),28):'<span></span>'}<div>${l.kind==='com'?`<b style="font-weight:600">${esc(l.txt)}</b>`:esc(l.txt)}<time>${l.who==='moi'?'Toi':esc(AG[l.who]?AG[l.who].name:'')} · ${fmt(l.at)}</time></div></li>`).join('')||'<li class="empty">Aucune activité pour l\'instant.</li>'}</ul></section></div>`)}
+function show(){$('#scrim').hidden=false;$('#drawer').hidden=false;renderDrawer();const db=$('#drawer .db');if(db&&!(view.k==='agent'&&agentTab==='chat'))db.scrollTop=0}
+function openAgent(id,tab){view={k:'agent',id};agentTab=tab||'travail';show();loadChat(id)}
+function openTask(id){const from=view?(view.k==='agent'?view.id:view.from||null):null;view={k:'task',id,from};show()}
+function closeDrawer(){view=null;$('#scrim').hidden=true;$('#drawer').hidden=true}
+function renderDrawer(){if(!view)return;const db=$('#drawer .db'),scr=db?db.scrollTop:0;if(view.k==='task')renderTask();else if(view.k==='comm')renderComm();else renderAgent();if(!view)return;const nb=$('#drawer .db');if(nb)nb.scrollTop=view.k==='agent'&&agentTab==='chat'?nb.scrollHeight:scr}
+
+/* ---------- navigation ---------- */
+function renderNav(){const n=urgent().length;const ci=$('#c-inbox');ci.textContent=n||'';ci.classList.toggle('hot',n>0);$('#c-proj').textContent=S.projects.length||'';
+ $('#me').innerHTML=Q.map(q=>`<option value="${q.id}"${S.me===q.id?' selected':''}>${esc(q.n)}</option>`).join('');$('#meline').innerHTML=meWho(34)}
+function renderView(){const r=R.r;$('#v-nouveau').hidden=r!=='nouveau';$('#view').hidden=r==='nouveau';if(r==='nouveau'){renderMeetMode();applyPreset();return}
+ const html=r==='pour-toi'?vInbox():r==='projets'?vProjects():r==='projet'?vProject():r==='organigramme'?vOrg():r==='cerveau'?vCerveau():r==='toile'?vToile():vHome();
+ keep($('#view'),html)}
+function renderAll(){renderNav();renderView();if(view)renderDrawer()}
+function route(){let h=decodeURIComponent((location.hash||'').slice(1));if(!h||h==='siege'||h==='taches')h='accueil';if(h==='reunion')h='nouveau';if(h==='equipe'){h='organigramme';orgView='list'}if(h==='plan')h='organigramme';
+ const prev=R.r+R.pid;R={r:h.startsWith('projet-')?'projet':['accueil','pour-toi','projets','organigramme','nouveau','cerveau','toile'].includes(h)?h:'accueil',pid:h.startsWith('projet-')?h.slice(7):null};
+ document.querySelectorAll('.nav a').forEach(a=>a.dataset.r===(R.r==='projet'?'projets':R.r)?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'));
+ renderView();if(prev!==R.r+R.pid)window.scrollTo(0,0)}
+
+/* ---------- mémoire ---------- */
+let db=null,ref=null,last='',sample=null,saveK;
+const C=window.claude;
+function save(){const j=JSON.stringify(S);try{localStorage.setItem('nf_siege',j)}catch(e){}
+ clearTimeout(saveK);saveK=setTimeout(()=>{if(ref&&j!==last){last=j;ref.set({v:1,state:j,at:now()}).catch(()=>toast("Sauvegarde impossible pour l'instant"))}},450)}
+const touch=()=>{save();renderAll()};
+function unwrap(s){if(!s)return null;if(typeof s.data==='function')return s.data();if(s.data&&typeof s.data==='object'&&!Array.isArray(s.data))return s.data;return s}
+function loadLocal(){try{const j=localStorage.getItem('nf_siege');S=j?JSON.parse(j):structuredClone(SEED)}catch(e){S=structuredClone(SEED)}normAll();renderAll()}
+(async()=>{try{db=C&&C.use?await C.use('db'):null}catch(e){db=null}
+ if(!db){loadLocal();return}
+ ref=db.doc('hq/state');const k=setTimeout(loadLocal,10000);let first=true;
+ try{ref.onSnapshot(s=>{clearTimeout(k);const d=unwrap(s);let ch=first;first=false;if(d&&d.state&&d.state!==last){last=d.state;try{S=JSON.parse(d.state);ch=true}catch(e){}}if(ch){normAll();renderAll()}},()=>{clearTimeout(k);loadLocal()})}catch(e){clearTimeout(k);loadLocal()}})();
+(async()=>{try{sample=C&&C.use?await C.use('sample'):null}catch(e){sample=null}renderAll()})();
+let mcp=null;(async()=>{try{mcp=C&&C.use?await C.use('mcp'):null}catch(e){mcp=null}renderAll()})();
+const DRV='Google Drive',CRM='netforce crm',ROOT='',KYC='';
+const clip=(x,n)=>{const s=typeof x==='string'?x:JSON.stringify(x);return s.length>n?s.slice(0,n)+' […tronqué]':s};
+function dataTools(seen,aid){const W=webTools(seen,aid);if(!mcp)return W;const q=s=>String(s||'').replace(/\\/g,'').replace(/'/g,"\\'");
+ const call=async(srv,tool,input,label,n=9000)=>{seen&&seen(label);try{const r=await mcp.callTool(srv,tool,input);return clip(r.payload??r.content,n)}catch(e){return 'Indisponible ('+(e&&e.code||'erreur')+(e&&e.code==='server_not_connected'?' : connecteur non ajouté':'')+(e&&e.code==='needs_reauth'?' : reconnecter le connecteur dans les réglages de claude.ai':'')+')'}};
+ const T=(name,description,props,req,fn)=>({name,description,inputSchema:{type:'object',properties:props,required:req},execute:fn});
+ return[...W,
+ T('drive_chercher',"Cherche des documents dans le Google Drive Netforce (fiches techniques, kit marketing, plaquettes, data room, BP, contrats…). Donne 1 à 3 mots-clés.",{mots_cles:{type:'string'}},['mots_cles'],i=>call(DRV,'search_files',{query:`'${ROOT}' in ancestors and not '${KYC}' in ancestors and fullText contains '${q(i.mots_cles)}'`,pageSize:8,snippetVerbosity:'BRIEF'},'Drive : « '+i.mots_cles+' »',7000)),
+ T('drive_lire',"Lit le contenu d'un document du Drive à partir de son id (obtenu avec drive_chercher ou l'index).",{file_id:{type:'string'}},['file_id'],i=>call(DRV,'read_file_content',{fileId:String(i.file_id)},'Drive : lecture d\'un document',14000)),
+ T('drive_index',"Lit l'index de la base documentaire Netforce (liste de tous les documents avec leurs ids). À utiliser en premier pour savoir ce qui existe.",{},[],()=>call(DRV,'read_file_content',{fileId:''},'Drive : index documentaire',14000)),
+ T('crm_pipeline',"Vue d'ensemble du pipeline commercial Netforce (contacts par étape et catégorie, relances).",{},[],()=>call(CRM,'pipeline_summary',{},'CRM : pipeline')),
+ T('crm_contacts',"Cherche des contacts dans le CRM (nom, société, ville, tag).",{recherche:{type:'string'},etape:{type:'string'}},[],i=>call(CRM,'search_contacts',{query:i.recherche||undefined,stage:i.etape||undefined,limit:25},'CRM : contacts'+(i.recherche?' « '+i.recherche+' »':''))),
+ T('crm_organisations',"Liste les organisations clientes ou prospects du CRM (communes, distributeurs…).",{recherche:{type:'string'}},[],i=>call(CRM,'list_organizations',{query:i.recherche||undefined},'CRM : organisations')),
+ T('crm_reunions',"Comptes rendus de réunions (résumé, décisions, tâches).",{recherche:{type:'string'}},[],i=>call(CRM,'list_meetings',{query:i.recherche||undefined,limit:8},'CRM : comptes rendus')),
+ T('crm_relances',"Contacts à relancer (en retard, aujourd'hui, à venir).",{},[],()=>call(CRM,'list_follow_ups',{status:'all'},'CRM : relances')),
+ T('crm_stock',"Stock de gants Netforce par modèle, couleur, taille.",{},[],()=>call(CRM,'get_stock',{},'CRM : stock')),
+ T('crm_dataroom',"Liste les data rooms et leurs fichiers.",{dossier:{type:'string'}},[],i=>call(CRM,'list_dataroom_folders',{folder:i.dossier||undefined},'CRM : data room')),
+ ...(['design','cm','cmo','video'].includes(aid)?[T('canva_creer_visuel',"Crée un visuel dans le Canva de Gérard (post LinkedIn, Instagram, flyer, affiche…). Donne un brief complet : sujet, texte exact à afficher, format, et la DA Netforce (fond navy profond, halo bleu électrique, G.I.E noir en héros, logo NETFORCE en capitales espacées, pas d'emoji). Renvoie le lien du design, en brouillon.",{brief:{type:'string'},format:{type:'string',description:'ex. « LinkedIn Post (Square) », « Instagram Post (Portrait) »'}},['brief'],async i=>{seen&&seen('Canva : création d\'un visuel');try{const r=await mcp.callTool('Canva','create-design',{brief:String(i.brief),format:i.format||undefined,user_intent:'Créer un visuel Netforce en brouillon pour validation par Gérard'});let p=r.payload||{};let job=p.job_id,tok=p.continuation_token;for(let k=0;k<20&&job;k++){const w=Math.min(15,Math.max(3,(p.polling_policy&&p.polling_policy.wait_seconds)||5));await new Promise(s=>setTimeout(s,w*1000));const q=await mcp.callTool('Canva','get-create-design-async-job',{job_id:job,continuation_token:tok,user_intent:'Suivre la création du visuel'});p=q.payload||{};tok=p.continuation_token||tok;const st=String(p.status||p.job&&p.job.status||'').toLowerCase();if(p.design||st==='success'||st==='completed'||st==='failed')break}return clip(p,4000)}catch(e){return 'Canva indisponible ('+(e&&e.code||'erreur')+(e&&e.code==='server_not_connected'?' : connecteur Canva non ajouté':'')+')'}})]:[])]}
+
+/* ---------- réunion ---------- */
+$('#mwho').innerHTML=`<option value="auto">Victor choisit les participants</option>${COMM.map(c=>`<option value="${c.id}">${esc(c.n)}</option>`).join('')}<option value="all">Toute l'entreprise</option>`;
+function renderMHint(){const c=CM[$('#mwho').value],el=$('#mhint');$('#go').textContent=c?(c.id==='comex'?'Réunir le COMEX':'Réunir le comité'):"Réunir l'équipe";if(!c){el.innerHTML='';return}el.innerHTML=`<span class="faces">${c.m.map(([id])=>face(lookOf(AG[id]),24)).join('')}</span><span class="small">Présents : ${c.m.map(([id])=>esc(AG[id].name)).join(', ')}</span>`}
+function applyPreset(){if(meetPreset&&CM[meetPreset]){$('#mwho').value=meetPreset;meetPreset=null;renderMHint();setTimeout(()=>{const b=$('#brief');b&&b.focus()},60)}}
+$('#presets').innerHTML=PRESETS.map(p=>`<button type="button" class="chip" data-act="preset">${esc(p)}</button>`).join('');
+function renderMeetMode(){$('#mmode').textContent=running?'':(sample?"Victor est connecté à l'IA du CRM : la réunion prend environ trente secondes."+(mcp?" Les agents peuvent lire ton Drive et ton CRM Netforce.":" Drive et CRM non reliés : les agents s'appuient sur le cerveau Netforce."):"IA du CRM indisponible : répartition par mots-clés. Tu peux aussi demander la réunion à Claude, qui pilote le siège via le connecteur du CRM.")}
+function roster(ids){return(ids?A.filter(a=>ids.includes(a.id)):A).map(a=>`${a.id} | ${a.name}, ${a.role} (${QN[a.q]}) | skills: ${[...a.skills,...a.todo].join(', ')||'aucun'} | ${a.mission}`).join('\n')}
+const CTX=`NETFORCE (SAS NETFORCE–NEXSTUN) conçoit et fabrique en France le G.I.E, Gant à Impulsion Électrique, et prépare son introduction en bourse. Gérard est l'humain qui pilote ce siège virtuel (plutôt côté marketing) : il valide les plans, les livrables et les décisions. Les faits Netforce sont dans les fiches du CERVEAU NETFORCE ci-dessous : utilise-les sans les redemander. Le reste est dans le Google Drive Netforce (index « 00 · INDEX NETFORCE ») et le CRM.`;
+const KB=[
+{id:'identite',t:"Identité et gouvernance",ico:'🏢',src:"Plateforme de marque · Investment Memorandum juil. 2026 · One-pager FR",x:''},
+{id:'doctrine',t:"Doctrine et plateforme de marque",ico:'🧭',src:"netforce-plateforme-de-marque (document de référence, il fait foi) · Repères refonte du site",x:''},
+{id:'produit',t:"Le produit G.I.E",ico:'🧤',src:"One-pager FR · Formation N1 · Investment Memorandum · Proposition G3X · Repères site",x:''},
+{id:'reglementaire',t:"Cadre réglementaire",ico:'⚖️',src:"Certificate-of-Weapon · Investment Memorandum · Mémo formation Suisse 2026 · Data room 07",x:''},
+{id:'pi',t:"Brevets et certifications",ico:'📜',src:"Kit marketing (Patent, Certification) · Repères site · Investment Memorandum",x:''},
+{id:'marche',t:"Marché et concurrence",ico:'🌍',src:"Investment Memorandum · Note « Why US » · Plateforme de marque · Repères site",x:''},
+{id:'commercial',t:"Offre commerciale et contrats",ico:'🤝',src:"Investment Memorandum · Plaquette commerciale FR · Proposition G3X · CRM",x:''},
+{id:'finance',t:"Finance, levée et IPO",ico:'📈',src:"Investment Memorandum juil. 2026 · BP 2026-2028 et BP levée juillet 2026 (data room 02) · Data room 01-03",x:''},
+{id:'industrie',t:"Industrie et production",ico:'🏭',src:"Investment Memorandum · Stratégie de publication (Bordeaux)",x:''},
+{id:'formation',t:"Formation et doctrine d'emploi",ico:'🎓',src:"Formation G.I.E Niveau 1 FR · Mémo formation Suisse 2026 · Repères site",x:''},
+{id:'communication',t:"Communication et réseaux",ico:'📣',src:"Stratégie de publication corrigée (juin 2026) · Repères refonte du site · Plateforme de marque",x:''},
+{id:'arbitrages',t:"Incohérences à arbitrer",ico:'⚠️',src:"Croisement des documents du Drive",x:''}
+];
+const KBMAP={
+pdt:['finance','marche','arbitrages'],adm:['finance','reglementaire','arbitrages'],dg:['finance','marche','commercial','industrie','arbitrages'],
+chef:['commercial','finance','communication','arbitrages'],assist:['communication'],strat:['marche','commercial','finance','industrie'],
+pa:['reglementaire','communication','marche'],rse:['industrie','formation','reglementaire'],audit:['finance','industrie','arbitrages'],
+daf:['finance','commercial','industrie','arbitrages'],ctrl:['finance','industrie','commercial'],compta:['finance'],ir:['finance','marche','commercial','pi','arbitrages'],data:['commercial','finance','marche'],
+coo:['industrie','commercial','formation'],supply:['industrie'],qual:['industrie','pi','reglementaire'],sav:['produit','formation'],form:['formation','reglementaire'],
+cto:['pi','industrie','reglementaire'],rd:['pi','industrie','marche'],dsi:['industrie'],
+dircom:['commercial','marche','reglementaire'],ao:['commercial','reglementaire','formation','pi'],prospect:['commercial','marche'],km:['commercial','formation'],export:['reglementaire','commercial','marche'],
+cmo:['communication','marche','commercial','arbitrages'],redac:['communication','pi'],cm:['communication'],video:['communication'],design:['communication'],seo:['communication','pi','marche'],
+rh:['identite','industrie'],jur:['reglementaire','pi','finance','arbitrages'],conf:['reglementaire','pi'],memo:['finance','reglementaire','pi']};
+
+const KBC=['identite','doctrine','produit'];
+const KBI=Object.fromEntries(KB.map(f=>[f.id,f]));
+const kbTxt=id=>(S.kbEdits&&S.kbEdits[id])||(S.kbBase&&S.kbBase[id])||KBI[id].x||'(Fiche non importée : demande à Claude d\'importer le cerveau Netforce dans le siège.)';
+const kbIds=a=>[...new Set([...KBC,...(KBMAP[a.id]||[])])];
+const kbBlock=ids=>ids.filter(id=>KBI[id]).map(id=>`### ${KBI[id].t} (source : ${KBI[id].src})\n${kbTxt(id)}`).join('\n\n');
+function teamMemory(ex){return S.tasks.filter(t=>t.statut==='fait'&&t.livrable&&t.agent!==ex).slice(-8).map(t=>`- « ${t.titre} » par ${AG[t.agent]?AG[t.agent].name:'?'}${t.pid&&P(t.pid)?' (projet : '+P(t.pid).titre+')':''}`).join('\n')||'aucun pour l\'instant'}
+function memSearch(q){const w=String(q||'').toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter(x=>x.length>2);if(!w.length)return'Donne des mots-clés.';
+ const items=[...S.tasks.filter(t=>t.livrable&&(t.statut==='fait'||t.statut==='valider')).map(t=>({k:'Livrable '+(t.statut==='fait'?'validé':'à valider')+' de '+(AG[t.agent]?AG[t.agent].name:'?')+' : « '+t.titre+' »',x:t.livrable})),
+ ...S.projects.map(p=>({k:'Projet « '+p.titre+' »',x:p.synthese+'\nDécisions : '+p.decisions.map(d=>d.t+(d.ok?' (tranchée)':' (à trancher)')).join(' ; ')})),
+ ...KB.map(f=>({k:'Fiche du cerveau : '+f.t,x:kbTxt(f.id)}))];
+ const sc=items.map(it=>{const s=(it.k+' '+it.x).toLowerCase();return{it,n:w.reduce((a,x)=>a+(s.split(x).length-1),0)}}).filter(r=>r.n).sort((a,b)=>b.n-a.n).slice(0,4);
+ return sc.length?sc.map(r=>r.it.k+'\n'+clip(r.it.x,1500)).join('\n\n---\n\n'):'Rien trouvé dans la mémoire du siège pour : '+q}
+function linkAdd(a,b,q){S.links=(S.links||[]);S.links.push({a,b,q:String(q).slice(0,140),at:now()});S.links=S.links.slice(-200);touch()}
+function webTools(seen,aid){const T=(name,description,props,req,fn)=>({name,description,inputSchema:{type:'object',properties:props,required:req},execute:fn});
+ const out=[T('cerveau_lire',"Lit une fiche du cerveau Netforce. Fiches : "+KB.map(f=>f.id+' ('+f.t+')').join(', '),{fiche:{type:'string'}},['fiche'],i=>{seen&&seen('Cerveau : '+(KBI[i.fiche]?KBI[i.fiche].t:i.fiche));return KBI[i.fiche]?kbTxt(i.fiche):'Fiche inconnue. Fiches : '+KB.map(f=>f.id).join(', ')}),
+ T('memoire_chercher',"Cherche dans la mémoire commune du siège : livrables des collègues, projets, décisions et fiches du cerveau. Donne 2 à 4 mots-clés.",{mots_cles:{type:'string'}},['mots_cles'],i=>{seen&&seen('Mémoire : « '+i.mots_cles+' »');return memSearch(i.mots_cles)})];
+ if(aid&&sample)out.push(T('demander_collegue',"Pose une question précise à un collègue du siège (id de l'agent) et reçois sa réponse. Utile quand une info relève d'un autre poste (ex. daf pour un chiffre, jur pour le réglementaire, cmo pour un message).",{agent:{type:'string',description:'id du collègue : '+A.filter(x=>x.id!==aid).map(x=>x.id).join(', ')},question:{type:'string'}},['agent','question'],async i=>{const b=AG[i.agent];if(!b||i.agent===aid)return'Collègue inconnu.';seen&&seen('Question à '+b.name);linkAdd(aid,b.id,i.question);
+  try{const r=await sample(persona(b)+`\n\nTon collègue ${AG[aid].name} (${AG[aid].role}) te pose une question. Réponds en moins de 150 mots, factuel, à partir de tes fiches ; dis clairement si tu ne sais pas.\n\nQuestion : ${i.question}`,{modelTier:'default'});return `${b.name} répond : `+clip(r.text||'',2500)}catch(e){return b.name+' n\'a pas pu répondre.'}}));
+ return out}
+/* ---------- export Obsidian ---------- */
+const OBS='Siège Netforce';
+const oSafe=s=>String(s).replace(/[\\/:*?"<>|#^\[\]]/g,'-').replace(/\s+/g,' ').trim();
+const oAg=a=>oSafe(a.name+' — '+a.role);
+const oFi=f=>oSafe('Cerveau — '+f.t);
+const oDi=q=>oSafe('Direction — '+QN[q]);
+const oCo=c=>oSafe('Comité — '+(c.s||c.n));
+const oPr=p=>oSafe('Projet — '+p.titre);
+const oLi=t=>oSafe('Livrable — '+t.titre+' ('+(AG[t.agent]?AG[t.agent].name:'?')+')');
+const L=x=>'[['+x+']]';
+const yq=s=>'"'+String(s).replace(/"/g,'\\"')+'"';
+const oDate=ms=>new Date(ms||Date.now()).toISOString().slice(0,10);
+function obsidianFiles(){const F=[],add=(p,c)=>F.push({path:OBS+'/'+p,content:c});
+ add(OBS+'.md',`---\ntype: accueil\ntags: [netforce, siege-virtuel]\nmaj: ${oDate()}\n---\n# Siège Netforce\n\nLe siège virtuel de NETFORCE : ${A.length} agents IA, un par poste, reliés au cerveau Netforce. Export du ${oDate()}. Ouvre la **vue graphe** d'Obsidian pour voir la toile.\n\n## Cerveau Netforce\n${KB.map(f=>'- '+L(oFi(f))).join('\n')}\n\n## Directions\n${Q.map(q=>'- '+L(oDi(q.id))).join('\n')}\n\n## Comités\n${COMM.map(c=>'- '+L(oCo(c))).join('\n')}\n\n## Projets\n${S.projects.map(p=>'- '+L(oPr(p))).join('\n')||'- aucun pour l\'instant'}\n\n## Tous les agents\n![[Agents.base]]\n`);
+ add('Agents.base',`filters:\n  and:\n    - type == "agent"\nproperties:\n  note.poste:\n    displayName: Poste\n  note.direction:\n    displayName: Direction\n  note.rend_compte_a:\n    displayName: Rend compte à\n  note.role_ipo:\n    displayName: Rôle IPO\nviews:\n  - type: table\n    name: Agents\n    order:\n      - file.name\n      - poste\n      - direction\n      - rend_compte_a\n      - role_ipo\n    groupBy:\n      property: direction\n      direction: ASC\n`);
+ KB.forEach(f=>{const users=A.filter(a=>kbIds(a).includes(f.id));add('Cerveau/'+oFi(f)+'.md',`---\ntype: fiche-cerveau\nsource: ${yq(f.src)}\ncommune: ${KBC.includes(f.id)}\ntags: [netforce, cerveau]\n---\n# ${f.t}\n\n> Source : ${f.src}${S.kbEdits&&S.kbEdits[f.id]?' — corrigée dans le siège':''}\n\n${kbTxt(f.id)}\n\n## Lue par\n${KBC.includes(f.id)?'Tous les agents (fiche commune) — '+L(OBS):users.map(a=>'- '+L(oAg(a))).join('\n')}\n`)});
+ Q.forEach(q=>{const m=A.filter(a=>a.q===q.id);add('Directions/'+oDi(q.id)+'.md',`---\ntype: direction\ntags: [netforce, direction]\n---\n# ${QN[q.id]}\n\n${m.map(a=>'- '+L(oAg(a))+' — '+a.role).join('\n')}\n\nRetour : ${L(OBS)}\n`)});
+ COMM.forEach(c=>add('Comités/'+oCo(c)+'.md',`---\ntype: comite\ntags: [netforce, comite]\n---\n# ${c.n}\n\n${c.d||''}\n\n## Membres\n${c.m.map(x=>'- '+L(oAg(AG[x[0]]))+(x[1]?' — '+x[1]:'')).join('\n')}\n`));
+ A.forEach(a=>{const boss=a.parent?AG[a.parent]:null,team=kids(a.id),cs=commsOf(a.id),ts=S.tasks.filter(t=>t.agent===a.id);
+  add('Agents/'+oAg(a)+'.md',`---\ntype: agent\nposte: ${yq(a.role)}\ndirection: ${yq('[['+oDi(a.q)+']]')}\nrend_compte_a: ${boss?yq('[['+oAg(boss)+']]'):'""'}\nsigle: ${yq(a.x||'')}\nrole_ipo: ${yq(a.w||'')}\ntags: [netforce, agent]\n---\n# ${a.name} — ${a.role}\n\n**Direction :** ${L(oDi(a.q))}${boss?'  \n**Rend compte à :** '+L(oAg(boss)):''}\n\n## Mission\n${a.mission}\n${a.w?'\n## Rôle dans l\'introduction en bourse\n'+a.w+'\n':''}\n## Fiches du cerveau lues avant chaque tâche\n${kbIds(a).map(id=>'- '+L(oFi(KBI[id]))).join('\n')}\n${METH[a.id]?'\n## Méthode\n'+METH[a.id].m+'\n\n*Source : '+METH[a.id].s+'*\n':''}${team.length?'\n## Équipe\n'+team.map(m=>'- '+L(oAg(m))).join('\n')+'\n':''}${cs.length?'\n## Comités\n'+cs.map(c=>'- '+L(oCo(c))).join('\n')+'\n':''}${ts.length?'\n## Tâches\n'+ts.map(t=>'- '+(t.statut==='fait'?'[x] ':'[ ] ')+t.titre+(t.pid&&P(t.pid)?' — '+L(oPr(P(t.pid))):'')+(t.livrable?' → '+L(oLi(t)):'')).join('\n')+'\n':''}${(S.links||[]).filter(l=>l.a===a.id).length?'\n## Questions posées aux collègues\n'+(S.links||[]).filter(l=>l.a===a.id).slice(-10).map(l=>'- '+L(oAg(AG[l.b]))+' : '+l.q).join('\n')+'\n':''}\n## Outils\n${[...a.skills,...a.apps].join(' · ')||'—'}\n`)});
+ S.projects.forEach(p=>{const ts=S.tasks.filter(t=>t.pid===p.id);add('Projets/'+oPr(p)+'.md',`---\ntype: projet\nstatut: ${ts.length&&ts.every(t=>t.statut==='fait')?'terminé':'actif'}\ndate: ${oDate(p.date)}\ntags: [netforce, projet]\n---\n# ${p.titre}\n\n## Brief\n${p.brief}\n\n## Synthèse\n${p.synthese}\n\n## Tour de table\n${(p.tour||[]).map(r=>AG[r.agent]?'- '+L(oAg(AG[r.agent]))+' : '+r.avis:'').filter(Boolean).join('\n')}\n\n## Décisions\n${(p.decisions||[]).map(d=>'- ['+(d.ok?'x':' ')+'] '+d.t).join('\n')||'—'}\n\n## Risques\n${(p.risques||[]).map(r=>'- '+r).join('\n')||'—'}\n\n## Tâches\n${ts.map(t=>'- ['+(t.statut==='fait'?'x':' ')+'] '+t.titre+' — '+(AG[t.agent]?L(oAg(AG[t.agent])):'')+(t.livrable?' → '+L(oLi(t)):'')).join('\n')}\n`)});
+ S.tasks.filter(t=>t.livrable).forEach(t=>{const a=AG[t.agent];add('Livrables/'+oLi(t)+'.md',`---\ntype: livrable\nstatut: ${yq(ST[t.statut]||t.statut)}\nagent: ${a?yq('[['+oAg(a)+']]'):'""'}\nprojet: ${t.pid&&P(t.pid)?yq('[['+oPr(P(t.pid))+']]'):'""'}\nversion: ${t.versions.length}\ntags: [netforce, livrable]\n---\n# ${t.titre}\n\nPar ${a?L(oAg(a)):'?'}${t.pid&&P(t.pid)?' · projet '+L(oPr(P(t.pid))):''} · ${ST[t.statut]||t.statut}\n\n${t.livrable}\n`)});
+ return F}
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return b=>{let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=t[(c^b[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0}})();
+function zipFiles(files){const enc=new TextEncoder(),parts=[],cen=[];let off=0;
+ const u16=n=>[n&255,(n>>8)&255],u32=n=>[n&255,(n>>8)&255,(n>>16)&255,(n>>>24)&255];
+ files.forEach(f=>{const name=enc.encode(f.path),data=enc.encode(f.content),crc=CRC(data);
+  const head=[...u32(0x04034b50),...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0)];
+  parts.push(new Uint8Array(head),name,data);
+  cen.push(new Uint8Array([...u32(0x02014b50),...u16(20),...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(off)]),name);
+  off+=head.length+name.length+data.length});
+ const cs=cen.reduce((a,b)=>a+b.length,0),end=new Uint8Array([...u32(0x06054b50),...u16(0),...u16(0),...u16(files.length),...u16(files.length),...u32(cs),...u32(off),...u16(0)]);
+ const all=[...parts,...cen,end],out=new Uint8Array(all.reduce((a,b)=>a+b.length,0));let p=0;all.forEach(b=>{out.set(b,p);p+=b.length});return out}
+let downloads=null;(async()=>{try{downloads=C&&C.use?await C.use('downloads'):null}catch(e){downloads=null}})();
+async function exportObsidian(){const files=obsidianFiles(),data=zipFiles(files),name='Siege-Netforce-Obsidian-'+oDate()+'.zip';
+ try{if(downloads){await downloads.save({filename:name,data:new Blob([data],{type:'application/zip'})})}else{const u=URL.createObjectURL(new Blob([data],{type:'application/zip'})),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000)}toast(files.length+' notes prêtes pour Obsidian')}catch(e){toast('Export annulé')}}
+let toileSel=null,kbOpen=null,kbEdit=null;
+function vCerveau(){const used=id=>A.filter(a=>kbIds(a).includes(id)).length;
+ return`<header class="ph"><div><h1>Cerveau Netforce</h1><p class="lead">Les fiches que les agents lisent avant chaque tâche, construites à partir de ton Drive. Chaque agent reçoit les fiches communes et celles de son poste ; il peut lire les autres à la demande. Tu peux corriger une fiche : la correction s'applique à tous.</p></div><div class="row" style="display:flex;gap:8px"><a class="btn" href="#toile">Voir la toile</a><button class="btn primary" data-act="obsidian">Exporter vers Obsidian</button></div></header>
+ <div class="kbg">${KB.map(f=>{const ed=S.kbEdits&&S.kbEdits[f.id],open=kbOpen===f.id;return`<article class="kbc ${open?'open':''}"><button class="kbh" data-act="kbopen" data-k="${f.id}" aria-expanded="${open}"><span><b>${esc(f.t)}</b><small>${KBC.includes(f.id)?'Commune à tous les agents':used(f.id)+' agents'}${ed?' · corrigée par toi':''}</small></span><span class="chev">${open?'−':'+'}</span></button>
+ ${open?(kbEdit===f.id?`<form data-form="kb" data-k="${f.id}" class="kbf"><textarea name="x" rows="16">${esc(kbTxt(f.id))}</textarea><div class="row"><button class="btn primary">Enregistrer</button><button type="button" class="btn" data-act="kbcancel">Annuler</button></div></form>`:`<div class="kbx">${esc(kbTxt(f.id)).replace(/\n/g,'<br>')}</div><p class="small mute">Source : ${esc(f.src)}</p><div class="row"><button class="btn sm" data-act="kbedit" data-k="${f.id}">Corriger</button>${ed?`<button class="btn sm" data-act="kbreset" data-k="${f.id}">Revenir à l'original</button>`:''}<span class="small mute">Utilisée par : ${A.filter(a=>kbIds(a).includes(f.id)).map(a=>a.name).join(', ')}</span></div>`):''}</article>`}).join('')}</div>`}
+function vToile(){const W=940,C=W/2,R1=165,R2=330,R3=372;
+ const fp={},ap={};KB.forEach((f,i)=>{const t=-Math.PI/2+i*2*Math.PI/KB.length;fp[f.id]=[C+R1*Math.cos(t),C+R1*Math.sin(t),t]});
+ A.forEach((a,i)=>{const t=-Math.PI/2+i*2*Math.PI/A.length;ap[a.id]=[C+R2*Math.cos(t),C+R2*Math.sin(t),t]});
+ const sel=toileSel,isA=sel&&AG[sel],isF=sel&&KBI[sel];
+ const links=(S.links||[]),pairs={};links.forEach(l=>{const k=[l.a,l.b].sort().join('|');pairs[k]=(pairs[k]||0)+1});
+ const projOf=id=>[...new Set(S.tasks.filter(t=>t.agent===id&&t.pid).map(t=>t.pid))];
+ const sameProj={};S.projects.forEach(p=>{const ids=[...new Set(S.tasks.filter(t=>t.pid===p.id).map(t=>t.agent))];ids.forEach(x=>ids.forEach(y=>{if(x<y){const k=x+'|'+y;sameProj[k]=(sameProj[k]||0)+1}}))});
+ let e='';
+ A.forEach(a=>kbIds(a).filter(id=>!KBC.includes(id)).forEach(id=>{const on=sel&&(sel===a.id||sel===id),[x1,y1]=ap[a.id],[x2,y2]=fp[id];e+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="ek ${on?'on':sel?'dim':''}" style="${on?'stroke:'+TEAM[a.q].d:''}"/>`}));
+ Object.entries(sameProj).forEach(([k,n])=>{const[x,y]=k.split('|');if(!ap[x]||!ap[y])return;const on=sel&&(sel===x||sel===y);if(!on)return;e+=`<path d="M${ap[x][0]},${ap[x][1]} Q${C},${C} ${ap[y][0]},${ap[y][1]}" class="ep"/>`});
+ Object.entries(pairs).forEach(([k,n])=>{const[x,y]=k.split('|');if(!ap[x]||!ap[y])return;const on=!sel||sel===x||sel===y;e+=`<path d="M${ap[x][0]},${ap[x][1]} Q${C},${C} ${ap[y][0]},${ap[y][1]}" class="ex ${on?'':'dim'}" style="stroke-width:${Math.min(1.5+n,5)}"/>`});
+ KBC.forEach(id=>{const[x,y]=fp[id];e+=`<line x1="${C}" y1="${C}" x2="${x}" y2="${y}" class="ec"/>`});
+ const fn=KB.map(f=>{const[x,y]=fp[f.id],on=!sel||sel===f.id||(isA&&kbIds(AG[sel]).includes(f.id));return`<g class="nd ${on?'':'dim'} ${sel===f.id?'sel':''}" data-act="tsel" data-n="${f.id}" tabindex="0" role="button" aria-label="Fiche ${esc(f.t)}"><circle cx="${x}" cy="${y}" r="${KBC.includes(f.id)?19:15}" class="fk ${KBC.includes(f.id)?'core':''}"/><text x="${x}" y="${y+(y<C?-24:32)}" text-anchor="middle" class="tf">${esc(f.t.length>24?f.t.slice(0,23)+'…':f.t)}</text></g>`}).join('');
+ const an=A.map(a=>{const[x,y,t]=ap[a.id],on=!sel||sel===a.id||(isF&&kbIds(a).includes(sel))||(isA&&(pairs[[a.id,sel].sort().join('|')]||sameProj[[a.id,sel].sort().join('|')])),lx=C+R3*Math.cos(t),ly=C+R3*Math.sin(t),anc=Math.cos(t)>0.2?'start':Math.cos(t)<-0.2?'end':'middle';return`<g class="nd ${on?'':'dim'} ${sel===a.id?'sel':''}" data-act="tsel" data-n="${a.id}" tabindex="0" role="button" aria-label="${esc(a.name+', '+a.role)}"><circle cx="${x}" cy="${y}" r="${COMEX.includes(a.id)||a.id==='dg'?13:10}" style="fill:${TEAM[a.q].bg};stroke:${TEAM[a.q].d}" class="fa"/><text x="${lx}" y="${ly+4}" text-anchor="${anc}" class="ta">${esc(a.name)}</text></g>`}).join('');
+ const side=isA?(()=>{const a=AG[sel],ex=links.filter(l=>l.a===sel||l.b===sel).slice(-5).reverse();return`<h3>${esc(a.name)}</h3><p class="small">${esc(a.role)} · ${esc(QN[a.q])}</p><p class="k">Fiches lues avant chaque tâche</p><ul class="tl">${kbIds(a).map(id=>`<li><button class="lnk" data-act="tsel" data-n="${id}">${esc(KBI[id].t)}</button></li>`).join('')}</ul><p class="k">Projets</p><p class="small">${projOf(a.id).map(p=>P(p)?esc(P(p).titre):'').filter(Boolean).join(' · ')||'Aucun pour l\'instant'}</p><p class="k">Derniers échanges avec ses collègues</p>${ex.length?`<ul class="tl">${ex.map(l=>`<li class="small"><b>${esc(AG[l.a]?AG[l.a].name:'?')} → ${esc(AG[l.b]?AG[l.b].name:'?')}</b> : ${esc(l.q)}</li>`).join('')}</ul>`:'<p class="small mute">Aucun encore. Les échanges apparaissent quand un agent consulte un collègue pendant une tâche.</p>'}<button class="btn sm" data-agent="${a.id}">Ouvrir sa fiche</button>`})():isF?(()=>{const f=KBI[sel];return`<h3>${esc(f.t)}</h3><p class="small mute">${KBC.includes(f.id)?'Fiche commune : lue par les 37 agents':'Lue par '+A.filter(a=>kbIds(a).includes(f.id)).map(a=>a.name).join(', ')}</p><div class="kbx sm">${esc(clip(kbTxt(f.id),900)).replace(/\n/g,'<br>')}</div><a class="btn sm" href="#cerveau" data-act="kbgo" data-k="${f.id}">Lire ou corriger la fiche</a>`})():`<h3>Comment lire la toile</h3><ul class="tl small"><li><span class="lg core"></span>Au centre, le cerveau Netforce : 3 fiches communes à tous, 9 fiches métier.</li><li><span class="lg ag"></span>Autour, les 37 agents, colorés par direction. Chacun est relié aux fiches de son poste.</li><li><span class="lg ex"></span>En bleu, les questions qu'un agent a posées à un collègue pendant une tâche.</li><li>Clique sur un agent ou une fiche pour voir ses liens, ses projets et ses échanges.</li></ul><p class="small mute">${links.length} échange${links.length>1?'s':''} entre agents · ${S.tasks.filter(t=>t.statut==='fait'&&t.livrable).length} livrable(s) validé(s) dans la mémoire commune</p>`;
+ return`<header class="ph"><div><h1>La toile</h1><p class="lead">Comment le siège est relié : chaque agent lit les fiches du cerveau Netforce liées à son poste, cherche dans la mémoire commune (livrables validés, projets, décisions) et peut poser une question à n'importe quel collègue.</p></div><div style="display:flex;gap:8px">${sel?`<button class="btn" data-act="tsel" data-n="">Tout afficher</button>`:''}<button class="btn primary" data-act="obsidian">Exporter vers Obsidian</button></div></header>
+ <div class="toile"><div class="tw"><svg viewBox="-80 70 ${W+160} ${W-140}" role="img" aria-label="Graphe des liens entre agents et fiches">${e}<circle cx="${C}" cy="${C}" r="46" class="fc"/><text x="${C}" y="${C-4}" text-anchor="middle" class="tc">Cerveau</text><text x="${C}" y="${C+13}" text-anchor="middle" class="tc s">Netforce</text>${fn}${an}</svg></div><aside class="tside">${side}</aside></div>`}
+
+async function runMeeting(){const ta=$('#brief'),brief=ta.value.trim();if(!brief){ta.focus();return}if(running)return;
+ const mode=$('#mwho').value,comm=CM[mode],allowed=comm?comm.m.map(x=>x[0]):null;running=true;$('#go').disabled=true;renderMeetMode();
+ const steps=['Victor lit ton projet','Les agents concernés donnent leur avis','Victor répartit les tâches'];let st=0;
+ const draw=()=>{$('#mprog').innerHTML=`<div class="prog">${steps.map((s,i)=>`<div class="mstep ${i<st?'ok':i===st?'cur':''}">${i<st?'<span class="okc">✓</span>':i===st?'<span class="spin"></span>':'<span class="dot"></span>'}${s}</div>`).join('')}</div>`};draw();
+ const tm=[setTimeout(()=>{st=1;draw()},2200),setTimeout(()=>{st=2;draw()},7000)];
+ let r=null;
+ if(sample){const prompt=`${CTX}\nGérard présente un projet au comité de direction de son siège virtuel. Fiches utiles :\n${kbBlock(['doctrine','produit','commercial','finance'])}\n\nTu es Victor, chef d'orchestre. Organise la réunion : chaque agent convoqué donne un avis bref et concret, puis tu répartis le travail.\n\nAgents (id | nom, poste | skills | mission) :\n${roster(allowed)}\n\nPoste de Gérard : ${QN[S.me]} (il travaille lui-même avec ce quartier).\n\nProjet de Gérard :\n"""${brief}"""\n\nRègles :\n- ${comm?`Réunion du ${comm.n} : seuls ses membres sont présents (${allowed.map(id=>AG[id].name).join(', ')}). Ne confie des tâches qu'à eux.`:mode==='all'?'Toute l\'entreprise est présente, mais ne donne une tâche qu\'aux agents utiles.':'Convoque seulement les agents vraiment utiles (2 à 5).'}\n- Fais simple : 1 tâche par agent, 3 à 6 tâches au total. Chaque tâche produit un livrable court et utilisable tout de suite (un texte, une liste, un tableau), faisable avec le cerveau Netforce, le Drive et le CRM. Pas de tâche « collecter », « auditer avec des accès » ou « attendre » : découpe en un premier résultat concret.\n- "besoins" = seulement ce qui n'existe ni dans le cerveau Netforce, ni dans le Drive, ni dans le CRM. 0 ou 1 par tâche, le plus souvent 0.\n- "actions_gerard" = ce que Gérard doit faire lui-même (valider, signer, décider, envoyer). Envois, signatures, paiements et publications restent toujours à Gérard.\n- "depend_de" = index (à partir de 0) des tâches à terminer avant.\n- N'invente aucun chiffre, client ni fait.\n- Français, phrases courtes, titres de tâche de 3 à 7 mots.\n\nRéponds uniquement en JSON :\n{"titre":"titre court du projet","synthese":"2-3 phrases","tour_de_table":[{"agent":"id","avis":"..."}],"taches":[{"agent":"id","titre":"...","detail":"...","besoins":["..."],"actions_gerard":["..."],"priorite":"haute|moyenne|basse","depend_de":[0]}],"decisions_gerard":["..."],"risques":["..."]}`;
+  try{r=await sample.json(prompt,{modelTier:'complex'})}catch(e){toast(e&&e.code==='rate_limited'?'Claude est très sollicité : répartition hors ligne.':'Claude indisponible : répartition hors ligne.')}}
+ if(!r||!Array.isArray(r.taches))r=localMeeting(brief,mode);
+ tm.forEach(clearTimeout);
+ const pid='p-'+uid(),ids=r.taches.map(()=>'t-'+uid()),ok=t=>t&&AG[t.agent]&&(!allowed||allowed.includes(t.agent));
+ const tasks=r.taches.map((t,i)=>({t,i})).filter(({t})=>ok(t)).map(({t,i})=>{const id=ids[i];const x=norm({id,pid,agent:t.agent,titre:String(t.titre||'Tâche'),detail:String(t.detail||''),besoins:(t.besoins||[]).map(x=>({t:String(x),ok:false})),gerard:(t.actions_gerard||[]).map(x=>({t:String(x),ok:false})),prio:PR.hasOwnProperty(t.priorite)?t.priorite:'moyenne',statut:'a_faire'});x._d=Array.isArray(t.depend_de)?t.depend_de:[];log(x,'chef','Tâche confiée en réunion');return x});
+ const kept=new Set(tasks.map(t=>t.id));tasks.forEach(t=>{t.dep=t._d.map(i=>ids[i]).filter(d=>d&&d!==t.id&&kept.has(d));delete t._d});
+ const proj={id:pid,titre:String(r.titre||brief.slice(0,60)),brief,synthese:String(r.synthese||''),tour:(r.tour_de_table||[]).filter(x=>x&&AG[x.agent]&&(!allowed||allowed.includes(x.agent))).map(x=>({agent:x.agent,avis:String(x.avis||'')})),decisions:(r.decisions_gerard||[]).map(t=>({t:String(t),ok:false})),risques:(r.risques||[]).map(String),date:now(),source:sample?'claude':'local',comm:comm?comm.id:null};
+ S.projects.push(proj);S.tasks.push(...tasks);running=false;$('#go').disabled=false;ta.value='';$('#mprog').innerHTML='';touch();
+ location.hash='#projet-'+pslug(proj);toast(`Projet créé : ${tasks.length} tâches pour ${new Set(tasks.map(t=>t.agent)).size} agents`)}
+function localMeeting(brief,mode){const b=brief.toLowerCase();let sel=A.filter(a=>a.kw.some(k=>b.includes(k)));
+ ['chef','dg','daf'].forEach(id=>{if(!sel.find(a=>a.id===id))sel.unshift(AG[id])});
+ A.filter(a=>a.q===S.me).slice(0,2).forEach(a=>{if(!sel.includes(a))sel.push(a)});
+ if(mode==='all')sel=A.slice();if(CM[mode])sel=CM[mode].m.map(x=>AG[x[0]]);
+ return{titre:brief.length>60?brief.slice(0,58)+'…':brief,synthese:"Répartition faite hors ligne à partir des mots-clés du projet. Chaque agent concerné apporte sa contribution habituelle ; ajuste les tâches dans leur fiche.",
+ tour_de_table:sel.map(a=>({agent:a.id,avis:`Je m'occupe de : ${a.tpl[0].toLowerCase()}.`})),
+ taches:sel.map(a=>({agent:a.id,titre:a.tpl[0],detail:'',besoins:a.tpl[1],actions_gerard:a.tpl[2],priorite:a.id==='chef'?'haute':'moyenne',depend_de:[]})),
+ decisions_gerard:["Confirmer l'objectif et la date limite du projet"],risques:[]}}
+
+/* ---------- les agents travaillent ---------- */
+function persona(a){const ts=of(a.id).map(t=>`- [${t.id}] ${t.titre} (${ST[t.statut]})${t.pid&&P(t.pid)?' — projet : '+P(t.pid).titre:''}${t.besoins.length?' — besoins : '+t.besoins.map(b=>b.t+(b.ok?' (fourni)':' (manquant)')).join(', '):''}`).join('\n')||'aucune';
+ const pr=S.projects.slice(-3).map(p=>`- ${p.titre} : ${p.synthese}`).join('\n')||'aucun';
+ return`${CTX}\nTu es ${a.name}, ${a.role} au siège virtuel de Netforce (${QN[a.q]}). Mission : ${a.mission}\n\nCERVEAU NETFORCE — fiches de ton poste (faits validés, à utiliser en priorité) :\n${kbBlock(kbIds(a))}\n\nAutres fiches lisibles avec l'outil cerveau_lire : ${KB.filter(f=>!kbIds(a).includes(f.id)).map(f=>f.id+' ('+f.t+')').join(', ')}.\nTravail validé récemment par tes collègues (cherche-le avec memoire_chercher) :\n${teamMemory(a.id)}\n\n${METH[a.id]?'Ta méthode (à appliquer seulement si elle sert la tâche) : '+METH[a.id].m+'\n':''}Tes skills : ${[...a.skills,...a.todo].join(', ')||'aucun'}. Tes applis : ${a.apps.join(', ')}.\n${(()=>{const boss=a.parent?AG[a.parent]:null,team=kids(a.id),cs=commsOf(a.id);return`Tu rends compte à ${boss?boss.name+' ('+boss.role+')':'l\'assemblée des actionnaires'}.${team.length?` Ton équipe : ${team.map(m=>m.name+' ('+m.role+')').join(', ')}.`:''}${cs.length?` Tu sièges au ${cs.map(c=>c.n).join(', au ')}.`:''}${a.w?` Ton rôle dans la préparation de l'introduction en bourse : ${a.w}`:''}`})()}
+Tes collègues de direction : ${A.filter(x=>x.q===a.q&&x.id!==a.id).map(x=>x.name+' ('+x.role+')').join(', ')||'aucun'}.\nGérard suit plus particulièrement : ${QN[S.me]}.\nTes tâches :\n${ts}\nProjets récents :\n${pr}\nRègles : tu prépares, Gérard décide. Tu n'envoies, ne signes, ne publies et ne paies jamais rien. Tu connais le CERVEAU NETFORCE ci-dessus : ne redemande jamais ces faits. Quand il te manque une info (fiche technique, client, chiffre, document), cherche-la d'abord dans tes fiches, puis avec tes outils : memoire_chercher (travail des collègues), cerveau_lire, demander_collegue (pour une info qui relève d'un autre poste), drive_index / drive_chercher / drive_lire, outils crm_* et cite le document utilisé. N'invente aucun chiffre ni fait : écris [À COMPLÉTER : …] seulement si l'info n'est ni dans le cerveau, ni dans le Drive, ni dans le CRM. Ne demande à Gérard que ce qui n'existe nulle part. Français, ton d'un collègue compétent et direct.`}
+function taskCtx(t){const p=P(t.pid),com=t.log.filter(l=>l.kind==='com').slice(-6).map(l=>'- '+l.txt).join('\n'),giv=t.besoins.filter(b=>b.ok).map(b=>b.val?`- ${b.t} : ${b.val}`:`- ${b.t} (Gérard l'a transmis par ailleurs)`),miss=t.besoins.filter(b=>!b.ok).map(b=>b.t);
+ return`${p?`\nProjet « ${p.titre} » : ${p.brief}`:''}${giv.length?`\nInformations fournies par Gérard :\n${giv.join('\n')}`:''}${miss.length?`\nInformations encore manquantes (marque-les [À COMPLÉTER]) : ${miss.join(', ')}.`:''}${t.feedback?`\nCorrection demandée par Gérard sur ta version précédente : ${t.feedback}`:''}${com?`\nCommentaires de Gérard :\n${com}`:''}`}
+async function makePlan(id){const t=TK(id);if(!t||!sample||planning.has(id)||busy.has(id))return;const a=AG[t.agent];planning.add(id);renderAll();
+ const prompt=`${persona(a)}\n\nAvant de travailler sur ta tâche « ${t.titre} »${t.detail?' ('+t.detail+')':''}, propose ton plan à Gérard.${taskCtx(t)}\nRéponds uniquement en JSON : {"etapes":["2 ou 3 étapes courtes, chacune commence par un verbe"],"question":null sauf si une info bloque vraiment et ne se trouve ni dans le cerveau, ni dans le Drive, ni dans le CRM : {"texte":"question fermée","options":["2 ou 3 réponses courtes"]}}`;
+ try{const r=await sample.json(prompt,{modelTier:'default'});const et=(r&&Array.isArray(r.etapes)?r.etapes:[]).map(String).filter(Boolean).slice(0,6);if(!et.length)throw{code:'vide'};
+  const q=r.question&&r.question.texte&&Array.isArray(r.question.options)&&r.question.options.length?{texte:String(r.question.texte),options:r.question.options.slice(0,3).map(String)}:null;
+  t.plan={etapes:et,statut:'propose',question:q,reponse:''};log(t,t.agent,`A proposé un plan en ${et.length} étapes`);toast(`${a.name} propose un plan`,{label:'Voir',fn:()=>openTask(id)})}
+ catch(e){toast(e&&e.code==='rate_limited'?'Claude est très sollicité, réessaie dans un moment.':`${a.name} n'a pas pu préparer son plan`)}
+ planning.delete(id);save();renderAll()}
+async function work(id){const t=TK(id);if(!t||!sample||busy.has(id))return;const a=AG[t.agent];busy.add(id);if(t.statut!=='en_cours')t.statut='en_cours';renderAll();
+ const pl=t.plan&&t.plan.etapes?`\nTon plan validé par Gérard :\n${t.plan.etapes.map((s,i)=>(i+1)+'. '+s).join('\n')}${t.plan.reponse?`\nSa réponse à ta question « ${t.plan.question?t.plan.question.texte:''} » : ${t.plan.reponse}`:''}`:'';
+ const prompt=`${persona(a)}\n\nProduis maintenant le livrable de ta tâche « ${t.titre} »${t.detail?' ('+t.detail+')':''}.${pl}${taskCtx(t)}${t.livrable?`\nTa version précédente (à améliorer) :\n${t.livrable.slice(0,3000)}`:''}\nFormat : fais simple et utile. Livre directement le résultat demandé, prêt à servir (moins de 400 mots, sauf si la tâche est un texte long à rédiger). Pas d'introduction, pas de méthode, pas d'avertissement, pas de liste de ce que tu ne sais pas. Appuie-toi sur le cerveau Netforce et cherche le reste dans le Drive ou le CRM. Si une info manque encore, fais une hypothèse raisonnable notée (hypothèse) ; 2 [À COMPLÉTER] maximum. Termine, seulement si nécessaire, par « Ce qu'il me faut de toi » (2 points maximum).`;
+ try{const r=await sample(prompt,{modelTier:'default',tools:dataTools(l=>{log(t,t.agent,'A consulté '+l);renderAll()},t.agent),onText:({text})=>{const e=document.getElementById('liv-live-'+id);if(e){e.textContent=text;e.scrollTop=e.scrollHeight}}});
+  addVersion(t,(r.text||'').slice(0,8000),t.agent);t.statut='valider';t.feedback='';if(t.plan)t.plan.statut='fait';log(t,t.agent,`A livré la version ${t.versions.length}, à valider`);toast(`${a.name} a terminé : livrable à relire`,{label:'Relire',fn:()=>openTask(id)})}
+ catch(e){if(!t.versions.length)t.statut='a_faire';toast(e&&e.code==='rate_limited'?'Claude est très sollicité, réessaie dans un moment.':`${a.name} n'a pas pu rédiger (${e&&e.code||'erreur'})`)}
+ busy.delete(id);save();renderAll()}
+async function planQueue(list){for(const t of list.slice(0,6))await makePlan(t.id)}
+
+/* ---------- discussion ---------- */
+async function loadChat(id){if(chats[id])return;chats[id]=[];if(db){try{const s=await db.doc('chat/'+id).get();const d=unwrap(s);if(d&&d.log)chats[id]=JSON.parse(d.log)}catch(e){}}else{try{chats[id]=JSON.parse(localStorage.getItem('nf_chat_'+id)||'[]')}catch(e){}}if(view&&view.k==='agent'&&view.id===id)renderDrawer()}
+function saveChat(id){const lg=JSON.stringify(chats[id].slice(-24));try{localStorage.setItem('nf_chat_'+id,lg)}catch(e){}if(db)db.doc('chat/'+id).set({log:lg}).catch(()=>{})}
+async function send(txt){const a=view&&view.k==='agent'?AG[view.id]:null;if(!a||!sample||chatBusy||!txt.trim())return;const id=a.id;chats[id]=chats[id]||[];chats[id].push({r:'u',c:txt.trim()});chatBusy=true;renderDrawer();
+ const hist=chats[id].filter(m=>m.r!=='t').slice(-14).map(m=>({role:m.r==='u'?'user':'assistant',content:m.c}));
+ const msgs=[{role:'user',content:persona(a)+"\n\nTu discutes avec Gérard, en équipe. Réponds court (moins de 180 mots sauf s'il demande un brouillon). Utilise tes outils quand c'est utile : chercher dans le Drive ou le CRM avant de demander une info, créer une tâche quand vous décidez d'un travail, changer un statut, enregistrer un livrable. Annonce ce que tu as fait en une ligne."},{role:'assistant',content:'Compris, je suis prêt.'},...hist];
+ const tools=[...dataTools(l=>{chats[id].push({r:'t',c:'Consulte '+l});renderAll()},id),{name:'creer_tache',description:"Crée une tâche pour toi (ou pour un collègue si Gérard le demande).",inputSchema:{type:'object',properties:{titre:{type:'string'},detail:{type:'string'},besoins:{type:'array',items:{type:'string'}},actions_gerard:{type:'array',items:{type:'string'}},agent:{type:'string',description:'id du collègue, sinon toi'},priorite:{type:'string',enum:['haute','moyenne','basse']}},required:['titre']},execute:i=>{const ag=AG[i.agent]?i.agent:id;const t=norm({id:'t-'+uid(),pid:null,agent:ag,titre:String(i.titre),detail:String(i.detail||''),besoins:(i.besoins||[]).map(x=>({t:String(x),ok:false})),gerard:(i.actions_gerard||[]).map(x=>({t:String(x),ok:false})),prio:PR.hasOwnProperty(i.priorite)?i.priorite:'moyenne',statut:'a_faire'});log(t,id,'Tâche créée en discussion avec Gérard');S.tasks.push(t);chats[id].push({r:'t',c:`Tâche créée pour ${AG[ag].name} : ${t.titre}`});save();return{ok:true,id:t.id}}},
+ {name:'changer_statut',description:'Change le statut d\'une de tes tâches.',inputSchema:{type:'object',properties:{task_id:{type:'string'},statut:{type:'string',enum:Object.keys(ST)}},required:['task_id','statut']},execute:i=>{const t=TK(i.task_id);if(!t)throw new Error('tâche inconnue');t.statut=i.statut;log(t,id,'Statut : '+ST[i.statut]);chats[id].push({r:'t',c:`« ${t.titre} » : ${ST[i.statut]}`});save();return{ok:true}}},
+ {name:'enregistrer_livrable',description:'Enregistre un brouillon comme nouvelle version du livrable d\'une tâche ; elle passe « À valider ».',inputSchema:{type:'object',properties:{task_id:{type:'string'},contenu:{type:'string'}},required:['task_id','contenu']},execute:i=>{const t=TK(i.task_id);if(!t)throw new Error('tâche inconnue');addVersion(t,String(i.contenu).slice(0,8000),id);t.statut='valider';log(t,id,`A livré la version ${t.versions.length} en discussion`);chats[id].push({r:'t',c:`Livrable enregistré pour « ${t.titre} »`});save();return{ok:true}}}];
+ try{const r=await sample(msgs,{cache:false,modelTier:'default',tools,onText:({text})=>{const e=document.getElementById('typing');if(e){e.textContent=text;e.classList.remove('pulse');const b=$('#chatbox');if(b)b.scrollTop=b.scrollHeight}}});chats[id].push({r:'a',c:r.text||'…'})}
+ catch(e){chats[id].push({r:'t',c:e&&e.code==='rate_limited'?'Claude est très sollicité, réessaie dans un moment.':`Message non traité (${e&&e.code||'erreur'}).`})}
+ chatBusy=false;saveChat(id);renderAll()}
+
+/* ---------- copie ---------- */
+function brief(t){const a=AG[t.agent],p=P(t.pid);return`Tu es ${a.name}, ${a.role} chez Netforce (${QN[a.q]}). Netforce prépare son introduction en bourse.
+Mission : ${a.mission}
+Skills à utiliser : ${a.skills.join(', ')||'aucun pour l\'instant'}
+Applis : ${a.apps.join(', ')}
+${p?`Projet : ${p.titre}\nContexte : ${p.brief}\n`:''}Ta tâche : ${t.titre}${t.detail?' — '+t.detail:''}
+${t.plan?'Plan validé :\n'+t.plan.etapes.map((s,i)=>(i+1)+'. '+s).join('\n')+'\n':''}Ce dont tu disposes ou que tu dois demander : ${t.besoins.map(b=>b.t+(b.ok?' (fourni)':' (à demander)')).join(' ; ')||'rien de particulier'}
+Règles : prépare tout en brouillon ; n'envoie, ne signe, ne publie et ne paie rien sans mon accord.`}
+async function copy(txt){try{await navigator.clipboard.writeText(txt);toast('Brief copié : colle-le dans une conversation Claude')}catch(e){toast('Copie refusée par le navigateur : le brief est affiché dans la fiche');const d=$('#drawer .db');if(d){const ta=document.createElement('textarea');ta.rows=8;ta.value=txt;d.prepend(ta);ta.select()}}}
+
+/* ---------- actions ---------- */
+function act(el){const k=el.dataset.act,t=TK(el.dataset.t),i=+el.dataset.i;
+ if(k==='close')closeDrawer();
+ else if(k==='close-nav')closeDrawer();
+ else if(k==='inbox'){closeDrawer();location.hash='#pour-toi'}
+ else if(k==='comm')openComm(el.dataset.c);
+ else if(k==='convene'){meetPreset=el.dataset.c;closeDrawer();if(R.r==='nouveau')applyPreset();else location.hash='#nouveau'}
+ else if(k==='obsidian'){exportObsidian()}
+ else if(k==='tsel'){toileSel=el.dataset.n||null;renderView()}
+ else if(k==='kbopen'){kbOpen=kbOpen===el.dataset.k?null:el.dataset.k;kbEdit=null;renderView()}
+ else if(k==='kbedit'){kbEdit=el.dataset.k;renderView()}
+ else if(k==='kbcancel'){kbEdit=null;renderView()}
+ else if(k==='kbreset'){S.kbEdits=S.kbEdits||{};S.kbEdits[el.dataset.k]='';touch();toast('Fiche revenue à l\'original')}
+ else if(k==='kbgo'){kbOpen=el.dataset.k;kbEdit=null}
+ else if(k==='orgv'){orgView=el.dataset.v;try{localStorage.setItem('nf_orgv',orgView)}catch(x){}renderView()}
+ else if(k==='toastbtn'){const f=toast.fn;toast.fn=null;$('#toast').hidden=true;if(f)f()}
+ else if(k==='tab'){agentTab=el.dataset.x;renderDrawer();if(agentTab==='chat'){const c=$('#cm');c&&c.focus()}}
+ else if(k==='chat'){openAgent(el.dataset.a,'chat');const c=$('#cm');c&&c.focus()}
+ else if(k==='assign'){openAgent(el.dataset.a);const c=$('#nt');c&&c.focus()}
+ else if(k==='preset'){$('#brief').value=el.textContent;$('#brief').focus()}
+ else if(k==='seed'){if(!S.projects.some(p=>p.id==='p_ex')){const s=structuredClone(SEED);S.projects.push(...s.projects);S.tasks.push(...s.tasks);normAll();touch();toast('Projet d\'exemple chargé')}}
+ else if(k==='delproj'){const p=el.dataset.p;if(el.dataset.sure){S.projects=S.projects.filter(x=>x.id!==p);S.tasks=S.tasks.filter(x=>x.pid!==p);location.hash='#projets';touch();toast('Projet supprimé')}else{el.dataset.sure=1;el.textContent='Confirmer la suppression'}}
+ else if(k==='go'&&t)makePlan(t.id);
+ else if(k==='work'&&t)work(t.id);
+ else if(k==='launch'&&t){t.plan.statut='valide';log(t,'moi','A validé le plan');save();work(t.id)}
+ else if(k==='mine'&&t){t.owner='moi';t.plan=null;t.statut='en_cours';log(t,'moi','Reprend la tâche lui-même');touch()}
+ else if(k==='giveback'&&t){t.owner='agent';t.statut='a_faire';log(t,'moi','Rend la tâche à '+AG[t.agent].name);touch()}
+ else if(k==='reopen'&&t){t.statut='a_faire';log(t,'moi','A rouvert la tâche');touch()}
+ else if(k==='editplan'&&t){ui['editplan-'+t.id]=!ui['editplan-'+t.id];renderAll()}
+ else if(k==='answer'&&t&&t.plan&&t.plan.question){t.plan.reponse=t.plan.question.options[i];log(t,'moi','Réponse : '+t.plan.reponse,'com');touch()}
+ else if(k==='ok'&&t){t.statut='fait';delete ui['refuse-'+t.id];const auto=t.gerard.filter(g=>!g.ok&&/^(valider|relire|approuver)/i.test(g.t));auto.forEach(g=>g.ok=true);log(t,'moi','A validé le livrable');touch();toast('Livrable validé',{label:'Annuler',fn:()=>{t.statut='valider';auto.forEach(g=>g.ok=false);log(t,'moi','A annulé la validation');touch()}})}
+ else if(k==='refuse'&&t){ui['refuse-'+t.id]=!ui['refuse-'+t.id];renderAll();const f=document.getElementById('rf-'+t.id);f&&f.focus()}
+ else if(k==='editliv'&&t){ui['editliv-'+t.id]=!ui['editliv-'+t.id];renderAll()}
+ else if(k==='ver'&&t){ui['ver-'+t.id]=i;renderAll()}
+ else if(k==='del'&&t){if(el.dataset.sure){S.tasks=S.tasks.filter(x=>x!==t);S.tasks.forEach(x=>x.dep=x.dep.filter(d=>d!==t.id));if(view&&view.k==='task'&&view.id===t.id){if(view.from)view={k:'agent',id:view.from};else closeDrawer()}touch();toast('Tâche supprimée')}else{el.dataset.sure=1;el.textContent='Confirmer la suppression'}}
+ else if(k==='runall'&&view)planQueue(of(view.id).filter(readyToStart));
+ else if(k==='qp'){const c=$('#cm');if(c){c.value=el.textContent;c.focus()}}
+ else if(k==='need-ok'&&t){const b=t.besoins[i];if(!b)return;b.ok=true;delete ui['nf-'+t.id+'-'+i];log(t,'moi','Indique avoir fourni : '+b.t);touch();toast('Noté comme déjà donné',{label:'Annuler',fn:()=>{b.ok=false;touch()}})}
+ else if(k==='need-open'&&t){const key='nf-'+t.id+'-'+i;ui[key]=!ui[key];renderAll();const f=document.getElementById('nv-'+t.id+'-'+i);f&&f.focus()}
+ else if(k==='need-undo'&&t){const b=t.besoins[i];if(!b)return;b.ok=false;b.val='';log(t,'moi','Retire : '+b.t);touch()}
+ else if(k==='act-ok'&&t){const g=t.gerard[i];if(!g)return;g.ok=true;log(t,'moi','Fait : '+g.t);touch();toast('Action faite',{label:'Annuler',fn:()=>{g.ok=false;touch()}})}
+ else if(k==='dec-ok'){const p=P(el.dataset.p);if(p&&p.decisions[i]){const d=p.decisions[i];d.ok=true;touch();toast('Décision notée',{label:'Annuler',fn:()=>{d.ok=false;touch()}})}}
+ else if(k==='mine-done'&&t){t.statut='fait';log(t,'moi','A terminé la tâche');touch();toast('Tâche terminée',{label:'Annuler',fn:()=>{t.statut='en_cours';touch()}})}}
+document.addEventListener('click',e=>{const el=e.target.closest('[data-act],[data-task],[data-agent],[data-proj]');if(!el)return;
+ if(el.dataset.act){if(el.tagName==='INPUT'||el.tagName==='SELECT')return;if(el.tagName==='BUTTON'&&el.type==='submit'&&el.form)return;act(el);return}
+ if(el.dataset.task){openTask(el.dataset.task);return}
+ if(el.dataset.agent){openAgent(el.dataset.agent);return}
+ if(el.dataset.proj){location.hash='#projet-'+el.dataset.proj}});
+document.addEventListener('change',e=>{const el=e.target,k=el.dataset.act,t=TK(el.dataset.t),i=+el.dataset.i;
+ if(el.id==='me'){S.me=el.value;touch();return}
+ if(el.id==='mwho'){renderMHint();return}
+ if(k==='ipofocus'){orgIPO=el.checked;renderView();return}
+ if(el.id==='teamf'||el.id==='teamf2'){teamF=el.value;try{localStorage.setItem('nf_team',teamF)}catch(x){}renderView();return}
+ if(k==='st'&&t){t.statut=el.value;log(t,'moi','Statut : '+ST[el.value]);touch()}
+ else if(k==='prio'&&t){t.prio=el.value;log(t,'moi','Priorité : '+el.value);touch()}
+ else if(k==='deleg'&&t){if(el.value==='moi'){t.owner='moi';t.plan=null;log(t,'moi','Reprend la tâche lui-même')}else{t.owner='agent';if(t.agent!==el.value){t.agent=el.value;t.plan=null;log(t,'moi','Confie la tâche à '+AG[el.value].name)}}touch()}
+ else if(k==='gok'&&t){t.gerard[i].ok=el.checked;if(el.checked)log(t,'moi','Fait : '+t.gerard[i].t);touch()}
+ else if(k==='bok'&&t){t.besoins[i].ok=el.checked;if(el.checked)log(t,'moi','Fourni : '+t.besoins[i].t);touch()}
+ else if(k==='dok'){const p=P(el.dataset.p);if(p){p.decisions[i].ok=el.checked;touch()}}});
+document.addEventListener('submit',e=>{const f=e.target;if(f.id==='meetform'){e.preventDefault();runMeeting();return}const k=f.dataset.form;if(!k)return;e.preventDefault();const t=TK(f.dataset.t),val=n=>(f.elements[n]&&f.elements[n].value||'').trim();
+ if(k==='kb'){const v=(f.elements.x.value||'').trim(),id=f.dataset.k;if(!v||!KBI[id])return;S.kbEdits=S.kbEdits||{};S.kbEdits[id]=v;kbEdit=null;touch();toast('Fiche corrigée : tous les agents la liront ainsi');return}
+ if(k==='add'){const v=val('x');if(!v||!view)return;const x=norm({id:'t-'+uid(),pid:null,agent:view.id,titre:v,detail:'',prio:'moyenne',statut:'a_faire'});log(x,'moi','Tâche confiée par toi');S.tasks.push(x);f.reset();touch();toast(`Tâche confiée à ${AG[view.id].name}`)}
+ else if(k==='ptask'){const v=val('x'),ag=val('a'),p=P(f.dataset.p);if(!v||!AG[ag]||!p)return;const x=norm({id:'t-'+uid(),pid:p.id,agent:ag,titre:v,detail:'',prio:'moyenne',statut:'a_faire'});log(x,'moi','Tâche ajoutée au projet par toi');S.tasks.push(x);f.reset();touch();toast(`Tâche confiée à ${AG[ag].name}`)}
+ else if(k==='chat'){const c=$('#cm');const v=c.value;c.value='';send(v)}
+ else if(k==='refuse'&&t){const r=val('r');if(!r)return;t.feedback=r;t.statut='a_faire';delete ui['refuse-'+t.id];log(t,'moi','Demande une correction : '+r,'com');touch();if(sample){toast(`${AG[t.agent].name} reprend son livrable`);work(t.id)}else toast(`Correction notée pour ${AG[t.agent].name}`)}
+ else if(k==='need'&&t){const v=val('v'),b=t.besoins[+f.dataset.i];if(!v||!b)return;b.val=v.slice(0,2000);b.ok=true;delete ui['nf-'+t.id+'-'+f.dataset.i];log(t,'moi','A fourni : '+b.t);touch();toast(`Envoyé à ${AG[t.agent].name}`,{label:'Annuler',fn:()=>{b.ok=false;b.val='';touch()}})}
+ else if(k==='plan'&&t){const s=val('s').split('\n').map(x=>x.trim()).filter(Boolean);if(!s.length)return;t.plan.etapes=s;delete ui['editplan-'+t.id];log(t,'moi','A modifié le plan');touch()}
+ else if(k==='liv'&&t){const x=val('x');if(!x)return;addVersion(t,x,'moi');delete ui['editliv-'+t.id];log(t,'moi',`A modifié le livrable (version ${t.versions.length})`);touch()}
+ else if(k==='com'&&t){const c=val('c');if(!c)return;log(t,'moi',c,'com');f.reset();touch()}
+ else if(k==='addb'&&t){const x=val('x');if(!x)return;t.besoins.push({t:x,ok:false});f.reset();touch()}
+ else if(k==='addg'&&t){const x=val('x');if(!x)return;t.gerard.push({t:x,ok:false});f.reset();touch()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&view){closeDrawer();return}
+ if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('g[data-agent],g[data-act]')){e.preventDefault();e.target.dispatchEvent(new MouseEvent('click',{bubbles:true}))}
+ if(e.key==='Enter'&&!e.shiftKey&&e.target.id==='cm'){e.preventDefault();e.target.form.requestSubmit()}});
+addEventListener('hashchange',route);
+route();renderAll();
+}
+</script>
+</body>
+</html>

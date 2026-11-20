@@ -10,6 +10,7 @@ import { rapportDb } from "./db";
 import { store } from "./store";
 import { runAutomationsSafely } from "./automations";
 import { listFiles, listFolders } from "./dataroom";
+import { SIEGE_TOOLS } from "./siegeTools";
 
 type Args = Record<string, unknown>;
 type Doc = Record<string, unknown> & { id: string };
@@ -652,6 +653,8 @@ export const TOOLS: ToolDef[] = [
       return { created: org };
     },
   },
+  // Siège IA : agents, projets, livrables (voir lib/server/siegeTools.ts)
+  ...SIEGE_TOOLS,
 ];
 
 export async function callTool(name: string, args: Args) {
@@ -661,7 +664,7 @@ export async function callTool(name: string, args: Args) {
     const result = await tool.run(args ?? {});
     return { isError: false, text: JSON.stringify(result) };
   } catch (e) {
-    const msg = e instanceof ToolError ? e.message : `Erreur interne : ${e instanceof Error ? e.message : String(e)}`;
+    const msg = e instanceof ToolError || (e as Error)?.name === "SiegeError" ? (e as Error).message : `Erreur interne : ${e instanceof Error ? e.message : String(e)}`;
     return { isError: true, text: msg };
   }
 }
