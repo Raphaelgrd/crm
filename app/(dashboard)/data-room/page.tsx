@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import JSZip from "jszip";
 import { FolderMeta, StoredFile, formatSize, useDataRoom } from "@/lib/dataroom";
+import { authFetch } from "@/lib/rapport";
 import { GuestShareModal, type RoomFile, type ShareScope } from "@/components/dataroom/GuestShareModal";
 import { FilePreview } from "@/components/dataroom/FilePreview";
 import { AccessPanel } from "@/components/dataroom/AccessPanel";
@@ -179,6 +180,14 @@ export default function DataRoomPage() {
     if (!blob) throw new Error("fichier introuvable");
     return blob;
   }, [preview, fileBlob]);
+  // Vidéos : lien de lecture en continu (signé par le serveur, valable 1 h).
+  const streamPreview = useCallback(async () => {
+    if (!preview) throw new Error("fichier introuvable");
+    const r = await authFetch(`/api/dataroom/${preview.id}/stream`, { method: "POST" });
+    const j = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
+    if (!r.ok || !j.url) throw new Error(j.error ?? `Erreur ${r.status}`);
+    return j.url;
+  }, [preview]);
   const [editingFile, setEditingFile] = useState<StoredFile | null>(null);
   const [editName, setEditName] = useState("");
   const [editFolder, setEditFolder] = useState("");
@@ -730,6 +739,7 @@ export default function DataRoomPage() {
           name={preview.name}
           mime={preview.mime}
           load={loadPreview}
+          streamUrl={preview.local ? undefined : streamPreview}
           onDownload={() => void downloadFile(preview.id)}
           onClose={closePreview}
         />

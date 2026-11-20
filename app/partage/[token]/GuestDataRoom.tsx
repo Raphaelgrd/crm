@@ -71,6 +71,10 @@ export default function GuestDataRoom({ token }: { token: string }) {
     return blobOf(preview);
   }, [preview, blobOf]);
   const closePreview = useCallback(() => setPreview(null), []);
+  const streamPreview = useCallback(async () => {
+    if (!preview) throw new Error("fichier introuvable");
+    return `/api/partage/${encodeURIComponent(token)}/stream/${preview.id}`;
+  }, [preview, token]);
 
   async function run(key: string, fn: () => Promise<void>) {
     setBusy(key);
@@ -205,6 +209,7 @@ export default function GuestDataRoom({ token }: { token: string }) {
           name={preview.name}
           mime={preview.mime}
           load={loadPreview}
+          streamUrl={streamPreview}
           onDownload={() => void run(`dl:${preview.id}`, async () => save(await blobOf(preview), preview.name))}
           onClose={closePreview}
         />

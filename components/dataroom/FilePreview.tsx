@@ -46,9 +46,12 @@ export function FilePreview({
   name,
   mime,
   load,
+  streamUrl,
   onDownload,
   onClose,
 }: {
+  /** Vidéos : adresse de lecture en continu (lecture immédiate, sans télécharger tout le fichier). */
+  streamUrl?: () => Promise<string>;
   name: string;
   mime: string;
   /** Charge le contenu du fichier (déjà autorisé par l'appelant). */
@@ -75,6 +78,11 @@ export function FilePreview({
     let url: string | null = null;
     (async () => {
       try {
+        if (kind === "video" && streamUrl) {
+          const u = await streamUrl();
+          if (!cancelled) setState({ s: "url", url: u });
+          return;
+        }
         const blob = await load();
         if (cancelled) return;
         if (kind === "image" || kind === "pdf" || kind === "video") {
@@ -113,9 +121,9 @@ export function FilePreview({
     })();
     return () => {
       cancelled = true;
-      if (url) URL.revokeObjectURL(url);
+      if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
     };
-  }, [kind, load, mime]);
+  }, [kind, load, mime, streamUrl]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -173,7 +181,7 @@ export function FilePreview({
         )}
         {state.s === "url" && kind === "pdf" && <iframe src={state.url} className="h-full w-full border-0 bg-white" title={name} />}
         {state.s === "url" && kind === "video" && (
-          <video src={state.url} controls playsInline className="h-full w-full bg-black object-contain" aria-label={name}>
+          <video src={state.url} controls playsInline preload="metadata" className="h-full w-full bg-black object-contain" aria-label={name}>
             Ton navigateur ne peut pas lire cette vidéo : télécharge-la.
           </video>
         )}
