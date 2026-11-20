@@ -28,7 +28,9 @@ class SiegeError extends Error { name = "SiegeError"; }
 async function load() {
   const s = await store();
   const st = ((await s.get("siege", "state")) as Any) || {};
-  const tasks = ((await s.list("siegeTasks")) as Any[]).sort((a, b) => (a._o ?? 0) - (b._o ?? 0));
+  // Tâches privées (admins seulement dans le CRM) : collection à part, protégée par les règles de la base.
+  const priv = ((await s.list("siegeTasksPrivate")) as Any[]).map((t) => ({ ...t, prive: true }));
+  const tasks = [...((await s.list("siegeTasks")) as Any[]), ...priv].sort((a, b) => (a._o ?? 0) - (b._o ?? 0));
   const S: Any = { me: "mkt", projects: [], links: [], kbEdits: {}, kbBase: {}, ...st, tasks };
   delete S.updatedAt; delete S.updatedBy;
   S.projects.forEach((p: Any) => { p.decisions ||= []; p.tour ||= []; p.risques ||= []; });
@@ -52,7 +54,7 @@ async function mutate(fn: (S: Any) => { tasks?: string[]; state?: boolean }) {
   }
   for (const id of ch.tasks || []) {
     const t = S.tasks.find((x: Any) => x.id === id);
-    if (t) await s.set("siegeTasks", id, JSON.parse(JSON.stringify({ ...t, _o: t._o ?? now() })));
+    if (t) await s.set(t.prive ? "siegeTasksPrivate" : "siegeTasks", id, JSON.parse(JSON.stringify({ ...t, _o: t._o ?? now() })));
   }
 }
 function chatLog(d: Any): Any[] { try { const l = d && d.log ? JSON.parse(String(d.log)) : []; return Array.isArray(l) ? l : []; } catch { return []; } }
