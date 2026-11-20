@@ -37,12 +37,34 @@ function createBridge(me: () => { name: string; email: string }) {
     const payload = { data: { v: 1, state: JSON.stringify(s), at: Date.now() } };
     listeners.forEach((l) => l(payload));
   };
+  // Erreur de lecture de la base (ex. règles Firestore) : signalée à la page, et écoute relancée automatiquement.
+  const report = (code: string | null) => {
+    (window as Any).__siegeError = code;
+    window.dispatchEvent(new Event("siege-status"));
+  };
+  const listen = (name: string, subscribe: (onErr: (e: Any) => void) => () => void) => {
+    let failures = 0;
+    const go = () => {
+      const unsub = subscribe((e) => {
+        console.error(name, e);
+        unsub();
+        failures += 1;
+        report(e?.code || "erreur");
+        setTimeout(go, Math.min(30_000, 1000 * 2 ** Math.min(failures - 1, 5)));
+      });
+    };
+    go();
+  };
   const start = async () => {
     if (started) return;
     started = true;
     await getCrmAuth().authStateReady();
-    onSnapshot(stateRef, (snap) => { stateDoc = snap.exists() ? snap.data() : null; stateReady = true; emit(); }, (e) => console.error("siege/state", e));
-    onSnapshot(tasksRef, (snap) => { tasks.clear(); snap.docs.forEach((d) => tasks.set(d.id, d.data())); tasksReady = true; emit(); }, (e) => console.error("siegeTasks", e));
+    listen("siege/state", (onErr) =>
+      onSnapshot(stateRef, (snap) => { report(null); stateDoc = snap.exists() ? snap.data() : null; stateReady = true; emit(); }, onErr),
+    );
+    listen("siegeTasks", (onErr) =>
+      onSnapshot(tasksRef, (snap) => { tasks.clear(); snap.docs.forEach((d) => tasks.set(d.id, d.data())); tasksReady = true; emit(); }, onErr),
+    );
   };
 
   async function saveState(value: Any) {
@@ -123,8 +145,15 @@ function createBridge(me: () => { name: string; email: string }) {
 }
 
 export default function SiegePage() {
-  const { name, user } = useCrmUser() as { name: string; user: { email?: string | null } | null };
+  const { name, user, isAdmin } = useCrmUser() as { name: string; user: { email?: string | null } | null; isAdmin: boolean };
   const [ready, setReady] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
+  useEffect(() => {
+    const on = () => setDbError((window as Any).__siegeError ?? null);
+    window.addEventListener("siege-status", on);
+    on();
+    return () => window.removeEventListener("siege-status", on);
+  }, []);
   useEffect(() => {
     const w = window as Any;
     if (!w.__siegeBridge) w.__siegeBridge = createBridge(() => ({ name: w.__siegeMe?.name || "", email: w.__siegeMe?.email || "" }));
@@ -132,5 +161,30 @@ export default function SiegePage() {
   }, []);
   useEffect(() => { (window as Any).__siegeMe = { name, email: user?.email || "" }; }, [name, user]);
   if (!ready) return null;
-  return <iframe src="/siege/index.html" title="Siège IA Netforce" className="block h-full w-full border-0" />;
+  return (
+    <div className="flex h-full flex-col">
+      {dbError && (
+        <div role="alert" className="bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">Le Siège IA n&apos;arrive pas à lire la base ({dbError}) : nouvelle tentative automatique…</p>
+          {dbError === "permission-denied" && (
+            <p className="mt-1">
+              Les règles de sécurité de la base refusent l&apos;accès.{" "}
+              {isAdmin ? (
+                <>
+                  Va dans{" "}
+                  <a href="/settings" className="font-semibold underline">
+                    Paramètres
+                  </a>{" "}
+                  → « Règles de sécurité de la base » → <strong>Publier les règles</strong>, puis recharge cette page.
+                </>
+              ) : (
+                "Préviens un admin : il doit publier les règles de sécurité dans Paramètres."
+              )}
+            </p>
+          )}
+        </div>
+      )}
+      <iframe src="/siege/index.html" title="Siège IA Netforce" className="block min-h-0 w-full flex-1 border-0" />
+    </div>
+  );
 }

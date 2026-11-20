@@ -612,7 +612,7 @@ export default function DataRoomPage() {
             {subfolders.length > 0 && (
               <div>
                 <p className="text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-wide">Sous-dossiers</p>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3">
                   {subfolders.map((name) => {
                     const subPath = `${currentPath}/${name}`;
                     const count = countUnder(subPath);
@@ -626,7 +626,7 @@ export default function DataRoomPage() {
                           <FolderOpen className="h-5 w-5 text-blue-500" aria-hidden="true" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-foreground truncate text-sm font-semibold">{name}</p>
+                          <p className="text-foreground line-clamp-2 text-sm font-semibold break-words" title={name}>{name}</p>
                           <p className="text-muted-foreground text-xs">{count} fichier{count !== 1 ? "s" : ""}</p>
                         </div>
                         {isAdmin && currentRoomMeta && (
@@ -668,7 +668,7 @@ export default function DataRoomPage() {
                 )}
               </div>
             ) : filesAtPath.length > 0 ? (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-4">
                 {filesAtPath.map((f) => {
                   const Icon = fileIcon(f.mime);
                   return (
@@ -685,7 +685,7 @@ export default function DataRoomPage() {
                         )}
                       </div>
                       <div className="p-3">
-                        <p className="text-foreground cursor-pointer truncate text-sm font-semibold hover:underline" title={f.name} onClick={() => openPreview(f)}>{f.name}</p>
+                        <p className="text-foreground line-clamp-2 cursor-pointer text-sm font-semibold break-words hover:underline" title={f.name} onClick={() => openPreview(f)}>{f.name}</p>
                         <p className="text-muted-foreground mt-0.5 text-xs">{formatSize(f.size)} — {formatDate(f.createdAt)}</p>
                         {f.local && <p className="mt-0.5 text-[10px] font-medium text-amber-600">Sur cet ordinateur uniquement</p>}
                       </div>
