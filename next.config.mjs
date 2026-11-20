@@ -11,10 +11,23 @@ const securityHeaders = [
   },
 ];
 
+// La page du siège (/siege/index.html) est affichée dans un cadre par le CRM lui-même :
+// elle accepte un cadre de la même origine seulement. Tout le reste reste interdit en cadre.
+const siegeHeaders = securityHeaders.map((h) =>
+  h.key === "X-Frame-Options"
+    ? { key: h.key, value: "SAMEORIGIN" }
+    : h.key === "Content-Security-Policy"
+      ? { key: h.key, value: h.value.replace("frame-ancestors 'none'", "frame-ancestors 'self'") }
+      : h,
+);
+
 const nextConfig = {
   poweredByHeader: false,
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    return [
+      { source: "/((?!siege/).*)", headers: securityHeaders },
+      { source: "/siege/:path*", headers: siegeHeaders },
+    ];
   },
 };
 
