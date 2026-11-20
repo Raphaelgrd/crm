@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { BlobMemory, PREFETCH_MAX_BYTES, fetchChunks } from "@/lib/chunkFetch";
 import { authFetch, useCrmUser } from "@/lib/rapport";
 
 // Fichiers de la Data Room enregistrés en ligne (Firebase) via les routes /api/dataroom du serveur :
@@ -90,19 +91,14 @@ async function uploadOne(meta: Omit<FileMeta, "chunks">, blob: Blob, onBytes?: (
   return ((await res.json()) as { file: FileMeta }).file;
 }
 
-const blobCache = new Map<string, Blob>();
+const blobCache = new BlobMemory();
 
-async function downloadBlob(meta: FileMeta): Promise<Blob> {
-  const cached = blobCache.get(meta.id);
-  if (cached) return cached;
-  const parts: ArrayBuffer[] = [];
-  for (let i = 0; i < meta.chunks; i++) {
-    parts.push(await (await api(`/api/dataroom/${meta.id}/chunks/${i}`)).arrayBuffer());
-  }
-  // Un fichier vide est stocké comme un octet nul : on le tronque à sa vraie taille.
-  const blob = new Blob(parts, { type: meta.mime }).slice(0, meta.size, meta.mime);
-  blobCache.set(meta.id, blob);
-  return blob;
+function downloadBlob(meta: FileMeta): Promise<Blob> {
+  return blobCache.get(meta.id, meta.size, async () => {
+    const parts = await fetchChunks(meta.chunks, async (i) => (await api(`/api/dataroom/${meta.id}/chunks/${i}`)).arrayBuffer());
+    // Un fichier vide est stocké comme un octet nul : on le tronque à sa vraie taille.
+    return new Blob(parts, { type: meta.mime }).slice(0, meta.size, meta.mime);
+  });
 }
 
 // --- Anciens fichiers locaux (IndexedDB) ---
@@ -406,6 +402,11 @@ export function useDataRoom() {
 
   /** Contenu d'un fichier (aperçu, zip). */
   const fileBlob = useCallback((id: string): Promise<Blob | null> => blobOf(id), []);
+  /** Télécharge un fichier en avance (survol) pour que son aperçu s'ouvre aussitôt. */
+  const prefetchBlob = useCallback((id: string) => {
+    const meta = findMeta(id);
+    if (meta && meta.size <= PREFETCH_MAX_BYTES) void downloadBlob(meta).catch(() => {});
+  }, []);
 
   const openFile = useCallback(async (id: string): Promise<void> => {
     // Fenêtre ouverte tout de suite : sinon le navigateur la bloque après le téléchargement.
@@ -603,6 +604,7 @@ export function useDataRoom() {
     localCount,
     migrateLocal,
     fileBlob,
+    prefetchBlob,
     uploadFiles,
     importFolder,
     deleteFile,

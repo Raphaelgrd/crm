@@ -10,6 +10,11 @@ import { useEffect, useRef, useState } from "react";
 
 type Msg = { type: "pptx"; buffer: ArrayBuffer };
 
+// Le lecteur se charge dès l'ouverture du cadre, pendant que la page parente télécharge le fichier.
+const importLib = () => import("pptx-preview");
+let lib: ReturnType<typeof importLib> | null = null;
+const loadLib = () => (lib ??= importLib());
+
 export default function PptxFrame() {
   const box = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"waiting" | "loading" | "done" | "error">("waiting");
@@ -22,7 +27,7 @@ export default function PptxFrame() {
       if (!box.current) return;
       setStatus("loading");
       try {
-        const { init } = await import("pptx-preview");
+        const { init } = await loadLib();
         box.current.innerHTML = "";
         const width = Math.min(box.current.clientWidth || 960, 1280);
         const previewer = init(box.current, { width, mode: "list" });
@@ -38,6 +43,7 @@ export default function PptxFrame() {
       }
     };
     window.addEventListener("message", onMessage);
+    void loadLib().catch(() => {});
     window.parent.postMessage({ type: "pptx-ready" }, "*");
     return () => window.removeEventListener("message", onMessage);
   }, []);

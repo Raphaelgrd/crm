@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileIcon, Loader2, X } from "lucide-react";
 
 // Aperçu d'un fichier de la Data Room avant téléchargement (équipe et invités) :
@@ -21,6 +21,57 @@ export function previewKind(name: string, mime: string): Kind {
   if (e === "xlsx" || e === "xlsm") return "xlsx";
   if (["txt", "csv", "md", "json"].includes(e) || mime.startsWith("text/")) return "text";
   return "none";
+}
+
+/** Aperçus qui ont besoin du fichier entier (les vidéos, elles, sont lues en continu). */
+export function needsWholeFile(name: string, mime: string): boolean {
+  const k = previewKind(name, mime);
+  return k !== "video" && k !== "none";
+}
+
+// Lecteurs Word / Excel : chargés une seule fois, dès que possible (survol ou ouverture), en même temps que le fichier.
+const importMammoth = () => import("mammoth");
+const importExcel = () => import("read-excel-file/browser");
+let mammothLib: ReturnType<typeof importMammoth> | null = null;
+let excelLib: ReturnType<typeof importExcel> | null = null;
+const loadMammoth = () => (mammothLib ??= importMammoth());
+const loadExcel = () => (excelLib ??= importExcel());
+
+/** Prépare le lecteur dont l'aperçu aura besoin (appelé au survol d'un fichier). */
+export function warmPreview(name: string, mime: string) {
+  const k = previewKind(name, mime);
+  if (k === "docx") void loadMammoth().catch(() => {});
+  if (k === "xlsx") void loadExcel().catch(() => {});
+}
+
+/**
+ * Survol d'un fichier pendant un court instant : on prépare son aperçu (lecteur + téléchargement en avance).
+ * Le délai évite de tout télécharger quand la souris ne fait que traverser la liste.
+ */
+export function usePreviewPrefetch<T extends { name: string; mime: string; size: number }>(prefetch: (f: T) => void) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancel = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  }, []);
+  useEffect(() => cancel, [cancel]);
+  return useCallback(
+    (f: T) => ({
+      onPointerEnter: () => {
+        cancel();
+        timer.current = setTimeout(() => {
+          warmPreview(f.name, f.mime);
+          if (needsWholeFile(f.name, f.mime)) prefetch(f);
+        }, 150);
+      },
+      onPointerLeave: cancel,
+      onFocus: () => {
+        warmPreview(f.name, f.mime);
+        if (needsWholeFile(f.name, f.mime)) prefetch(f);
+      },
+    }),
+    [cancel, prefetch],
+  );
 }
 
 const MAX_ROWS = 500;
@@ -83,6 +134,8 @@ export function FilePreview({
           if (!cancelled) setState({ s: "url", url: u });
           return;
         }
+        // Le lecteur se charge pendant que le fichier se télécharge (et non après).
+        warmPreview(name, mime);
         const blob = await load();
         if (cancelled) return;
         if (kind === "image" || kind === "pdf" || kind === "video") {
@@ -93,11 +146,11 @@ export function FilePreview({
           url = URL.createObjectURL(typed);
           setState({ s: "url", url });
         } else if (kind === "docx") {
-          const mammoth = (await import("mammoth")).default;
+          const mammoth = (await loadMammoth()).default;
           const { value } = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
           if (!cancelled) setState({ s: "html", html: `<!doctype html><meta charset="utf-8">${DOCX_STYLE}${value || "<p><em>Document vide.</em></p>"}` });
         } else if (kind === "xlsx") {
-          const readXlsxFile = (await import("read-excel-file/browser")).default;
+          const readXlsxFile = (await loadExcel()).default;
           const all = await readXlsxFile(blob);
           const sheets = all.map((s) => {
             const rows = s.data.slice(0, MAX_ROWS).map((r) => r.slice(0, MAX_COLS).map(cellText));
@@ -123,7 +176,7 @@ export function FilePreview({
       cancelled = true;
       if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
     };
-  }, [kind, load, mime, streamUrl]);
+  }, [kind, load, mime, name, streamUrl]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -153,7 +206,7 @@ export function FilePreview({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col" onClick={(e) => e.stopPropagation()}>
-        {state.s === "loading" && (
+        {state.s === "loading" && kind !== "pptx" && (
           <div className="flex flex-1 items-center justify-center gap-2 text-sm text-white/70">
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
             Chargement de l&apos;aperçu…
@@ -186,7 +239,10 @@ export function FilePreview({
           </video>
         )}
 
-        {state.s === "pptx" && <PptxFrame name={name} buffer={state.buffer} />}
+        {/* Le lecteur PowerPoint s'ouvre tout de suite et se prépare pendant le téléchargement du fichier. */}
+        {kind === "pptx" && (state.s === "loading" || state.s === "pptx") && (
+          <PptxFrame name={name} buffer={state.s === "pptx" ? state.buffer : null} />
+        )}
 
         {state.s === "html" && (
           <iframe sandbox="" srcDoc={state.html} className="h-full w-full border-0 bg-white" title={name} />
@@ -256,26 +312,37 @@ export function FilePreview({
  * PowerPoint : rendu dans un cadre « bac à sable » sans origine (pas d'allow-same-origin) qui charge /apercu-pptx.
  * Le contenu du fichier est envoyé par message ; le cadre n'a accès ni à la session ni aux données du CRM.
  */
-function PptxFrame({ name, buffer }: { name: string; buffer: ArrayBuffer }) {
+function PptxFrame({ name, buffer }: { name: string; buffer: ArrayBuffer | null }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  const [ready, setReady] = useState(false);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     const onMessage = (e: MessageEvent<{ type?: string; message?: string }>) => {
       if (!frame.current || e.source !== frame.current.contentWindow) return;
-      if (e.data?.type === "pptx-ready") {
-        const copy = buffer.slice(0);
-        // Le cadre n'a pas d'origine (« null ») : « * » est la seule cible possible ; seul ce cadre reçoit le message.
-        frame.current.contentWindow?.postMessage({ type: "pptx", buffer: copy }, "*", [copy]);
-      }
+      if (e.data?.type === "pptx-ready") setReady(true);
+      if (e.data?.type === "pptx-done") setDone(true);
       if (e.data?.type === "pptx-error") setError(e.data.message || "fichier illisible");
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [buffer]);
+  }, []);
+  useEffect(() => {
+    if (!ready || !buffer || !frame.current?.contentWindow) return;
+    const copy = buffer.slice(0);
+    // Le cadre n'a pas d'origine (« null ») : « * » est la seule cible possible ; seul ce cadre reçoit le message.
+    frame.current.contentWindow.postMessage({ type: "pptx", buffer: copy }, "*", [copy]);
+  }, [ready, buffer]);
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       {error && <p className="bg-amber-50 px-4 py-2 text-sm text-amber-900">Aperçu impossible ({error}) : télécharge le fichier pour l&apos;ouvrir.</p>}
       <iframe ref={frame} src="/apercu-pptx" sandbox="allow-scripts" title={name} className="min-h-0 w-full flex-1 border-0 bg-gray-200" />
+      {!done && !error && (
+        <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/60 text-sm text-white/80">
+          <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+          {buffer ? "Mise en page des diapositives…" : "Chargement de la présentation…"}
+        </div>
+      )}
     </div>
   );
 }

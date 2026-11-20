@@ -24,7 +24,7 @@ import JSZip from "jszip";
 import { FolderMeta, StoredFile, formatSize, useDataRoom } from "@/lib/dataroom";
 import { authFetch } from "@/lib/rapport";
 import { GuestShareModal, type RoomFile, type ShareScope } from "@/components/dataroom/GuestShareModal";
-import { FilePreview } from "@/components/dataroom/FilePreview";
+import { FilePreview, usePreviewPrefetch } from "@/components/dataroom/FilePreview";
 import { AccessPanel } from "@/components/dataroom/AccessPanel";
 
 const ACCENT_GRADIENTS = [
@@ -158,6 +158,7 @@ export default function DataRoomPage() {
     localCount,
     migrateLocal,
     fileBlob,
+    prefetchBlob,
   } = useDataRoom();
   const [migrating, setMigrating] = useState(false);
 
@@ -174,6 +175,8 @@ export default function DataRoomPage() {
   const [lightbox, setLightbox] = useState<StoredFile | null>(null);
   const [preview, setPreview] = useState<StoredFile | null>(null);
   const openPreview = (f: StoredFile) => setPreview(f);
+  // Survol d'un fichier : son aperçu se prépare en avance (lecteur + fichier).
+  const hoverPrefetch = usePreviewPrefetch<StoredFile>(useCallback((f: StoredFile) => !f.local && prefetchBlob(f.id), [prefetchBlob]));
   const closePreview = useCallback(() => setPreview(null), []);
   const loadPreview = useCallback(async () => {
     const blob = preview ? await fileBlob(preview.id) : null;
@@ -681,7 +684,7 @@ export default function DataRoomPage() {
                 {filesAtPath.map((f) => {
                   const Icon = fileIcon(f.mime);
                   return (
-                    <div key={f.id} className="group border-border bg-card relative overflow-hidden rounded-xl border shadow-(--shadow-card)">
+                    <div key={f.id} {...hoverPrefetch(f)} className="group border-border bg-card relative overflow-hidden rounded-xl border shadow-(--shadow-card)">
                       <div
                         className="bg-muted flex h-28 cursor-pointer items-center justify-center overflow-hidden"
                         onClick={() => openPreview(f)}

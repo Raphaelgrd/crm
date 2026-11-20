@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Eye, FileText, Folder, FolderLock, Loader2 } from "lucide-react";
 import JSZip from "jszip";
-import { FilePreview } from "@/components/dataroom/FilePreview";
+import { FilePreview, needsWholeFile, usePreviewPrefetch } from "@/components/dataroom/FilePreview";
+import { BlobMemory, PREFETCH_MAX_BYTES, fetchChunks } from "@/lib/chunkFetch";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
@@ -56,15 +57,27 @@ export default function GuestDataRoom({ token }: { token: string }) {
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b, "fr"));
   }, [data]);
 
-  const blobOf = useCallback(async (f: SharedFile): Promise<Blob> => {
-    const parts: ArrayBuffer[] = [];
-    for (let i = 0; i < f.chunks; i++) {
-      const r = await fetch(`/api/partage/${encodeURIComponent(token)}/files/${f.id}/${i}`, { cache: "no-store" });
-      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error || "Téléchargement impossible.");
-      parts.push(await r.arrayBuffer());
-    }
-    return new Blob(parts, { type: f.mime }).slice(0, f.size, f.mime);
-  }, [token]);
+  const memory = useRef(new BlobMemory());
+  const blobOf = useCallback(
+    (f: SharedFile): Promise<Blob> =>
+      memory.current.get(f.id, f.size, async () => {
+        const parts = await fetchChunks(f.chunks, async (i) => {
+          const r = await fetch(`/api/partage/${encodeURIComponent(token)}/files/${f.id}/${i}`, { cache: "no-store" });
+          if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error || "Téléchargement impossible.");
+          return r.arrayBuffer();
+        });
+        return new Blob(parts, { type: f.mime }).slice(0, f.size, f.mime);
+      }),
+    [token],
+  );
+  /** Survol d'un fichier : téléchargement en avance pour que l'aperçu s'ouvre aussitôt. */
+  const prefetch = useCallback(
+    (f: SharedFile) => {
+      if (f.size <= PREFETCH_MAX_BYTES && needsWholeFile(f.name, f.mime)) void blobOf(f).catch(() => {});
+    },
+    [blobOf],
+  );
+  const hoverPrefetch = usePreviewPrefetch<SharedFile>(prefetch);
 
   const loadPreview = useCallback(async () => {
     if (!preview) throw new Error("fichier introuvable");
@@ -163,7 +176,7 @@ export default function GuestDataRoom({ token }: { token: string }) {
                     )}
                     <ul className="bg-card border-border divide-border divide-y overflow-hidden rounded-xl border shadow-sm">
                       {files.map((f) => (
-                        <li key={f.id} className="flex items-center gap-3 px-4 py-3">
+                        <li key={f.id} {...hoverPrefetch(f)} className="flex items-center gap-3 px-4 py-3">
                           <FileText className="text-muted-foreground h-5 w-5 shrink-0" aria-hidden="true" />
                           <div className="min-w-0 flex-1">
                             <button type="button" onClick={() => setPreview(f)} className="text-foreground block max-w-full truncate text-left text-sm font-medium hover:underline">
