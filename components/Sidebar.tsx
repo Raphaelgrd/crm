@@ -30,6 +30,7 @@ import {
   Mail,
   Monitor,
   Bot,
+  Network,
   ListTodo,
   Images,
   ScanLine,
@@ -87,6 +88,7 @@ const NAV_GROUPS: {
       { href: "/automatisation", label: "Automatisations", icon: Zap },
       { href: "/rapport", label: "Rapport d'activité", icon: Clock },
       { href: "/assistant", label: "Assistant IA", icon: Bot },
+      { href: "/siege", label: "Siège IA", icon: Network },
     ],
   },
 ];

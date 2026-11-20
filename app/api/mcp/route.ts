@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { apiKeyOk } from "@/lib/server/apiKey";
 import { TOOLS, callTool } from "@/lib/server/mcpTools";
+import { SIEGE_GUIDE } from "@/lib/server/siegeTools";
 
 // Serveur MCP (transport « Streamable HTTP », réponses JSON sans SSE) :
 // permet à Claude, ChatGPT ou tout client MCP de lire et modifier le CRM.
@@ -19,7 +20,9 @@ const CORS = {
 
 const INSTRUCTIONS = `CRM de Netforce (gants de protection pour forces de l'ordre et défense).
 Données : contacts (pipeline commercial et levée de fonds), organisations, agenda, comptes rendus de réunion, prêts/envois de gants, stock, dossiers de la Data Room, activité de l'équipe et rapport d'heures.
-Avant de créer un contact, cherche-le avec search_contacts pour éviter les doublons. Les dates sont au format YYYY-MM-DD.`;
+Avant de créer un contact, cherche-le avec search_contacts pour éviter les doublons. Les dates sont au format YYYY-MM-DD.
+
+${SIEGE_GUIDE}`;
 
 type JsonRpc = { jsonrpc?: string; id?: string | number | null; method?: string; params?: Record<string, unknown> };
 
