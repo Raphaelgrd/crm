@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { storageError } from "@/lib/server/dataroom";
-import { checkShareToken, recordOpen, sharedFiles } from "@/lib/server/shares";
+import { checkShareToken, isPartialShare, recordOpen, sharedFiles } from "@/lib/server/shares";
 
 export const runtime = "nodejs";
 
@@ -13,7 +13,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     if ("error" in access) return Response.json({ error: access.error }, { status: access.status });
     const { share, folder } = access;
     await recordOpen(share);
-    const files = (await sharedFiles(folder)).map((f) => ({
+    const files = (await sharedFiles(folder, share)).map((f) => ({
       id: f.id,
       name: f.name,
       mime: f.mime,
@@ -24,7 +24,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       createdAt: f.createdAt,
     }));
     return Response.json(
-      { folder: folder.name, email: share.email, expiresAt: share.expiresAt, files },
+      { folder: folder.name, email: share.email, expiresAt: share.expiresAt, partial: isPartialShare(share), files },
       { headers: { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } },
     );
   } catch (e) {

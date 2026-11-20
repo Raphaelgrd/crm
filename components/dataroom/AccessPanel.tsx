@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Clock, Globe, Lock, Trash2, UserPlus } from "lucide-react";
 import { authFetch } from "@/lib/rapport";
 import { useContacts, contactFullName } from "@/lib/contacts";
+import { scopeText, type RoomFile } from "./GuestShareModal";
 
 // Panneau « Utilisateurs ayant accès » d'une Data Room (admins) : invités extérieurs regroupés par échéance,
 // durée modifiable, accès retirable, et membres de l'équipe qui voient la Data Room.
@@ -18,6 +19,8 @@ interface Share {
   lastOpenedAt: string | null;
   opens: number;
   status: "active" | "expired" | "revoked";
+  paths?: string[];
+  fileIds?: string[];
 }
 interface Member {
   email: string;
@@ -34,9 +37,11 @@ const daysLeft = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now(
 
 export function AccessPanel({
   folder,
+  files = [],
   onAdd,
   refreshKey,
 }: {
+  files?: RoomFile[];
   folder: { id: string; name: string; visibility: "public" | "private"; sharedWith: string[] };
   onAdd: () => void;
   refreshKey: number;
@@ -205,7 +210,10 @@ export function AccessPanel({
                             </option>
                           ))}
                         </select>
-                        <p className="text-muted-foreground mt-2 text-[11px]">
+                        <p className="text-foreground mt-2 truncate text-[11px] font-medium" title={scopeText(s, files)}>
+                          Accès : {scopeText(s, files)}
+                        </p>
+                        <p className="text-muted-foreground mt-1 text-[11px]">
                           Partagé par {s.createdBy || "?"} le {fmt(s.createdAt)} ·{" "}
                           {s.opens ? `ouvert ${s.opens} fois, dernière fois le ${fmt(s.lastOpenedAt ?? s.createdAt)}` : "jamais ouvert"}
                         </p>

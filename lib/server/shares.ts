@@ -32,9 +32,54 @@ export async function checkShareToken(token: string): Promise<ShareAccess> {
 
 const under = (folder: string, name: string) => folder === name || folder.startsWith(name + "/");
 
-/** Fichiers de la Data Room partagée. */
-export async function sharedFiles(folder: FolderRecord): Promise<FileMeta[]> {
-  return (await listFiles()).filter((f) => under(f.folder, folder.name));
+/** Chemin d'un fichier relatif à sa Data Room ("" = racine). */
+export const relPath = (f: Pick<FileMeta, "folder">, room: string) => (f.folder === room ? "" : f.folder.slice(room.length + 1));
+
+/** Partage limité à des dossiers ou fichiers précis ? */
+export const isPartialShare = (s: Pick<ShareRecord, "paths" | "fileIds">) => !!(s.paths?.length || s.fileIds?.length);
+
+/** Le fichier fait-il partie de ce qui est partagé (Data Room entière, ou dossiers / fichiers choisis) ? */
+export function inShareScope(share: Pick<ShareRecord, "paths" | "fileIds">, folder: Pick<FolderRecord, "name">, f: FileMeta): boolean {
+  if (!under(f.folder, folder.name)) return false;
+  if (!isPartialShare(share)) return true;
+  if (share.fileIds?.includes(f.id)) return true;
+  const rel = relPath(f, folder.name);
+  return (share.paths ?? []).some((p) => rel === p || rel.startsWith(p + "/"));
+}
+
+/** Fichiers visibles par l'invité. */
+export async function sharedFiles(folder: FolderRecord, share?: Pick<ShareRecord, "paths" | "fileIds">): Promise<FileMeta[]> {
+  return (await listFiles()).filter((f) => (share ? inShareScope(share, folder, f) : under(f.folder, folder.name)));
+}
+
+export class ShareScopeError extends Error {}
+
+/** Vérifie et nettoie une sélection : chaque dossier doit contenir des fichiers, chaque fichier doit être dans la Data Room. */
+export async function validateScope(folder: FolderRecord, paths: unknown, fileIds: unknown): Promise<{ paths?: string[]; fileIds?: string[] }> {
+  const ps = Array.isArray(paths) ? [...new Set(paths.map((p) => String(p).trim().replace(/^\/+|\/+$/g, "")).filter(Boolean))].slice(0, 200) : [];
+  const ids = Array.isArray(fileIds) ? [...new Set(fileIds.map(String))].slice(0, 500) : [];
+  if (!ps.length && !ids.length) return {};
+  const files = (await listFiles()).filter((f) => under(f.folder, folder.name));
+  for (const p of ps) {
+    if (!files.some((f) => { const r = relPath(f, folder.name); return r === p || r.startsWith(p + "/"); })) {
+      throw new ShareScopeError(`Dossier introuvable ou vide dans « ${folder.name} » : ${p}`);
+    }
+  }
+  for (const id of ids) {
+    if (!files.some((f) => f.id === id)) throw new ShareScopeError("Un des fichiers choisis n'est pas dans cette Data Room.");
+  }
+  return { ...(ps.length ? { paths: ps } : {}), ...(ids.length ? { fileIds: ids } : {}) };
+}
+
+/** Ce qui est partagé, en une phrase complète : « la Data Room « X » » ou « des documents de la Data Room « X » : … ». */
+export function scopeLabel(share: Pick<ShareRecord, "paths" | "fileIds">, folderName: string, fileNames: Map<string, string> = new Map()): string {
+  if (!isPartialShare(share)) return `la Data Room « ${folderName} »`;
+  const parts = [
+    ...(share.paths ?? []).map((p) => `le dossier « ${p.split("/").pop()} »`),
+    ...(share.fileIds ?? []).map((id) => `« ${fileNames.get(id) ?? "document"} »`),
+  ];
+  const shown = parts.slice(0, 3).join(", ") + (parts.length > 3 ? ` et ${parts.length - 3} autre${parts.length - 3 > 1 ? "s" : ""} élément${parts.length - 3 > 1 ? "s" : ""}` : "");
+  return `des documents de la Data Room « ${folderName} » : ${shown}`;
 }
 
 /** Première ouverture = activation du compte invité ; ensuite on note la dernière visite. */
@@ -61,8 +106,11 @@ export async function createGuestShare(opts: {
   message: string;
   senderName: string;
   senderEmail: string;
+  /** Partage partiel (déjà validé par validateScope). */
+  scope?: { paths?: string[]; fileIds?: string[] };
 }): Promise<{ share: ShareRecord; url: string; emailed: boolean; emailError: string }> {
   const { folder, email, days, message, senderName, senderEmail } = opts;
+  const scope = opts.scope ?? {};
   const now = new Date();
   const share: ShareRecord = {
     id: newShareId(),
@@ -71,8 +119,13 @@ export async function createGuestShare(opts: {
     expiresAt: new Date(now.getTime() + days * 86_400_000).toISOString(),
     createdAt: now.toISOString(),
     createdBy: senderEmail,
+    ...(scope.paths?.length ? { paths: scope.paths } : {}),
+    ...(scope.fileIds?.length ? { fileIds: scope.fileIds } : {}),
   };
   await saveShare(share);
+  const partial = isPartialShare(share);
+  const names = partial ? new Map((await listFiles()).map((f) => [f.id, f.name])) : new Map<string, string>();
+  const what = scopeLabel(share, folder.name, names);
   const url = shareUrl(share.id);
 
   let emailed = false;
@@ -81,19 +134,19 @@ export async function createGuestShare(opts: {
     const until = new Date(share.expiresAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" });
     const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#0f172a">
 <p style="font-size:16px">Bonjour,</p>
-<p style="font-size:15px;line-height:1.55">${escapeHtml(senderName)} vous donne accès à la Data Room <strong>« ${escapeHtml(folder.name)} »</strong> de Netforce.</p>
+<p style="font-size:15px;line-height:1.55">${escapeHtml(senderName)} (Netforce) vous donne accès à <strong>${escapeHtml(what)}</strong>.</p>
 ${message ? `<p style="font-size:15px;line-height:1.55;background:#f1f5f9;border-radius:8px;padding:12px 14px">${escapeHtml(message).replace(/\n/g, "<br/>")}</p>` : ""}
-<p style="margin:28px 0"><a href="${url}" style="background:#0f172a;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block">Ouvrir la Data Room</a></p>
+<p style="margin:28px 0"><a href="${url}" style="background:#0f172a;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block">${partial ? "Voir les documents" : "Ouvrir la Data Room"}</a></p>
 <p style="font-size:13px;color:#475569;line-height:1.5">Votre accès invité est créé automatiquement à votre première visite, avec cette adresse email. Il est valable jusqu'au <strong>${until}</strong>. Les documents sont confidentiels : merci de ne pas transférer ce lien.</p>
 </div>`;
     // Version texte en plus du HTML : les messageries notent mieux les emails qui ont les deux.
     const text = [
       "Bonjour,",
       "",
-      `${senderName} vous donne accès à la Data Room « ${folder.name} » de Netforce.`,
+      `${senderName} (Netforce) vous donne accès à ${what}.`,
       ...(message ? ["", message] : []),
       "",
-      `Ouvrir la Data Room : ${url}`,
+      `${partial ? "Voir les documents" : "Ouvrir la Data Room"} : ${url}`,
       "",
       `Votre accès invité est créé automatiquement à votre première visite, avec cette adresse email. Il est valable jusqu'au ${until}.`,
       "Les documents sont confidentiels : merci de ne pas transférer ce lien.",
@@ -103,7 +156,7 @@ ${message ? `<p style="font-size:15px;line-height:1.55;background:#f1f5f9;border
         from: `${senderName} · Netforce <contact@mail.netforce-defense.com>`,
         to: email,
         replyTo: senderEmail || undefined,
-        subject: `Accès à la Data Room « ${folder.name} » — Netforce`,
+        subject: partial ? `Documents partagés — Data Room « ${folder.name} » — Netforce` : `Accès à la Data Room « ${folder.name} » — Netforce`,
         html,
         text,
       });

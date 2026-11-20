@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 import { listFolders, listShares, storageError, type ShareRecord } from "@/lib/server/dataroom";
-import { SHARE_DURATIONS, createGuestShare } from "@/lib/server/shares";
+import { SHARE_DURATIONS, ShareScopeError, createGuestShare, validateScope } from "@/lib/server/shares";
 
 export const runtime = "nodejs";
 
@@ -27,6 +27,8 @@ const publicShare = (s: ShareRecord) => ({
   activatedAt: s.activatedAt ?? null,
   lastOpenedAt: s.lastOpenedAt ?? null,
   opens: s.opens ?? 0,
+  paths: s.paths ?? [],
+  fileIds: s.fileIds ?? [],
   status: s.revoked ? "revoked" : new Date(s.expiresAt).getTime() <= Date.now() ? "expired" : "active",
 });
 
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   try {
     const r = await adminAndFolder(req, ctx);
     if ("res" in r) return r.res;
-    const b = (await req.json()) as { email?: unknown; days?: unknown; message?: unknown; senderName?: unknown };
+    const b = (await req.json()) as { email?: unknown; days?: unknown; message?: unknown; senderName?: unknown; paths?: unknown; fileIds?: unknown };
     const email = typeof b.email === "string" ? b.email.trim().toLowerCase() : "";
     const days = Number(b.days);
     const message = typeof b.message === "string" ? b.message.trim().slice(0, 1000) : "";
@@ -60,7 +62,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     if (!EMAIL.test(email)) return Response.json({ error: "Adresse email invalide." }, { status: 400 });
     if (!SHARE_DURATIONS.includes(days)) return Response.json({ error: "Durée invalide." }, { status: 400 });
 
+    let scope: { paths?: string[]; fileIds?: string[] };
+    try {
+      scope = await validateScope(r.folder, b.paths, b.fileIds);
+    } catch (e) {
+      if (e instanceof ShareScopeError) return Response.json({ error: e.message }, { status: 400 });
+      throw e;
+    }
     const { share, url, emailed, emailError } = await createGuestShare({
+      scope,
       folder: r.folder,
       email,
       days,

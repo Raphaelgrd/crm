@@ -196,6 +196,9 @@ export interface ShareRecord {
   activatedAt?: string;
   lastOpenedAt?: string;
   opens?: number;
+  /** Partage partiel : sous-dossiers (chemins relatifs à la Data Room) et/ou fichiers précis. Absent = toute la Data Room. */
+  paths?: string[];
+  fileIds?: string[];
 }
 
 export async function listShares(): Promise<ShareRecord[]> {

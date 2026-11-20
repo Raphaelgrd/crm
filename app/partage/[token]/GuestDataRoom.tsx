@@ -25,6 +25,8 @@ interface ShareData {
   folder: string;
   email: string;
   expiresAt: string;
+  /** Seulement certains dossiers ou fichiers de la Data Room. */
+  partial?: boolean;
   files: SharedFile[];
 }
 
@@ -120,7 +122,9 @@ export default function GuestDataRoom({ token }: { token: string }) {
           <>
             <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">Data Room partagée</p>
+                <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                  {data.partial ? "Documents partagés · Data Room" : "Data Room partagée"}
+                </p>
                 <h1 className="text-foreground mt-1 text-2xl font-bold text-balance">{data.folder}</h1>
                 <p className="text-muted-foreground mt-1 text-sm">
                   Accès invité de <strong className="text-foreground">{data.email}</strong>, valable jusqu&apos;au {fmtDate(data.expiresAt)}

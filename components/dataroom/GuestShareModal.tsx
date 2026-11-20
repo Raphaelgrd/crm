@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Check, Copy, Loader2, Send, UserX, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, Copy, FileText, FolderOpen, Loader2, Send, UserX, X } from "lucide-react";
 import { authFetch, useCrmUser } from "@/lib/rapport";
 import { useContacts } from "@/lib/contacts";
 
@@ -11,6 +11,30 @@ interface Share {
   expiresAt: string;
   activatedAt: string | null;
   lastOpenedAt: string | null;
+  paths?: string[];
+  fileIds?: string[];
+}
+
+/** Fichier de la Data Room, avec son chemin relatif à la Data Room ("" = racine). */
+export interface RoomFile {
+  id: string;
+  name: string;
+  path: string;
+}
+
+export interface ShareScope {
+  paths: string[];
+  fileIds: string[];
+}
+
+/** Description courte de ce qu'un invité voit. */
+export function scopeText(s: { paths?: string[]; fileIds?: string[] }, files: RoomFile[]): string {
+  const paths = s.paths ?? [];
+  const ids = s.fileIds ?? [];
+  if (!paths.length && !ids.length) return "Toute la Data Room";
+  const names = new Map(files.map((f) => [f.id, f.name]));
+  const parts = [...paths.map((p) => `dossier « ${p.split("/").pop()} »`), ...ids.map((id) => `« ${names.get(id) ?? "document supprimé"} »`)];
+  return parts.length > 3 ? `${parts.slice(0, 2).join(", ")} et ${parts.length - 2} autres éléments` : parts.join(", ");
 }
 
 const DURATIONS = [
@@ -24,8 +48,25 @@ const DURATIONS = [
 
 const fmt = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 
-/** Partage temporaire d'une Data Room avec une personne extérieure (compte invité, lien par email). */
-export function GuestShareModal({ folderId, folderName, onClose }: { folderId: string; folderName: string; onClose: () => void }) {
+/** Partage temporaire d'une Data Room, ou de dossiers / fichiers précis, avec une personne extérieure (lien par email). */
+export function GuestShareModal({
+  folderId,
+  folderName,
+  onClose,
+  files = [],
+  initialScope,
+}: {
+  folderId: string;
+  folderName: string;
+  onClose: () => void;
+  /** Fichiers en ligne de la Data Room (pour choisir une sélection). */
+  files?: RoomFile[];
+  /** Sélection proposée à l'ouverture (bouton « Partager » d'un dossier ou d'un fichier). */
+  initialScope?: ShareScope;
+}) {
+  const [mode, setMode] = useState<"all" | "some">(initialScope && (initialScope.paths.length || initialScope.fileIds.length) ? "some" : "all");
+  const [selPaths, setSelPaths] = useState<string[]>(initialScope?.paths ?? []);
+  const [selFiles, setSelFiles] = useState<string[]>(initialScope?.fileIds ?? []);
   const { name } = useCrmUser();
   const { contacts } = useContacts();
   const [email, setEmail] = useState("");
@@ -71,6 +112,10 @@ export function GuestShareModal({ folderId, folderName, onClose }: { folderId: s
       setError(matches.length ? "Choisis un contact dans la liste, ou tape une adresse email complète." : "Aucun contact trouvé : tape l'adresse email complète.");
       return;
     }
+    if (mode === "some" && !selPaths.length && !selFiles.length) {
+      setError("Coche au moins un dossier ou un fichier à partager.");
+      return;
+    }
     setSending(true);
     setError("");
     setResult(null);
@@ -78,7 +123,13 @@ export function GuestShareModal({ folderId, folderName, onClose }: { folderId: s
       const r = await authFetch(`/api/dataroom/folders/${folderId}/shares`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, days, message, senderName: name }),
+        body: JSON.stringify({
+          email,
+          days,
+          message,
+          senderName: name,
+          ...(mode === "some" ? { paths: selPaths, fileIds: selFiles } : {}),
+        }),
       });
       const d = (await r.json()) as { url?: string; emailed?: boolean; emailError?: string; error?: string };
       if (!r.ok || !d.url) throw new Error(d.error || "Partage impossible.");
@@ -118,7 +169,7 @@ export function GuestShareModal({ folderId, folderName, onClose }: { folderId: s
         </div>
         <p className="text-muted-foreground mb-5 text-sm">
           La personne reçoit un lien par email. À son premier clic, un compte invité est créé avec son adresse : elle voit et télécharge
-          uniquement cette Data Room, jusqu&apos;à la date choisie.
+          uniquement ce que tu partages, jusqu&apos;à la date choisie.
         </p>
 
         <form onSubmit={(e) => void send(e)} className="space-y-3">
@@ -168,6 +219,31 @@ export function GuestShareModal({ folderId, folderName, onClose }: { folderId: s
               </ul>
             )}
           </div>
+          <fieldset className="space-y-2">
+            <legend className="text-muted-foreground mb-1 text-xs">Que partager ?</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  ["all", "Toute la Data Room"],
+                  ["some", "Une sélection"],
+                ] as const
+              ).map(([m, label]) => (
+                <label
+                  key={m}
+                  className={
+                    "cursor-pointer rounded-lg border px-3 py-2 text-center text-sm font-medium " +
+                    (mode === m ? "border-primary bg-primary/5 text-primary" : "border-border text-foreground hover:bg-muted")
+                  }
+                >
+                  <input type="radio" name="share-mode" value={m} checked={mode === m} onChange={() => setMode(m)} className="sr-only" />
+                  {label}
+                </label>
+              ))}
+            </div>
+            {mode === "some" && (
+              <ScopePicker files={files} paths={selPaths} fileIds={selFiles} onPaths={setSelPaths} onFiles={setSelFiles} />
+            )}
+          </fieldset>
           <label className="block space-y-1">
             <span className="text-muted-foreground text-xs">Accès pendant</span>
             <select value={days} onChange={(e) => setDays(Number(e.target.value))} className={input}>
@@ -232,6 +308,7 @@ export function GuestShareModal({ folderId, folderName, onClose }: { folderId: s
                     <p className="text-muted-foreground text-xs">
                       {s.activatedAt ? `Compte activé le ${fmt(s.activatedAt)}` : "Lien pas encore ouvert"} · expire le {fmt(s.expiresAt)}
                     </p>
+                    <p className="text-muted-foreground truncate text-xs">Accès : {scopeText(s, files)}</p>
                   </div>
                   <button
                     type="button"
@@ -247,6 +324,113 @@ export function GuestShareModal({ folderId, folderName, onClose }: { folderId: s
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Choix des dossiers et fichiers à partager. Cocher un dossier partage tout son contenu, sous-dossiers compris. */
+function ScopePicker({
+  files,
+  paths,
+  fileIds,
+  onPaths,
+  onFiles,
+}: {
+  files: RoomFile[];
+  paths: string[];
+  fileIds: string[];
+  onPaths: (p: string[]) => void;
+  onFiles: (f: string[]) => void;
+}) {
+  const [q, setQ] = useState("");
+  // Tous les dossiers (avec leurs parents), triés pour un affichage en arbre.
+  const folders = useMemo(() => {
+    const set = new Set<string>();
+    for (const f of files) {
+      const segs = f.path ? f.path.split("/") : [];
+      for (let i = 1; i <= segs.length; i++) set.add(segs.slice(0, i).join("/"));
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "fr"));
+  }, [files]);
+  // Dossier coché qui contient déjà ce chemin (le chemin lui-même ou un parent).
+  const coveredBy = (path: string) => paths.find((p) => path === p || path.startsWith(p + "/"));
+  const parentOf = (path: string) => path.split("/").slice(0, -1).join("/");
+  const needle = q.trim().toLowerCase();
+  const rows: { kind: "folder" | "file"; key: string; label: string; depth: number; path: string; id?: string }[] = [];
+  const addFiles = (path: string) => {
+    for (const f of files.filter((x) => x.path === path).sort((a, b) => a.name.localeCompare(b.name, "fr"))) {
+      if (!needle || f.name.toLowerCase().includes(needle)) {
+        rows.push({ kind: "file", key: f.id, label: f.name, depth: path ? path.split("/").length : 0, path, id: f.id });
+      }
+    }
+  };
+  addFiles("");
+  for (const d of folders) {
+    if (!needle || d.toLowerCase().includes(needle)) {
+      rows.push({ kind: "folder", key: "d:" + d, label: d.split("/").pop() ?? d, depth: d.split("/").length - 1, path: d });
+    }
+    addFiles(d);
+  }
+  const count = paths.length + fileIds.length;
+
+  return (
+    <div className="border-border rounded-lg border">
+      <div className="border-border flex items-center gap-2 border-b px-2 py-1.5">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Filtrer les dossiers et fichiers"
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+          aria-label="Filtrer les dossiers et fichiers"
+        />
+        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+          {count} sélectionné{count > 1 ? "s" : ""}
+        </span>
+      </div>
+      <ul className="max-h-56 overflow-y-auto py-1">
+        {!rows.length && <li className="text-muted-foreground px-3 py-2 text-xs">Aucun fichier en ligne dans cette Data Room.</li>}
+        {rows.map((r) => {
+          // Contenu d'un dossier déjà coché : coché d'office, non modifiable.
+          const inherited = r.kind === "folder" ? (parentOf(r.path) ? coveredBy(parentOf(r.path)) : undefined) : r.path ? coveredBy(r.path) : undefined;
+          const checked = !!inherited || (r.kind === "folder" ? paths.includes(r.path) : fileIds.includes(r.id!));
+          const toggle = () => {
+            if (r.kind === "folder") {
+              if (paths.includes(r.path)) onPaths(paths.filter((p) => p !== r.path));
+              else {
+                // Le dossier couvre ses sous-dossiers et fichiers : on les retire de la sélection.
+                onPaths([...paths.filter((p) => !p.startsWith(r.path + "/")), r.path]);
+                onFiles(fileIds.filter((id) => {
+                  const f = files.find((x) => x.id === id);
+                  return !f || !(f.path === r.path || f.path.startsWith(r.path + "/"));
+                }));
+              }
+            } else onFiles(fileIds.includes(r.id!) ? fileIds.filter((x) => x !== r.id) : [...fileIds, r.id!]);
+          };
+          return (
+            <li key={r.key}>
+              <label
+                className={"hover:bg-muted flex cursor-pointer items-center gap-2 py-1 pr-3 text-sm " + (inherited ? "opacity-60" : "")}
+                style={{ paddingLeft: 12 + r.depth * 16 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={!!inherited}
+                  onChange={toggle}
+                  className="accent-blue-600"
+                  aria-label={`${r.kind === "folder" ? "Dossier" : "Fichier"} ${r.label}`}
+                />
+                {r.kind === "folder" ? (
+                  <FolderOpen className="h-4 w-4 shrink-0 text-blue-500" aria-hidden="true" />
+                ) : (
+                  <FileText className="text-muted-foreground h-4 w-4 shrink-0" aria-hidden="true" />
+                )}
+                <span className={"truncate " + (r.kind === "folder" ? "font-medium" : "")}>{r.label}</span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

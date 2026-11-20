@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getMeta, readChunk, storageError } from "@/lib/server/dataroom";
-import { checkShareToken } from "@/lib/server/shares";
+import { checkShareToken, inShareScope } from "@/lib/server/shares";
 
 export const runtime = "nodejs";
 
@@ -14,8 +14,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     if ("error" in access) return Response.json({ error: access.error }, { status: access.status });
     const meta = await getMeta(fileId);
     const n = Number(i);
-    const name = access.folder.name;
-    const inside = !!meta && (meta.folder === name || meta.folder.startsWith(name + "/"));
+    // Seuls les fichiers compris dans le partage (Data Room entière, ou dossiers / fichiers choisis).
+    const inside = !!meta && inShareScope(access.share, access.folder, meta);
     if (!meta || !inside || !Number.isInteger(n) || n < 0 || n >= meta.chunks) {
       return Response.json({ error: "Fichier introuvable." }, { status: 404 });
     }

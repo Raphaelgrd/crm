@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import JSZip from "jszip";
 import { FolderMeta, StoredFile, formatSize, useDataRoom } from "@/lib/dataroom";
-import { GuestShareModal } from "@/components/dataroom/GuestShareModal";
+import { GuestShareModal, type RoomFile, type ShareScope } from "@/components/dataroom/GuestShareModal";
 import { FilePreview } from "@/components/dataroom/FilePreview";
 import { AccessPanel } from "@/components/dataroom/AccessPanel";
 
@@ -184,6 +184,7 @@ export default function DataRoomPage() {
   const [editFolder, setEditFolder] = useState("");
   const [guestShareFolder, setGuestShareFolder] = useState<FolderMeta | null>(null);
   const [accessRefresh, setAccessRefresh] = useState(0);
+  const [guestShareScope, setGuestShareScope] = useState<ShareScope | undefined>(undefined);
   const [renameFolderTarget, setRenameFolderTarget] = useState<string | null>(null);
   const [renameFolderName, setRenameFolderName] = useState("");
 
@@ -224,6 +225,21 @@ export default function DataRoomPage() {
   const isAtRoot = currentPath === "";
   const pathSegments = currentPath ? currentPath.split("/") : [];
   const currentRoomMeta = folderMetas.find((f) => f.name === pathSegments[0]);
+  // Fichiers en ligne de la Data Room ouverte, avec leur chemin relatif (pour les partages partiels).
+  const roomFiles: RoomFile[] = useMemo(() => {
+    const room = pathSegments[0];
+    if (!room) return [];
+    return files
+      .filter((f) => !f.local && (f.folder === room || f.folder.startsWith(room + "/")))
+      .map((f) => ({ id: f.id, name: f.name, path: f.folder === room ? "" : f.folder.slice(room.length + 1) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files, pathSegments[0]]);
+  const relToRoom = (path: string) => path.split("/").slice(1).join("/");
+  const shareScoped = (scope: ShareScope) => {
+    if (!currentRoomMeta) return;
+    setGuestShareScope(scope);
+    setGuestShareFolder(currentRoomMeta);
+  };
 
   // Files at exactly the current path
   const filesAtPath = useMemo(() => {
@@ -373,7 +389,10 @@ export default function DataRoomPage() {
                 {isAdmin && currentRoomMeta && (
                   <button
                     type="button"
-                    onClick={() => setGuestShareFolder(currentRoomMeta)}
+                    onClick={() => {
+                      setGuestShareScope(undefined);
+                      setGuestShareFolder(currentRoomMeta);
+                    }}
                     className="border-border bg-card text-foreground hover:bg-muted inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
                     title="Donner un accès temporaire à une personne extérieure"
                   >
@@ -606,10 +625,24 @@ export default function DataRoomPage() {
                         <div className="shrink-0 rounded-lg bg-blue-50 p-2 dark:bg-blue-950/30">
                           <FolderOpen className="h-5 w-5 text-blue-500" aria-hidden="true" />
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="text-foreground truncate text-sm font-semibold">{name}</p>
                           <p className="text-muted-foreground text-xs">{count} fichier{count !== 1 ? "s" : ""}</p>
                         </div>
+                        {isAdmin && currentRoomMeta && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              shareScoped({ paths: [relToRoom(subPath)], fileIds: [] });
+                            }}
+                            className="text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 rounded-lg p-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                            aria-label={`Partager le dossier ${name}`}
+                            title="Partager ce dossier avec une personne extérieure"
+                          >
+                            <Share2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
                       </div>
                     );
                   })}
@@ -658,6 +691,9 @@ export default function DataRoomPage() {
                       </div>
                       <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                         <button type="button" onClick={() => void openFile(f.id)} className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700" aria-label="Ouvrir"><ExternalLink className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" /></button>
+                        {isAdmin && currentRoomMeta && !f.local && (
+                          <button type="button" onClick={() => shareScoped({ paths: [], fileIds: [f.id] })} className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700" aria-label={`Partager ${f.name}`} title="Partager ce fichier avec une personne extérieure"><Share2 className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" /></button>
+                        )}
                         <button type="button" onClick={() => { setEditingFile(f); setEditName(f.name); setEditFolder(f.folder); }} className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700" aria-label="Renommer"><Pencil className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" /></button>
                         <button type="button" onClick={() => void downloadFile(f.id)} className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700" aria-label="Télécharger"><Download className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" /></button>
                         {confirmDelete === f.id ? (
@@ -673,7 +709,15 @@ export default function DataRoomPage() {
             ) : null}
           </div>
           {isAdmin && currentRoomMeta && (
-            <AccessPanel folder={currentRoomMeta} onAdd={() => setGuestShareFolder(currentRoomMeta)} refreshKey={accessRefresh} />
+            <AccessPanel
+              folder={currentRoomMeta}
+              files={roomFiles}
+              onAdd={() => {
+                setGuestShareScope(undefined);
+                setGuestShareFolder(currentRoomMeta);
+              }}
+              refreshKey={accessRefresh}
+            />
           )}
           </div>
         )}
@@ -764,6 +808,8 @@ export default function DataRoomPage() {
         <GuestShareModal
           folderId={guestShareFolder.id}
           folderName={guestShareFolder.name}
+          files={roomFiles}
+          initialScope={guestShareScope}
           onClose={() => {
             setGuestShareFolder(null);
             setAccessRefresh((n) => n + 1);
