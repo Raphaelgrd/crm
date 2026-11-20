@@ -199,5 +199,7 @@ export async function chatCompletion(opts: {
     return chatCompletion({ ...opts, retried: true });
   }
   console.error("[llm]", errors.join(" | "));
-  throw new LlmError("L'IA est momentanément saturée sur tous les services gratuits. Réessaie dans une minute.");
+  // Raison de chaque service (code HTTP + début du message, sans clé) pour comprendre l'échec sans ouvrir les journaux.
+  const detail = errors.map((e) => e.replace(/\s+/g, " ").slice(0, 110)).join(" · ");
+  throw new LlmError(`L'IA n'a pas pu répondre (tous les services ont échoué). Détail : ${detail}`);
 }
