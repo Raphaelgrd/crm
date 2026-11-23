@@ -153,7 +153,8 @@ export function createBridge(me: () => { name: string; email: string; isAdmin?: 
         if (!res.ok) throw { code: j.code || "upstream_error", message: j.message };
         if (j.content) { text += (text ? "\n\n" : "") + j.content; opts.onText?.({ text, delta: j.content }); }
         if (!j.toolCalls?.length) return { text, truncated: false };
-        messages.push({ role: "assistant", content: j.content || "", tool_calls: j.toolCalls });
+        // `raw` : contenu exact du tour de Claude, à lui rendre tel quel au tour suivant.
+        messages.push({ role: "assistant", content: j.content || "", tool_calls: j.toolCalls, ...(j.raw ? { raw: j.raw } : {}) });
         for (const c of j.toolCalls) {
           let out: Any;
           try { out = exec[c.function.name] ? await exec[c.function.name](JSON.parse(c.function.arguments || "{}")) : "Outil inconnu"; } catch (e) { out = "Erreur : " + ((e as Error)?.message || e); }

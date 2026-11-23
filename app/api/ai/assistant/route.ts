@@ -5,7 +5,7 @@ import { ChatMessage, LlmError, chatCompletion } from "@/lib/server/llm";
 import { assistantTools, type AssistantAction, type AssistantCtx, type Person } from "@/lib/server/assistantTools";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 function systemPrompt(me: Person, isAdmin: boolean) {
   const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" });
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
       const r = await chatCompletion({ messages: conversation, tools: groqTools, maxTokens: 2000, startAt: provider });
       provider = r.provider;
       if (r.toolCalls?.length) {
-        conversation.push({ role: "assistant", content: r.content, tool_calls: r.toolCalls });
+        conversation.push({ role: "assistant", content: r.content, tool_calls: r.toolCalls, raw: r.raw });
         for (const tc of r.toolCalls) {
           conversation.push({ role: "tool", tool_call_id: tc.id, content: await runTool(tc.function.name, tc.function.arguments) });
         }

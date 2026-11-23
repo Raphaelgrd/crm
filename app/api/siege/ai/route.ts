@@ -4,9 +4,10 @@ import { ChatMessage, LlmError, chatCompletion } from "@/lib/server/llm";
 
 // IA des agents du Siège : relaie une conversation (avec outils exécutés dans la page) vers les modèles du CRM.
 export const runtime = "nodejs";
-export const maxDuration = 120;
+// Claude peut réfléchir une minute ou plus sur un livrable : marge large.
+export const maxDuration = 300;
 
-const hasKey = () => !!(process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || process.env.MISTRAL_API_KEY);
+const hasKey = () => !!(process.env.ANTHROPIC_API_KEY || process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || process.env.MISTRAL_API_KEY);
 
 export async function GET(req: NextRequest) {
   if (!(await verifyCrmUser(req))) return unauthorized();
@@ -19,7 +20,8 @@ export async function POST(req: NextRequest) {
   if (!body?.messages?.length) return Response.json({ code: "bad_request" }, { status: 400 });
   try {
     const r = await chatCompletion({ messages: body.messages, tools: body.tools, maxTokens: Math.min(body.maxTokens ?? 4000, 8000), temperature: 0.4 });
-    return Response.json({ content: r.content, toolCalls: r.toolCalls ?? [] });
+    // `raw` (Claude) : la page le renvoie avec le message assistant au tour suivant.
+    return Response.json({ content: r.content, toolCalls: r.toolCalls ?? [], raw: r.raw ?? null, provider: r.providerName });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const limited = e instanceof LlmError && /429|limite|rate/i.test(msg);

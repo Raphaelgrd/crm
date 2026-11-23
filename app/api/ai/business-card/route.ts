@@ -3,7 +3,7 @@ import { unauthorized, verifyCrmUser } from "@/lib/server/auth";
 import { LlmError, chatCompletion } from "@/lib/server/llm";
 
 export const runtime = "nodejs";
-export const maxDuration = 90;
+export const maxDuration = 300;
 
 const CATEGORIES = ["Prospect", "Client", "Partenaire", "Fournisseur", "Investisseur", "Distributeur", "Ambassadeur", "Institutionnel", "Banque"];
 

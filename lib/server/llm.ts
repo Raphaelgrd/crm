@@ -1,5 +1,7 @@
-// Accès aux modèles d'IA avec bascule automatique entre fournisseurs gratuits :
-// Groq → Gemini → Mistral (ordre modifiable avec AI_PROVIDERS). Tous exposent l'API « chat completions ».
+// Accès aux modèles d'IA avec bascule automatique entre fournisseurs :
+// Claude (si ANTHROPIC_API_KEY, API Messages, voir claude.ts) → Groq → Gemini → Mistral (gratuits, API « chat completions »).
+// Ordre modifiable avec AI_PROVIDERS ; Claude reste en tête dès que sa clé est définie.
+import { claudeErrorText, claudeModel, claudeTurn } from "./claude";
 
 export interface ToolCall {
   id: string;
@@ -12,6 +14,8 @@ export interface ChatMessage {
   content: string;
   tool_call_id?: string;
   tool_calls?: ToolCall[];
+  /** Contenu brut d'un tour de Claude, à lui rendre tel quel (ignoré par les autres fournisseurs). */
+  raw?: unknown;
 }
 
 export class LlmError extends Error {}
@@ -55,6 +59,16 @@ async function pickGeminiModel(key: string): Promise<string> {
 
 function providers(): Provider[] {
   const all: Record<string, Provider | null> = {
+    claude: process.env.ANTHROPIC_API_KEY
+      ? {
+          id: "claude",
+          name: "Claude",
+          url: "",
+          key: process.env.ANTHROPIC_API_KEY,
+          model: async () => claudeModel(),
+          visionModel: async () => claudeModel(),
+        }
+      : null,
     groq: process.env.GROQ_API_KEY
       ? {
           id: "groq",
@@ -86,7 +100,8 @@ function providers(): Provider[] {
         }
       : null,
   };
-  const order = (process.env.AI_PROVIDERS ?? "groq,gemini,mistral").split(",").map((s) => s.trim().toLowerCase());
+  const order = (process.env.AI_PROVIDERS ?? "claude,groq,gemini,mistral").split(",").map((s) => s.trim().toLowerCase());
+  if (!order.includes("claude")) order.unshift("claude");
   return order.map((n) => all[n]).filter((p): p is Provider => !!p);
 }
 
@@ -123,6 +138,8 @@ function toWire(m: ChatMessage) {
 export interface ChatResult {
   content: string;
   toolCalls?: ToolCall[];
+  /** Claude : contenu brut du tour, à renvoyer dans le message assistant suivant (champ `raw`). */
+  raw?: unknown[];
   provider: number;
   providerName: string;
 }
@@ -140,8 +157,11 @@ export async function chatCompletion(opts: {
   retried?: boolean;
   /** Images (data URL) jointes au dernier message utilisateur : seuls les fournisseurs « vision » sont utilisés. */
   images?: string[];
+  /** Diagnostic : n'essayer que ce fournisseur (id). */
+  only?: string;
 }): Promise<ChatResult> {
-  const list = opts.images?.length ? (await Promise.all(providers().map(async (p) => ((await p.visionModel()) ? p : null)))).filter((p): p is Provider => !!p) : providers();
+  const list0 = opts.images?.length ? (await Promise.all(providers().map(async (p) => ((await p.visionModel()) ? p : null)))).filter((p): p is Provider => !!p) : providers();
+  const list = opts.only ? list0.filter((p) => p.id === opts.only) : list0;
   if (!list.length) {
     throw new LlmError(
       opts.images?.length
@@ -154,6 +174,18 @@ export async function chatCompletion(opts: {
 
   for (let i = opts.startAt ?? 0; i < list.length; i++) {
     const p = list[i];
+    if (p.id === "claude") {
+      try {
+        const r = await claudeTurn({ messages: opts.messages, tools: opts.tools, images: opts.images });
+        console.info(`[llm] Claude ${claudeModel()} : ${r.usage.input} jetons lus (+${r.usage.cacheRead} en cache), ${r.usage.output} écrits`);
+        return { content: r.content, toolCalls: r.toolCalls, raw: r.raw, provider: i, providerName: p.name };
+      } catch (e) {
+        const { text, wait } = claudeErrorText(e);
+        if (wait !== undefined) shortestWait = Math.min(shortestWait, wait);
+        errors.push(text);
+        continue;
+      }
+    }
     try {
       const res = await fetch(p.url, {
         method: "POST",
@@ -205,4 +237,28 @@ export async function chatCompletion(opts: {
   // Raison de chaque service (code HTTP + début du message, sans clé) pour comprendre l'échec sans ouvrir les journaux.
   const detail = errors.map((e) => e.replace(/\s+/g, " ").slice(0, 110)).join(" · ");
   throw new LlmError(`L'IA n'a pas pu répondre (tous les services ont échoué). Détail : ${detail}`);
+}
+
+/** Paramètres → « Tester les IA » : une courte question à chaque fournisseur configuré, séparément. */
+export async function testProviders() {
+  const out: { id: string; name: string; model: string; ok: boolean; ms: number; detail: string }[] = [];
+  for (const p of providers()) {
+    const t0 = Date.now();
+    let model = "?";
+    try {
+      model = await p.model();
+    } catch {}
+    try {
+      const r = await chatCompletion({
+        messages: [{ role: "user", content: "Test de connexion du CRM Netforce : réponds seulement « OK »." }],
+        maxTokens: 50,
+        only: p.id,
+        retried: true,
+      });
+      out.push({ id: p.id, name: p.name, model, ok: true, ms: Date.now() - t0, detail: r.content.slice(0, 80) });
+    } catch (e) {
+      out.push({ id: p.id, name: p.name, model, ok: false, ms: Date.now() - t0, detail: (e instanceof Error ? e.message : String(e)).replace(/^.*Détail : /, "").slice(0, 300) });
+    }
+  }
+  return out;
 }
