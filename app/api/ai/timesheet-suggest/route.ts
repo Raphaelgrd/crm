@@ -25,7 +25,8 @@ Règles :
 const round = (h: number) => Math.max(0.5, Math.round(h * 2) / 2);
 
 export async function POST(req: NextRequest) {
-  if (!(await verifyCrmUser(req))) return unauthorized();
+  const user = await verifyCrmUser(req);
+  if (!user) return unauthorized();
   const { activity, tasks, categories } = (await req.json()) as {
     activity: TrackerDoc;
     tasks: TaskIn[];
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
       json: true,
       maxTokens: 900,
       temperature: 0.2,
+      meta: { email: user.email, feature: "pointage" },
     });
     const parsed = JSON.parse(raw) as {
       suggestions?: { taskId?: string; hours?: number; reason?: string }[];

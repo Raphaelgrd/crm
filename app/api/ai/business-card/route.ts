@@ -21,7 +21,8 @@ Règles :
 - Si l'image n'est pas une carte de visite, renvoie {"error":"Ce n'est pas une carte de visite."}.`;
 
 export async function POST(req: NextRequest) {
-  if (!(await verifyCrmUser(req))) return unauthorized();
+  const user = await verifyCrmUser(req);
+  if (!user) return unauthorized();
   const { images } = (await req.json()) as { images?: string[] };
   const valid = (images ?? []).filter((u) => /^data:image\/(jpeg|png|webp);base64,/.test(u)).slice(0, 2);
   if (!valid.length) return Response.json({ error: "Image manquante." }, { status: 400 });
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
       images: valid,
       maxTokens: 1200,
       temperature: 0,
+      meta: { email: user.email, feature: "carte-de-visite" },
     });
     const start = content.indexOf("{");
     const end = content.lastIndexOf("}");

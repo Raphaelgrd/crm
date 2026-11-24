@@ -35,6 +35,7 @@ import {
   Images,
   ScanLine,
   Trash2,
+  History,
 } from "lucide-react";
 import { TodoBadge } from "@/components/todos/TodoBadge";
 
@@ -89,6 +90,7 @@ const NAV_GROUPS: {
       { href: "/rapport", label: "Rapport d'activité", icon: Clock },
       { href: "/assistant", label: "Assistant IA", icon: Bot },
       { href: "/siege", label: "Siège IA", icon: Network },
+      { href: "/historique-ia", label: "Historique IA", icon: History },
     ],
   },
 ];

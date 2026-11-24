@@ -1,4 +1,5 @@
 import { LlmError, chatCompletion } from "./llm";
+import type { AiMeta } from "./aiUsage";
 
 export { LlmError as GroqError };
 
@@ -9,6 +10,8 @@ export async function groqChat(opts: {
   json?: boolean;
   maxTokens?: number;
   temperature?: number;
+  /** Qui demande et pour quoi (« Historique IA »). */
+  meta?: AiMeta;
 }): Promise<string> {
   const { content: text } = await chatCompletion({
     messages: [
@@ -17,6 +20,7 @@ export async function groqChat(opts: {
     ],
     maxTokens: Math.max(opts.maxTokens ?? 600, 1500),
     temperature: opts.temperature ?? 0.3,
+    meta: opts.meta,
   });
   if (!opts.json) return text;
   // Pas de mode JSON forcé (non garanti selon le modèle) : on extrait l'objet de la réponse.

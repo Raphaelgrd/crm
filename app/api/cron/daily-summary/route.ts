@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
         system: SUMMARY_SYSTEM,
         user: `Personne : ${name}\nDate : ${date}\n\n${activityText(t)}`,
         maxTokens: 350,
+        meta: { feature: "resume-quotidien", name: "Automatique" },
       });
       await setDoc(doc(r.db, "activity_summaries", `${t.userId}_${date}`), {
         userId: t.userId,

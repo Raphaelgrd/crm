@@ -2,6 +2,7 @@
 // Claude (si ANTHROPIC_API_KEY, API Messages, voir claude.ts) → Groq → Gemini → Mistral (gratuits, API « chat completions »).
 // Ordre modifiable avec AI_PROVIDERS ; Claude reste en tête dès que sa clé est définie.
 import { claudeErrorText, claudeModel, claudeTurn } from "./claude";
+import { type AiMeta, budgetStatus, recordUsage } from "./aiUsage";
 
 export interface ToolCall {
   id: string;
@@ -159,6 +160,10 @@ export async function chatCompletion(opts: {
   images?: string[];
   /** Diagnostic : n'essayer que ce fournisseur (id). */
   only?: string;
+  /** Qui demande et pour quoi : enregistré dans « Historique IA ». */
+  meta?: AiMeta;
+  /** Modèle Claude « premium » (Opus) au lieu du modèle du quotidien. */
+  premium?: boolean;
 }): Promise<ChatResult> {
   const list0 = opts.images?.length ? (await Promise.all(providers().map(async (p) => ((await p.visionModel()) ? p : null)))).filter((p): p is Provider => !!p) : providers();
   const list = opts.only ? list0.filter((p) => p.id === opts.only) : list0;
@@ -176,8 +181,17 @@ export async function chatCompletion(opts: {
     const p = list[i];
     if (p.id === "claude") {
       try {
-        const r = await claudeTurn({ messages: opts.messages, tools: opts.tools, images: opts.images });
-        console.info(`[llm] Claude ${claudeModel()} : ${r.usage.input} jetons lus (+${r.usage.cacheRead} en cache), ${r.usage.output} écrits`);
+        // Plafond mensuel atteint : Claude est sauté, les IA gratuites répondent (diagnostic excepté).
+        if (opts.meta?.feature !== "diagnostic") {
+          const b = await budgetStatus().catch(() => null);
+          if (b?.reached) {
+            errors.push(`Claude : plafond du mois atteint (${b.spentUsd.toFixed(2)} $ sur ${b.budgetUsd.toFixed(2)} $)`);
+            continue;
+          }
+        }
+        const r = await claudeTurn({ messages: opts.messages, tools: opts.tools, images: opts.images, premium: opts.premium });
+        console.info(`[llm] Claude ${r.model} : ${r.usage.input} jetons lus (+${r.usage.cacheRead} en cache), ${r.usage.output} écrits`);
+        await recordUsage({ ...(opts.meta ?? { feature: "autre" }), provider: p.name, model: r.model, premium: !!opts.premium, ...r.usage });
         return { content: r.content, toolCalls: r.toolCalls, raw: r.raw, provider: i, providerName: p.name };
       } catch (e) {
         const { text, wait } = claudeErrorText(e);
@@ -211,12 +225,23 @@ export async function chatCompletion(opts: {
       }
       const data = (await res.json()) as {
         choices?: { message?: { content?: string | null; tool_calls?: ToolCall[] } }[];
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
       };
       const msg = data.choices?.[0]?.message;
       if (!msg) {
         errors.push(`${p.name}: réponse vide`);
         continue;
       }
+      await recordUsage({
+        ...(opts.meta ?? { feature: "autre" }),
+        provider: p.name,
+        model: opts.images?.length ? ((await p.visionModel()) ?? "?") : await p.model(),
+        premium: false,
+        input: data.usage?.prompt_tokens ?? 0,
+        output: data.usage?.completion_tokens ?? 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+      });
       return {
         content: stripThinking(msg.content ?? ""),
         toolCalls: msg.tool_calls?.length ? normalizeToolCalls(msg.tool_calls) : undefined,
@@ -253,6 +278,7 @@ export async function testProviders() {
         messages: [{ role: "user", content: "Test de connexion du CRM Netforce : réponds seulement « OK »." }],
         maxTokens: 50,
         only: p.id,
+        meta: { feature: "diagnostic" },
         retried: true,
       });
       out.push({ id: p.id, name: p.name, model, ok: true, ms: Date.now() - t0, detail: r.content.slice(0, 80) });

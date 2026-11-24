@@ -148,7 +148,13 @@ export function createBridge(me: () => { name: string; email: string; isAdmin?: 
       const exec = Object.fromEntries((opts.tools || []).map((t: Any) => [t.name, t.execute]));
       let text = "";
       for (let turn = 0; turn < 8; turn++) {
-        const res = await authFetch("/api/siege/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages, tools }) });
+        // meta : pour « Historique IA » (usage, agent, nom de la personne) ; premium : Opus, accepté pour les admins seulement.
+        const meta = { f: opts.meta?.f, a: opts.meta?.a, name: me().name };
+        const res = await authFetch("/api/siege/ai", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages, tools, meta, premium: !!opts.premium }),
+        });
         const j = await res.json().catch(() => ({}));
         if (!res.ok) throw { code: j.code || "upstream_error", message: j.message };
         if (j.content) { text += (text ? "\n\n" : "") + j.content; opts.onText?.({ text, delta: j.content }); }
@@ -170,6 +176,8 @@ export function createBridge(me: () => { name: string; email: string; isAdmin?: 
       try { return JSON.parse(text.slice(a, b + 1)); } catch { throw { code: "bad_json", text }; }
     };
     fn.limits = async () => ({ images: false });
+    // Claude branché (clé sur Vercel) : le Siège propose alors la qualité Premium.
+    fn.claude = !!r.claude;
     return fn;
   }
 

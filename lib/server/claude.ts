@@ -5,7 +5,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ChatMessage, ToolCall } from "./llm";
 
-export const claudeModel = () => process.env.ANTHROPIC_MODEL?.trim() || "claude-opus-5-5";
+/** Modèle du quotidien (Haiku : rapide, quelques centimes par mois) et modèle « premium » (Opus, sur demande d'un admin). */
+export const claudeModel = () => process.env.ANTHROPIC_MODEL?.trim() || "claude-haiku-5-5";
+export const claudePremiumModel = () => process.env.ANTHROPIC_PREMIUM_MODEL?.trim() || "claude-opus-5-5";
+/** Le relais côté API en cas de refus n'existe que sur Opus, Sonnet et Fable (pas sur Haiku). */
+const hasServerFallback = (model: string) => /^claude-(opus|sonnet|fable)-5/.test(model);
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
 const claudeEffort = (): Effort => {
@@ -105,15 +109,17 @@ export interface ClaudeReply {
   content: string;
   toolCalls?: ToolCall[];
   raw: unknown[];
-  usage: { input: number; output: number; cacheRead: number };
+  model: string;
+  usage: { input: number; output: number; cacheRead: number; cacheWrite: number };
 }
 
 /** Un tour de Claude. Lève une erreur (typée par le SDK) si l'API refuse ou échoue : le fournisseur suivant prend le relais. */
-export async function claudeTurn(opts: { messages: ChatMessage[]; tools?: unknown[]; images?: string[] }): Promise<ClaudeReply> {
+export async function claudeTurn(opts: { messages: ChatMessage[]; tools?: unknown[]; images?: string[]; premium?: boolean }): Promise<ClaudeReply> {
   const { system, messages } = toAnthropic(opts.messages, opts.images);
   const tools = toAnthropicTools(opts.tools);
+  const model = opts.premium ? claudePremiumModel() : claudeModel();
   const res = await getClient().beta.messages.create({
-    model: claudeModel(),
+    model,
     max_tokens: 16_000,
     ...(system ? { system } : {}),
     messages,
@@ -123,8 +129,7 @@ export async function claudeTurn(opts: { messages: ChatMessage[]; tools?: unknow
     // Le préfixe (consignes, outils, début de conversation) est mis en cache : les tours suivants coûtent moins cher.
     cache_control: { type: "ephemeral" },
     // Si Claude décline une demande pour raison de sécurité, l'API la confie elle-même à un autre modèle Claude.
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    ...(hasServerFallback(model) ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
   });
   if (res.stop_reason === "refusal") throw new ClaudeRefusal(`Claude a décliné la demande (${res.stop_details?.category ?? "sans catégorie"}).`);
   let text = "";
@@ -139,7 +144,8 @@ export async function claudeTurn(opts: { messages: ChatMessage[]; tools?: unknow
     content: text.trim(),
     toolCalls: toolCalls.length ? toolCalls : undefined,
     raw: res.content as unknown[],
-    usage: { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0 },
+    model: res.model || model,
+    usage: { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0 },
   };
 }
 

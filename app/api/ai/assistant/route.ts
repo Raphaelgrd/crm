@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
     // On reste sur le fournisseur qui a répondu, pour ne pas mélanger les modèles en cours de raisonnement.
     let provider = 0;
     for (let i = 0; i < 6; i++) {
-      const r = await chatCompletion({ messages: conversation, tools: groqTools, maxTokens: 2000, startAt: provider });
+      const r = await chatCompletion({ messages: conversation, tools: groqTools, maxTokens: 2000, startAt: provider, meta: { email: user.email, feature: "assistant" } });
       provider = r.provider;
       if (r.toolCalls?.length) {
         conversation.push({ role: "assistant", content: r.content, tool_calls: r.toolCalls, raw: r.raw });

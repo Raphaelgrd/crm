@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
       system: SUMMARY_SYSTEM,
       user: `Personne : ${name || "membre de l'équipe"}\nDate : ${doc?.date ?? ""}\n\n${data}`,
       maxTokens: 350,
+      meta: { email: user.email, feature: "resume-activite" },
     });
     return Response.json({ summary });
   } catch (e) {
